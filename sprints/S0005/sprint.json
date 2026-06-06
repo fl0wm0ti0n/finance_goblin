@@ -1,0 +1,29 @@
+{
+  "id": "S0005",
+  "story_ids": ["US-0005"],
+  "status": "PLANNED",
+  "created": "2026-05-31",
+  "goal": "Deliver WealthService, Alert Engine, migration 005, sync alerts phase, wealth/alert REST API, React /wealth + /alerts + header bell, Grafana Dashboard 4 + Dashboard 1 threshold, tests, and operator user guide.",
+  "scope": [
+    "SQLx migration 005 — alert_config, alerts, net_worth_snapshots (DEC-0027)",
+    "TOML [alerts] + startup alert_config mirror (DEC-0029)",
+    "WealthService: net worth breakdown, daily snapshots, mixed-currency flag (DEC-0025)",
+    "Alert Engine: scarcity, budget drift, plan viability evaluators (DEC-0026)",
+    "Alert lifecycle: fingerprint dedup, acknowledge, dismiss, resolve (DEC-0027)",
+    "Sync pipeline alerts phase after forecast+plan hook (DEC-0028)",
+    "Wealth and alert REST API under /api/v1/wealth/* and /api/v1/alerts/*",
+    "React /wealth page + header bell + /alerts inbox (DEC-0030)",
+    "Grafana Dashboard 4 (uid: portfolio) + Dashboard 1 $scarcity_threshold (DEC-0029, DEC-0030)",
+    "Alert and wealth tests and operator user guide (docs/user-guides/US-0005.md)"
+  ],
+  "risks": [
+    "Mixed-currency total without FX — mandatory mixed_currency banner (R-0021, DEC-0025)",
+    "Budget drift MTD proration vs one-time plan deltas (R-0022, DEC-0026)",
+    "Plan viability on stale forecast/plan baseline (R-0022, R-0019)",
+    "Alert dedup vs US-0003 subscription alerts — separate surfaces + cross-link (R-0023)",
+    "Sync mutex grows with alerts phase — monitor combined latency (R-0024, DEC-0028)",
+    "Dashboard 1 variable coercion — test $scarcity_threshold::numeric in SQL (R-0025, DEC-0029)"
+  ],
+  "task_count": 12,
+  "decisions": ["DEC-0025", "DEC-0026", "DEC-0027", "DEC-0028", "DEC-0029", "DEC-0030"]
+}

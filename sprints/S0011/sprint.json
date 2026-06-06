@@ -1,0 +1,29 @@
+{
+  "id": "S0011",
+  "story_ids": ["US-0011"],
+  "status": "PLANNED",
+  "created": "2026-06-02",
+  "goal": "Deliver DEC-0057 unified analytics: /analytics/grafana/ proxy, six /analytics/{slug} iframe pages, Analytics nav, Wealth migration, Grafana anonymous compose env, CSP frame-src, env contract, tests, US-0011 user guide.",
+  "scope": [
+    "GRAFANA_UPSTREAM AppConfig with allowlisted host validation",
+    "Backend analytics proxy at /analytics/grafana/ (prefix strip, WebSocket, X-Frame-Options rewrite)",
+    "Grafana anonymous Viewer and allow_embedding env in docker-compose.yml",
+    ".env.example GRAFANA_UPSTREAM and VITE_GRAFANA_EMBED_BASE; deprecate VITE_GRAFANA_URL",
+    "AnalyticsEmbedPage and six dashboard routes in App.tsx",
+    "AppLayout Analytics sidebar nav group",
+    "WealthPage in-app /analytics/portfolio link (deprecate external Grafana tab)",
+    "SPA CSP frame-src self for same-origin iframe embed",
+    "Proxy and WebSocket integration smoke tests",
+    "ECharts product page regression tests",
+    "Operator user guide docs/user-guides/US-0011.md"
+  ],
+  "risks": [
+    "WebSocket proxy gaps — mandatory QA smoke on live refresh panel (R-0056 §4)",
+    "Anonymous Grafana Viewer isolation — DEC-0057 decision gate if omniflow smoke fails",
+    "Framing headers — proxy rewrite + CSP frame-src (R-0056 §2)",
+    "Upstream SSRF — allowlist validation on GRAFANA_UPSTREAM host"
+  ],
+  "task_count": 11,
+  "decisions": ["DEC-0057"],
+  "research": ["R-0054", "R-0056"]
+}

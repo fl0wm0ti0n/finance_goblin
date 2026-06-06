@@ -1,0 +1,32 @@
+{
+  "id": "S0007",
+  "story_ids": ["US-0007"],
+  "status": "PLANNED",
+  "created": "2026-06-01",
+  "goal": "Deliver ExchangeConnector (Binance/Bybit/Bitunix), Portfolio Engine hybrid PnL, FxService, migration 007, sync exchanges phase, wealth/portfolio REST API, React /wealth Crypto tab, Settings exchange section, allocation_target plan template, Grafana Dashboard 4 completion, tests, and operator user guide.",
+  "scope": [
+    "SQLx migration 007 — exchange + portfolio + fx tables; alter net_worth_snapshots (DEC-0042)",
+    "TOML [exchanges] + [portfolio] + settings API extension (DEC-0040)",
+    "FxService Frankfurter fiat + exchange ticker alts (DEC-0039)",
+    "ExchangeConnector trait + HTTP/signing layer + repository (DEC-0037)",
+    "Binance, Bybit, Bitunix connector implementations (DEC-0037)",
+    "PortfolioEngine hybrid PnL + baselines + avg-cost (DEC-0038)",
+    "Sync pipeline exchanges phase before alerts + ExchangeService (DEC-0041)",
+    "Extended wealth/portfolio REST API + allocation_target plan template (DEC-0042)",
+    "React /wealth Crypto tab + Overview extension (R-0026)",
+    "Settings crypto exchanges read-only + Sync Status per-exchange rows (DEC-0040)",
+    "Grafana Dashboard 4 completion — crypto stat, allocation pie, performance (R-0026)",
+    "Exchange portfolio tests + get_portfolio extension + operator user guide"
+  ],
+  "risks": [
+    "Binance symbol fan-out latency — active symbols only; longer interval (R-0032, R-0036)",
+    "Bitunix signing — spot-first; mock integration test (R-0032)",
+    "First-sync avg-cost inaccuracy — document; prefer exchange PnL (R-0033)",
+    "FX incomplete illiquid alts — exclude + banner (R-0034)",
+    "Mutex duration — log phase timing (R-0036, DEC-0018)",
+    "Secret rotation — env + restart doc (R-0035)",
+    "get_portfolio 8 KB cap — top-5 holdings (R-0031)"
+  ],
+  "task_count": 12,
+  "decisions": ["DEC-0037", "DEC-0038", "DEC-0039", "DEC-0040", "DEC-0041", "DEC-0042"]
+}

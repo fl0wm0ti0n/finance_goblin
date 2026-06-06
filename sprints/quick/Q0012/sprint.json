@@ -1,0 +1,59 @@
+{
+  "id": "Q0012",
+  "type": "quick",
+  "bug_ids": ["BUG-0005"],
+  "status": "PLANNED",
+  "created": "2026-06-05",
+  "goal": "Close BUG-0005: Bitunix futures header-auth client, effective_enabled_futures policy, futures wallet + position ingestion, dual-path test_connection; operator verify on omniflow.",
+  "scope": [
+    "N1: futures header-auth HTTP client + futures_base_url per DEC-0062",
+    "N3: effective_enabled_futures policy + settings exposure per DEC-0063",
+    "M1: futures account balance ingestion product_type futures",
+    "N2: sync_positions get_pending_positions product_type linear per DEC-0064",
+    "N4: dual-path test_connection spot + futures messaging",
+    "O1: verify-work omniflow probes rows M/N/O"
+  ],
+  "risks": [
+    "Bitunix futures sign canonical string drift vs docs — unit fixture required",
+    "Operator spot-only intent requires BITUNIX_ENABLED_FUTURES=false opt-out",
+    "USDT margin coin only — alt margin coins deferred",
+    "sync_funding remains stub — out of sprint scope"
+  ],
+  "task_count": 6,
+  "estimate_total_hours": 10,
+  "decisions": ["DEC-0062", "DEC-0063", "DEC-0064", "DEC-0037", "DEC-0038", "DEC-0041"],
+  "research": ["R-0058", "R-0059"],
+  "acceptance_rows": ["M", "N", "O"],
+  "execute_order": ["N1", "N3", "M1", "N2", "N4", "O1"],
+  "gated_tasks": ["O1"],
+  "operator_gates": [
+    {
+      "id": "EXCHANGE_SYNC",
+      "before_tasks": ["O1"],
+      "description": "Manual exchange sync after deploy — futures holdings backfill via upsert (required before O1 wealth/holdings probes)"
+    }
+  ],
+  "acceptance_mapping": {
+    "M": {
+      "tasks": ["M1", "N2", "O1"],
+      "verify": "Post-sync holdings include non-spot product_type futures/linear when operator has futures exposure"
+    },
+    "N": {
+      "tasks": ["N1", "N2", "N3", "N4", "O1"],
+      "verify": "Futures REST on fapi.bitunix.com with header auth; test_connection and sync populate data when enabled"
+    },
+    "O": {
+      "tasks": ["M1", "N2", "O1"],
+      "verify": "Wealth crypto subtotal reflects combined spot + futures wallet holdings"
+    }
+  },
+  "deploy_order": [
+    "N1 + N3 + M1 + N2 + N4 single PR",
+    "Deploy image to omniflow",
+    "Operator manual exchange sync",
+    "O1 verify-work smoke rows M/N/O + regression footer"
+  ],
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260605-q0012-bug0005",
+  "architecture_ref": "architecture-20260605-bug0005"
+}

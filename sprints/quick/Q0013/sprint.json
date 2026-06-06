@@ -1,0 +1,62 @@
+{
+  "id": "Q0013",
+  "type": "quick",
+  "bug_ids": ["BUG-0010"],
+  "status": "PLANNED",
+  "created": "2026-06-05",
+  "goal": "Close BUG-0010: Firefly balance mirror diagnostics, negative wealth visibility, ML disabled metadata, forecast/wealth UX warnings, honest ML copy; operator verify after Full Firefly sync.",
+  "scope": [
+    "AA1: balance mirror ingest + sync diagnostics (extends DEC-0060)",
+    "AB1: include negative-balance asset accounts per DEC-0065",
+    "AC1: sidecar_disabled metadata per DEC-0066",
+    "AA3: negative starting balance warning in meta + UI",
+    "AB2: wealth zero-total empty-state guidance",
+    "AC2: forecast ML three-state UI copy",
+    "V1: verify-work omniflow probes rows AA/AB/AC"
+  ],
+  "risks": [
+    "Account balances need manual Full Firefly sync post-deploy before V1 probes",
+    "Firefly source may legitimately show negative Giro — product shows signed truth + warnings, not invented positive balance",
+    "Stale baselines may need Full sync recompute before AC1 metadata visible",
+    "AC3 ML production deferred to US-0013 — acceptance AC partial by design until epic"
+  ],
+  "task_count": 7,
+  "estimate_total_hours": 11,
+  "decisions": ["DEC-0065", "DEC-0066", "DEC-0060", "DEC-0049", "DEC-0025", "DEC-0007"],
+  "research": ["R-0062"],
+  "acceptance_rows": ["AA", "AB", "AC"],
+  "execute_order": ["AA1", "AB1", "AC1", "AA3", "AB2", "AC2", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "description": "Manual Full Firefly sync after deploy — account balance backfill via DEC-0002 upsert + baseline/wealth recompute (required before V1 probes)"
+    }
+  ],
+  "acceptance_mapping": {
+    "AA": {
+      "tasks": ["AA1", "AA3", "V1"],
+      "verify": "Forecast starting balance plausible OR negative-start warning; 3mo end not silent implausible -25365 without warning"
+    },
+    "AB": {
+      "tasks": ["AB1", "AB2", "V1"],
+      "verify": "Wealth accounts non-empty; negative Giro included; total_eur honest signed sum"
+    },
+    "AC": {
+      "tasks": ["AC1", "AC2", "V1"],
+      "verify": "meta ml_skipped_reason sidecar_disabled when ML off; UI distinguishes not enabled vs skipped"
+    }
+  },
+  "deploy_order": [
+    "AA1 + AB1 + AC1 + AA3 + AB2 + AC2 single PR",
+    "Deploy image to omniflow",
+    "Operator manual Full Firefly sync (balance backfill + recompute)",
+    "V1 verify-work smoke rows AA/AB/AC + regression footer"
+  ],
+  "next_phase": "execute",
+  "plan_verify_verdict": "PASS",
+  "plan_verify_at": "2026-06-06T00:00:00Z",
+  "sprint_plan_ref": "sprint-plan-20260605-q0013-bug0010",
+  "architecture_ref": "architecture-20260605-bug0010"
+}

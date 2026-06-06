@@ -1,0 +1,71 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "showHeader": true },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT status, COUNT(*) AS runs FROM sync_runs GROUP BY status ORDER BY status",
+          "refId": "A"
+        }
+      ],
+      "title": "Sync runs by status",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "showHeader": true },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT entity_type, records_synced, last_successful_sync_at FROM sync_cursors ORDER BY entity_type",
+          "refId": "A"
+        }
+      ],
+      "title": "Records synced per entity",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "id": 3,
+      "options": { "showHeader": true },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT started_at, finished_at, status, trigger, EXTRACT(EPOCH FROM (finished_at - started_at)) AS duration_seconds FROM sync_runs WHERE finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent sync duration",
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["platform", "health"],
+  "templating": { "list": [] },
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Platform Health",
+  "uid": "platform-health",
+  "version": 1
+}

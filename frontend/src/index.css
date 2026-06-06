@@ -1,0 +1,279 @@
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background: #0f172a;
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+}
+
+.sidebar.collapsed {
+  width: 64px;
+  grid-column: span 1;
+}
+
+.sidebar nav a,
+.sidebar nav span.disabled {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 0.25rem;
+  color: inherit;
+}
+
+.sidebar nav a.active,
+.sidebar nav a:hover {
+  background: #1e293b;
+}
+
+.sidebar nav span.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: white;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge.read-only {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.analytics-embed {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 6rem);
+  min-height: 24rem;
+}
+
+.analytics-embed-frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+}
+
+.content {
+  padding: 1.5rem;
+}
+
+.card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.stat {
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.status-success {
+  color: #047857;
+}
+
+.status-failed {
+  color: #b91c1c;
+}
+
+.status-running {
+  color: #2563eb;
+}
+
+.btn {
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid #334155;
+  font-size: 0.85rem;
+}
+
+.select {
+  min-width: 220px;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: white;
+}
+
+.tabs .tab {
+  background: #e2e8f0;
+  color: #0f172a;
+  margin-right: 0.5rem;
+}
+
+.tabs .tab.active {
+  background: #2563eb;
+  color: white;
+}
+
+.confidence-high {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.confidence-medium {
+  background: #fef9c3;
+  color: #854d0e;
+}
+
+.confidence-low {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.drawer-overlay,
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 50;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modal-overlay,
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.drawer {
+  width: min(480px, 100%);
+  height: 100%;
+  overflow: auto;
+  margin: 0;
+  border-radius: 0;
+}
+
+.modal {
+  width: min(420px, 90vw);
+}
+
+.alert-banner {
+  border-left: 4px solid #2563eb;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.badge.stale {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge.severity-critical {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.badge.severity-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge.severity-info {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.btn.primary {
+  background: #2563eb;
+}

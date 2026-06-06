@@ -1,0 +1,226 @@
+use std::collections::HashMap;
+
+use chrono::{Datelike, NaiveDate};
+
+use super::types::{
+    AdjustmentDirection, AdjustmentFrequency, AdjustmentTarget, ConfirmedSubscription, PlanAdjustment,
+};
+
+const HORIZON_DAYS: i64 = 730;
+
+/// Map plan adjustments to daily net-cashflow deltas keyed by calendar date.
+pub fn build_overlay_deltas(
+    adjustments: &[PlanAdjustment],
+    confirmed_subs: &[ConfirmedSubscription],
+    start: NaiveDate,
+    end: NaiveDate,
+) -> HashMap<NaiveDate, f64> {
+    let mut deltas: HashMap<NaiveDate, f64> = HashMap::new();
+    let mut sorted: Vec<_> = adjustments.to_vec();
+    sorted.sort_by_key(|a| (a.sort_order, a.id));
+
+    for adj in &sorted {
+        if adj.target_type == AdjustmentTarget::Subscription
+            && adj.direction == AdjustmentDirection::RemoveOutflow
+        {
+            if let Some(payee) = &adj.target_key {
+                apply_subscription_removal(&mut deltas, payee, confirmed_subs, start, end);
+            }
+            continue;
+        }
+
+        let signed_amount = adj.amount * adj.direction.signed_multiplier();
+        let effective_end = adj.effective_to.unwrap_or(end);
+
+        let mut date = start;
+        while date <= end {
+            if date >= adj.effective_from && date <= effective_end && is_due(adj, date) {
+                *deltas.entry(date).or_insert(0.0) += signed_amount;
+            }
+            date += chrono::Duration::days(1);
+        }
+    }
+
+    deltas
+}
+
+fn apply_subscription_removal(
+    deltas: &mut HashMap<NaiveDate, f64>,
+    payee_key: &str,
+    confirmed_subs: &[ConfirmedSubscription],
+    start: NaiveDate,
+    end: NaiveDate,
+) {
+    let Some(sub) = confirmed_subs.iter().find(|s| s.payee_key == payee_key) else {
+        return;
+    };
+
+    if sub.interval_days <= 0 {
+        return;
+    }
+
+    let mut date = start;
+    while date <= end {
+        if is_interval_due(date, sub.interval_days) {
+            *deltas.entry(date).or_insert(0.0) += sub.amount.abs();
+        }
+        date += chrono::Duration::days(1);
+    }
+}
+
+fn is_due(adj: &PlanAdjustment, date: NaiveDate) -> bool {
+    if date < adj.effective_from {
+        return false;
+    }
+    if let Some(to) = adj.effective_to {
+        if date > to {
+            return false;
+        }
+    }
+
+    match adj.frequency {
+        AdjustmentFrequency::OneTime => date == adj.effective_from,
+        AdjustmentFrequency::Weekly => {
+            (date - adj.effective_from).num_days() % 7 == 0
+        }
+        AdjustmentFrequency::Monthly => {
+            date.day() == adj.effective_from.day()
+                || (adj.effective_from.day() > 28
+                    && date.day() == last_day_of_month(date).day())
+        }
+        AdjustmentFrequency::Quarterly => {
+            let months = months_between(adj.effective_from, date);
+            months % 3 == 0 && date.day() == adj.effective_from.day()
+        }
+    }
+}
+
+fn is_interval_due(date: NaiveDate, interval_days: i64) -> bool {
+    let epoch = NaiveDate::from_ymd_opt(2020, 1, 1).unwrap();
+    (date - epoch).num_days() % interval_days == 0
+}
+
+fn months_between(from: NaiveDate, to: NaiveDate) -> i32 {
+    (to.year() - from.year()) * 12 + (to.month() as i32 - from.month() as i32)
+}
+
+fn last_day_of_month(date: NaiveDate) -> NaiveDate {
+    let (y, m) = (date.year(), date.month());
+    if m == 12 {
+        NaiveDate::from_ymd_opt(y + 1, 1, 1)
+            .unwrap()
+            .pred_opt()
+            .unwrap()
+    } else {
+        NaiveDate::from_ymd_opt(y, m + 1, 1)
+            .unwrap()
+            .pred_opt()
+            .unwrap()
+    }
+}
+
+pub fn overlay_horizon_end(start: NaiveDate) -> NaiveDate {
+    start + chrono::Duration::days(HORIZON_DAYS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    fn adj(
+        direction: AdjustmentDirection,
+        amount: f64,
+        frequency: AdjustmentFrequency,
+        from: NaiveDate,
+    ) -> PlanAdjustment {
+        PlanAdjustment {
+            id: Uuid::new_v4(),
+            version_id: Uuid::new_v4(),
+            direction,
+            amount,
+            frequency,
+            target_type: AdjustmentTarget::Household,
+            target_key: None,
+            label: None,
+            effective_from: from,
+            effective_to: None,
+            sort_order: 0,
+        }
+    }
+
+    #[test]
+    fn monthly_outflow_applies_on_schedule() {
+        let start = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
+        let end = NaiveDate::from_ymd_opt(2026, 3, 15).unwrap();
+        let adjustments = vec![adj(
+            AdjustmentDirection::AddOutflow,
+            300.0,
+            AdjustmentFrequency::Monthly,
+            start,
+        )];
+
+        let deltas = build_overlay_deltas(&adjustments, &[], start, end);
+        assert!(deltas.get(&start).copied().unwrap_or(0.0).abs() > 299.0);
+        assert!(deltas.get(&NaiveDate::from_ymd_opt(2026, 2, 15).unwrap()).is_some());
+    }
+
+    #[test]
+    fn weekly_adjustment_repeats_every_seven_days() {
+        let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2026, 1, 21).unwrap();
+        let adjustments = vec![adj(
+            AdjustmentDirection::AddInflow,
+            50.0,
+            AdjustmentFrequency::Weekly,
+            start,
+        )];
+
+        let deltas = build_overlay_deltas(&adjustments, &[], start, end);
+        assert_eq!(deltas.get(&start).copied(), Some(50.0));
+        assert_eq!(
+            deltas.get(&NaiveDate::from_ymd_opt(2026, 1, 8).unwrap()).copied(),
+            Some(50.0)
+        );
+    }
+
+    #[test]
+    fn one_time_applies_only_on_effective_from() {
+        let start = NaiveDate::from_ymd_opt(2026, 5, 10).unwrap();
+        let end = NaiveDate::from_ymd_opt(2026, 5, 20).unwrap();
+        let adjustments = vec![adj(
+            AdjustmentDirection::AddOutflow,
+            1000.0,
+            AdjustmentFrequency::OneTime,
+            start,
+        )];
+
+        let deltas = build_overlay_deltas(&adjustments, &[], start, end);
+        assert_eq!(deltas.len(), 1);
+        assert!(deltas.get(&start).copied().unwrap_or(0.0) < -999.0);
+    }
+
+    #[test]
+    fn subscription_removal_matches_payee_key() {
+        let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2026, 1, 31).unwrap();
+        let mut adjustment = adj(
+            AdjustmentDirection::RemoveOutflow,
+            0.0,
+            AdjustmentFrequency::Monthly,
+            start,
+        );
+        adjustment.target_type = AdjustmentTarget::Subscription;
+        adjustment.target_key = Some("netflix".into());
+
+        let subs = vec![ConfirmedSubscription {
+            payee_key: "netflix".into(),
+            amount: -12.99,
+            interval_days: 30,
+        }];
+
+        let deltas = build_overlay_deltas(&[adjustment], &subs, start, end);
+        assert!(!deltas.is_empty());
+        assert!(deltas.values().any(|v| *v > 12.0));
+    }
+}

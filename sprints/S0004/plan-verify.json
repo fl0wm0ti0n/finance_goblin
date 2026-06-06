@@ -1,0 +1,62 @@
+{
+  "sprint": "S0004",
+  "story_id": "US-0004",
+  "verified_at": "2026-05-31T19:23:12Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0004",
+  "tasks_source": "sprints/S0004/tasks.md",
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "User can create named plan with scenario adjustments (e.g. +300 €/month leasing)",
+      "tasks": ["T-0037", "T-0038", "T-0039", "T-0041", "T-0043", "T-0044", "T-0047"],
+      "covered": true,
+      "notes": "Migration 004 plans/adjustments schema (T-0037); plan CRUD + adjustment repository (T-0038); overlay engine projects deltas on forecast baseline (T-0039); PlanService orchestration + recompute (T-0041); REST create/adjustment endpoints (T-0043); Scenarios tab adjustment CRUD + template apply (T-0044); integration tests create plan → apply template → recompute (T-0047)"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "Built-in scenario templates: current (Ist), leasing, savings mode, house purchase",
+      "tasks": ["T-0040", "T-0043", "T-0044", "T-0048"],
+      "covered": true,
+      "notes": "Built-in template defaults and apply_template logic (T-0040); apply-template endpoint + savings-mode suggestions (T-0043); template cards + savings mode modal (T-0044); operator guide covers all templates (T-0048)"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Plan versions (v1, v2, v3) can be created and compared side-by-side",
+      "tasks": ["T-0038", "T-0040", "T-0041", "T-0043", "T-0045", "T-0047"],
+      "covered": true,
+      "notes": "Version CRUD with cap enforcement and freeze semantics (T-0038); create_version copies adjustments and freezes prior (T-0040); compare_versions metrics (T-0041); versions/compare REST endpoints (T-0043); Compare tab metrics table + grouped bar chart (T-0045); versioning unit tests including v4 cap rejection (T-0047)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "Daily plan-vs-Ist comparison shows planned, actual, and deviation amounts",
+      "tasks": ["T-0037", "T-0039", "T-0041", "T-0042", "T-0043", "T-0045", "T-0047"],
+      "covered": true,
+      "notes": "plan_daily_cashflow hypertable (T-0037); overlay + project emit planned_net series (T-0039); plan_vs_actual with planned/actual/deviation and stale flags (T-0041); post-forecast active plan refresh keeps series current (T-0042); GET /plans/active/plan-vs-actual endpoint (T-0043); Plan vs Actual dual-line chart + daily table (T-0045); deviation sign and stale metadata tests (T-0047)"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Grafana Dashboard 3 (Budget plan/ist/deviation) reflects active plan",
+      "tasks": ["T-0043", "T-0046", "T-0048"],
+      "covered": true,
+      "notes": "Plan-vs-actual and active plan data exposed via API (T-0043); budgets.json uid budgets with plan/Ist/Abweichung panels + MTD table + empty-state annotation (T-0046); operator guide documents Dashboard 3 and active-plan requirement (T-0048)"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "Scenario changes do not modify Firefly transaction data",
+      "tasks": ["T-0039", "T-0042", "T-0043", "T-0047", "T-0048"],
+      "covered": true,
+      "notes": "Overlay reads forecast baseline read-only; no Firefly mirror mutation (T-0039); forecast hook refreshes plan only, no sync mutex phase change (T-0042); REST handlers read-only toward Firefly per DEC-0004 (T-0043); read-only audit assertion in plan module tests (T-0047); user guide documents read-only guarantee (T-0048)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "summary": {
+    "acceptance_criteria_count": 6,
+    "covered_count": 6,
+    "gap_count": 0,
+    "task_count": 12,
+    "tasks_without_acceptance_ref": [],
+    "tasks_without_acceptance_ref_note": "All tasks T-0037–T-0048 map to at least one AC in tasks.md acceptance refs and coverage map"
+  }
+}

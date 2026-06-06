@@ -1,0 +1,64 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260605-omniflow-prod-api-500",
+  "intake_work_item_kind": "bug",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Restore omniflow production API health: GET /api/v1/* endpoints return 200 within normal latency (not 500 after ~30s DB timeout); Bitunix POST /api/v1/exchanges/bitunix/test returns actionable success or auth error (not 400 unknown exchange); Grafana analytics SQL queries succeed via proxied datasource.",
+      "intake_run_id": "intake-20260605-omniflow-prod-api-500",
+      "turn_index": 0,
+      "ref": "ie:intake-20260605-omniflow-prod-api-500:0:abecb9f53d4bf1fa"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Sub-defect F: DATABASE_HOST=host.docker.internal vs expected postgres on traefik (compose external overlay, flow-finance-ai DB pool, all product APIs). G: ExchangeService::new uses config.bitunix.enabled not effective_enabled; BitunixConnector openapi.bitunix.com query-param sign vs futures fapi.bitunix.com header auth. H: grafana/provisioning/datasources/postgres.yaml ${DATABASE_HOST}; Grafana duplicate UID provisioning warnings.",
+      "intake_run_id": "intake-20260605-omniflow-prod-api-500",
+      "turn_index": 1,
+      "ref": "ie:intake-20260605-omniflow-prod-api-500:1:66bdd0d0ea653f1d"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "US-0010 external profile on financegnome.omniflow.cc post-BUG-0001/Q0007; DEC-0056/R-0052 expect DATABASE_HOST=postgres in-network; operator .env may override overlay; do not read .env/.env_prod secrets; BUG-0002 OPEN separately (Firefly PAT, risk-score, settings) — do not merge unless PO extends; wallet extension out of scope.",
+      "intake_run_id": "intake-20260605-omniflow-prod-api-500",
+      "turn_index": 2,
+      "ref": "ie:intake-20260605-omniflow-prod-api-500:2:110555a06a67b79e"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Smoke: representative GET /api/v1/alerts/unread-count, sync/entities, exchanges, forecast/* return 200 <5s with DATABASE_HOST=postgres; settings API database_host=postgres database_mode=external; Bitunix test endpoint with credentials present returns non-400; POST /analytics/grafana/api/ds/query returns 200 for platform-health panel SQL; regression OIDC and bundled-firefly profiles.",
+      "intake_run_id": "intake-20260605-omniflow-prod-api-500",
+      "turn_index": 3,
+      "ref": "ie:intake-20260605-omniflow-prod-api-500:3:03aba109cf0f7ebc"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator confirms financegnome product pages load data without API 500 cascade; Bitunix test connection succeeds or shows documented auth/URL mismatch fix; analytics dashboards render SQL panels; BUG-0003 acceptance rows F+G+H checked on external profile; discovery documents root cause per sub-defect.",
+      "intake_run_id": "intake-20260605-omniflow-prod-api-500",
+      "turn_index": 4,
+      "ref": "ie:intake-20260605-omniflow-prod-api-500:4:a5b5ff6cb373039c"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug",
+    "rationale": "Same operator investigation session (2026-06-05) on US-0010 external financegnome.omniflow.cc post-Q0008; sub-defects F (DB host cascade 500), G (Bitunix test 400), H (Grafana SQL 400) share DATABASE_HOST misconfiguration root and are tracked under BUG-0003 for discovery decomposition.",
+    "alternatives_considered": [
+      "BUG-0003 DB-only + BUG-0004 Bitunix-only + BUG-0005 Grafana-only — rejected to avoid duplicate environment/evidence blocks; fixes remain independently testable via sub-defect acceptance rows F/G/H",
+      "Merge into BUG-0002 — rejected per PO: BUG-0002 remains Firefly sync / risk-score / settings display; distinct production regression cluster"
+    ]
+  }
+}

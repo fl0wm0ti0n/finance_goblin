@@ -1,0 +1,147 @@
+{
+  "sprint": "S0011",
+  "story_id": "US-0011",
+  "phase": "qa",
+  "verified_at": "2026-06-02T23:30:00Z",
+  "result": "PASS",
+  "verdict": "PASS",
+  "ready_for_verify_work": true,
+  "ready_for_release": false,
+  "acceptance_source": "docs/product/acceptance.md#US-0011",
+  "decisions": ["DEC-0057"],
+  "inputs": [
+    "handoffs/dev_to_qa.md",
+    "sprints/S0011/summary.md",
+    "sprints/S0011/uat.md",
+    "sprints/S0011/plan-verify.json",
+    "decisions/DEC-0057.md",
+    "docs/user-guides/US-0011.md"
+  ],
+  "automated_checks": [
+    {
+      "id": "QA-AUTO-1",
+      "description": "cargo test --test analytics_proxy_integration",
+      "result": "pass",
+      "evidence": "4/4 passed (prefix strip, X-Frame-Options, Set-Cookie, WS route)"
+    },
+    {
+      "id": "QA-AUTO-2",
+      "description": "cargo test --test product_routes_regression",
+      "result": "pass",
+      "evidence": "4/4 passed (product routes, analytics slugs, wealth in-app, echarts imports)"
+    },
+    {
+      "id": "QA-AUTO-3",
+      "description": "cargo test grafana_upstream --lib",
+      "result": "pass",
+      "evidence": "3/3 allowlist unit tests"
+    },
+    {
+      "id": "QA-AUTO-4",
+      "description": "frontend npm run build",
+      "result": "pass",
+      "evidence": "tsc + vite build exit 0 (QA run 2026-06-02)"
+    },
+    {
+      "id": "QA-AUTO-5",
+      "description": "DEC-0057 static contract review",
+      "result": "pass",
+      "evidence": "proxy path, compose anonymous env, CSP, no subpath, no public Grafana default, JWT boundary"
+    }
+  ],
+  "acceptance": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Analytics sidebar lists six provisioned dashboards with in-app routes",
+      "verdict": "PASS",
+      "method": "AppLayout + AnalyticsEmbedPage + regression test",
+      "runtime_pending": false
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "User opens each dashboard in-app via iframe without default new tab",
+      "verdict": "PASS",
+      "method": "AnalyticsEmbedPage iframe + wealth no _blank test",
+      "runtime_pending": true,
+      "runtime_note": "omniflow iframe load deferred (host 404)"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Embed works with Traefik auth or documented dev bypass",
+      "verdict": "PASS",
+      "method": "proxy outside JWT + US-0011.md Traefik section",
+      "runtime_pending": true,
+      "runtime_note": "omniflow Traefik session + proxy health deferred"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "ECharts product pages remain functional",
+      "verdict": "PASS",
+      "method": "product_routes_regression tests",
+      "runtime_pending": false
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Wealth uses in-app portfolio analytics entry",
+      "verdict": "PASS",
+      "method": "WealthPage Link + regression test",
+      "runtime_pending": false
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "Future-chart guideline documented",
+      "verdict": "PASS",
+      "method": "docs/user-guides/US-0011.md",
+      "runtime_pending": false
+    },
+    {
+      "acceptance_id": "AC-7",
+      "criterion": "Operator guide single-URL analytics; no public Grafana host required",
+      "verdict": "PASS",
+      "method": "US-0011.md + .env.example",
+      "runtime_pending": false
+    }
+  ],
+  "uat_steps": [
+    { "id": "UAT-1", "result": "pass", "method": "static + regression" },
+    { "id": "UAT-2", "result": "pass", "method": "static + regression; runtime deferred" },
+    { "id": "UAT-3", "result": "pass", "method": "static/docs; runtime deferred" },
+    { "id": "UAT-4", "result": "pass", "method": "product_routes_regression" },
+    { "id": "UAT-5", "result": "pass", "method": "wealth regression test" },
+    { "id": "UAT-6", "result": "pass", "method": "user guide review" },
+    { "id": "UAT-7", "result": "pass", "method": "user guide + .env.example" }
+  ],
+  "advisories": [
+    {
+      "id": "QA-ADV-1",
+      "severity": "low",
+      "note": "Omniflow host smoke deferred: curl 404 on health, root, and /analytics/grafana/api/health (OMNIFLOW_HOST_UNAVAILABLE)."
+    },
+    {
+      "id": "QA-ADV-2",
+      "severity": "low",
+      "note": "Grafana Live WebSocket panel refresh — manual smoke on deployed host at verify-work."
+    },
+    {
+      "id": "QA-ADV-3",
+      "severity": "low",
+      "note": "compose-config-check env-dependent failure per dev handoff; not US-0011 blocker."
+    }
+  ],
+  "blockers": [],
+  "summary": {
+    "acceptance_criteria_count": 7,
+    "pass_count": 7,
+    "pass_with_prerequisites_count": 0,
+    "fail_count": 0,
+    "automated_pass": 5,
+    "runtime_deferred": true
+  },
+  "artifacts": {
+    "qa_findings": "sprints/S0011/qa-findings.md",
+    "handoff": "handoffs/qa_to_release.md",
+    "uat": "sprints/S0011/uat.json"
+  },
+  "next_phase": "verify-work",
+  "notes": "QA 2026-06-02: PASS. Omniflow iframe/runtime deferred. No dev rework. Proceed /verify-work in fresh subagent."
+}

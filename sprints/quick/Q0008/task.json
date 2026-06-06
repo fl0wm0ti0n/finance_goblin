@@ -1,0 +1,106 @@
+{
+  "id": "Q0008",
+  "title": "BUG-0002 omniflow production integration defects — PAT guard, risk-score 200, effective exchange enabled",
+  "status": "planned",
+  "bug_id": "BUG-0002",
+  "architecture_ref": "architecture-20260604-bug0002",
+  "sprint_plan_ref": "sprint-plan-20260604-q0008-bug0002",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["C", "D", "E"],
+  "task_count": 5,
+  "estimate_total_hours": 10.5,
+  "tasks": [
+    {
+      "id": "C2",
+      "title": "Empty PAT env guard + sync fail-fast",
+      "status": "open",
+      "estimate_hours": 3,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0002 (C) code — no blank Bearer 401",
+      "files": [
+        "backend/src/config/mod.rs",
+        "backend/src/sync/mod.rs",
+        "backend/src/health/mod.rs"
+      ],
+      "tests": [
+        "Unit: empty PAT → pat_configured() false",
+        "Unit: sync preflight error firefly_personal_access_token_missing"
+      ]
+    },
+    {
+      "id": "D1",
+      "title": "Risk-score 200 tagged empty-state + Planning types",
+      "status": "open",
+      "estimate_hours": 4,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0002 (D) — GET /api/v1/plans/risk-score always 200",
+      "files": [
+        "backend/src/api/plans.rs",
+        "backend/src/plan/risk.rs",
+        "frontend/src/lib/api.ts",
+        "frontend/src/pages/PlanningPage.tsx"
+      ],
+      "tests": [
+        "Rust: 200 no_score no_active_plan / not_computed",
+        "Rust: 200 ok regression",
+        "npm run build"
+      ]
+    },
+    {
+      "id": "E1",
+      "title": "Effective enabled in settings_view + startup mirror",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0002 (E) — Bitunix-only enabled+configured",
+      "files": [
+        "backend/src/config/mod.rs",
+        "backend/src/exchanges/service.rs"
+      ],
+      "tests": [
+        "Settings API: configured creds imply effective enabled"
+      ]
+    },
+    {
+      "id": "E2",
+      "title": "default.toml binance.enabled=false",
+      "status": "open",
+      "estimate_hours": 0.5,
+      "depends_on": ["E1"],
+      "acceptance_hook": "BUG-0002 (E) greenfield Binance row",
+      "files": ["backend/config/default.toml"],
+      "tests": ["Greenfield settings: binance not falsely enabled without env"]
+    },
+    {
+      "id": "C1",
+      "title": "Operator PAT + runbook/compose verification",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["C2"],
+      "acceptance_hook": "BUG-0002 (C) operator — sync success, counts > 0",
+      "files": [
+        "docs/engineering/runbook.md",
+        ".env.example"
+      ],
+      "tests": [
+        "Operator: printenv FIREFLY_PERSONAL_ACCESS_TOKEN non-empty (value not logged)",
+        "Operator: manual sync success; no 401 in sync status"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "C2 + D1 + E1 + E2 code image",
+    "C1 operator PAT",
+    "Omniflow smoke C/D/E + regression"
+  ],
+  "execute_order": ["C2", "D1", "E1", "E2", "C1"],
+  "frozen_boundaries": [
+    "No 404 for empty risk-score",
+    "No PAT values in logs",
+    "No GF_SERVER_SERVE_FROM_SUB_PATH",
+    "No Traefik/JWT stack changes for analytics"
+  ],
+  "decisions": ["DEC-0004", "DEC-0054"],
+  "research": ["R-0057", "R-0032"],
+  "operator_next": "After deploy: set non-empty FIREFLY_PERSONAL_ACCESS_TOKEN, recreate flow-finance-ai, run BUG-0002 acceptance smoke on financegnome.omniflow.cc"
+}

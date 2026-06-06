@@ -1,0 +1,60 @@
+{
+  "id": "Q0017",
+  "type": "quick",
+  "bug_ids": ["BUG-0007"],
+  "status": "PLANNED",
+  "created": "2026-06-07",
+  "goal": "Close BUG-0007: DEC-0069 A′+E+F bundle — category_search + mirror_date_bounds on get_transactions; get_subscriptions schema enrichment + Counterparty guard; orchestrator prompt + audit result_rows; operator verify S/T/U on financegnome.omniflow.cc after backend deploy.",
+  "scope": [
+    "A1: Repository ILIKE category resolve + mirror MIN/MAX bounds",
+    "A2: Service + get_transactions tool schema/response extensions",
+    "F1: get_subscriptions kind enum, merchant_names[], patterns_count, Counterparty guard",
+    "E1: SYSTEM_PROMPT enumeration/category_search/bounds rules + audit result_rows",
+    "E2: Parameter schema descriptions for category_id + category_search",
+    "T1: Unit/integration tests for A′, F, E contracts + privacy regression",
+    "V1: verify-work omniflow AI Chat smoke rows S/T/U + six-tool footer"
+  ],
+  "risks": [
+    "LLM may still ignore enriched payloads — mitigated by E1 prompt rules + audit observability",
+    "category_search ILIKE false positives on short keywords — min 2 chars + cap 10",
+    "Amazon Jan–Oct 2023 is true empty period — V1 must probe mirror_date_bounds not miscategorization",
+    "BUG-0008 shared SubscriptionService — F1 must be additive AI JSON only",
+    "Integration tests require operator DATABASE_URL (TimescaleDB)"
+  ],
+  "task_count": 7,
+  "estimate_total_hours": 13.5,
+  "decisions": ["DEC-0069", "DEC-0032", "DEC-0035", "DEC-0045"],
+  "research": ["R-0065"],
+  "acceptance_rows": ["S", "T", "U"],
+  "execute_order": ["A1", "A2", "F1", "E1", "E2", "T1", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Deploy A1–E2+T1 single backend PR before V1 AI Chat omniflow smoke"
+    }
+  ],
+  "acceptance_mapping": {
+    "S": {
+      "tasks": ["F1", "E1", "E2", "V1"],
+      "verify": "Chat lists named subscription merchants from get_subscriptions after cancelable-total question; not generic-only or cannot retrieve"
+    },
+    "T": {
+      "tasks": ["A1", "A2", "E1", "E2", "V1"],
+      "verify": "Strom/Amazon amounts via category_search in mirror window; Amazon Jan–Oct 2023 cites mirror_date_bounds empty-state"
+    },
+    "U": {
+      "tasks": ["A1", "A2", "F1", "E1", "V1"],
+      "verify": "Multi-tool fusion without user-supplied merchant names; category + subscription + amount signals combined"
+    }
+  },
+  "deploy_order": [
+    "A1 + A2 + F1 + E1 + E2 + T1 single backend PR",
+    "Deploy backend image on omniflow",
+    "V1 verify-work AI Chat smoke rows S/T/U + regression footer"
+  ],
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260607-q0017-bug0007",
+  "architecture_ref": "architecture-20260607-bug0007"
+}

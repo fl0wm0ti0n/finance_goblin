@@ -1,0 +1,106 @@
+{
+  "id": "Q0010",
+  "title": "BUG-0006 Firefly mirror ingest + get_transactions aggregate contract",
+  "status": "PLANNED",
+  "bug_id": "BUG-0006",
+  "architecture_ref": "architecture-20260605-bug0006",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["P", "Q", "R"],
+  "task_count": 5,
+  "estimate_total_hours": 9.5,
+  "tasks": [
+    {
+      "id": "Q1",
+      "title": "Firefly category_id sync on upsert",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0006 (Q) — category_id persisted on mirror transactions rows",
+      "files": [
+        "backend/src/firefly/mod.rs",
+        "backend/src/db/mod.rs"
+      ],
+      "tests": [
+        "Unit: fixture split JSON → category_id on upsert",
+        "cargo test --lib firefly/db"
+      ]
+    },
+    {
+      "id": "Q2",
+      "title": "ISO datetime date parse in Firefly sync",
+      "status": "open",
+      "estimate_hours": 1.5,
+      "depends_on": ["Q1"],
+      "acceptance_hook": "BUG-0006 (Q) — non-NULL NaiveDate; period filter returns rows",
+      "files": ["backend/src/firefly/mod.rs"],
+      "tests": [
+        "Unit: ISO datetime → date component only",
+        "Unit: invalid date → NULL + warn"
+      ]
+    },
+    {
+      "id": "Q3",
+      "title": "Amount sign normalization per DEC-0059",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["Q2"],
+      "acceptance_hook": "BUG-0006 (Q) — signed amounts; amount < 0 outflow sums",
+      "files": ["backend/src/firefly/mod.rs"],
+      "decisions": ["DEC-0059"],
+      "tests": [
+        "Unit: withdrawal/deposit/transfer → expected sign",
+        "Re-sync upsert backfill (no SQL migration)"
+      ]
+    },
+    {
+      "id": "R1",
+      "title": "TransactionAggregates contract extension",
+      "status": "open",
+      "estimate_hours": 3,
+      "depends_on": ["Q3"],
+      "acceptance_hook": "BUG-0006 (R) — totals, uncategorized count, period_status; raw_rows gated",
+      "files": [
+        "backend/src/transactions/types.rs",
+        "backend/src/transactions/repository.rs",
+        "backend/src/transactions/service.rs",
+        "backend/src/ai/tools/transactions.rs"
+      ],
+      "tests": [
+        "Integration: fixture rows → totals + period_status",
+        "Unit: allow_raw_transactions=false → summary fields; raw_rows absent"
+      ]
+    },
+    {
+      "id": "P1",
+      "title": "verify-work prep and acceptance mapping",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["R1"],
+      "operator_gate": "Manual Firefly sync after deploy required before P1 smoke",
+      "acceptance_hook": "BUG-0006 (P) — AI Chat uses get_transactions aggregates; SQL probe matches",
+      "files": ["sprints/quick/Q0010/uat.md"],
+      "tests": [
+        "SQL probe: count, category_id, dates, amount sign",
+        "AI Chat spending question non-empty aggregates",
+        "period_status distinguishes empty vs uncategorized vs zero-outflow"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "Q1 → Q2 → Q3 → R1 single backend PR",
+    "Deploy image to omniflow",
+    "Operator manual Firefly sync (backfill ~922 rows via DEC-0002 upsert)",
+    "P1 verify-work smoke rows P/Q/R + regression footer"
+  ],
+  "execute_order": ["Q1", "Q2", "Q3", "R1", "P1"],
+  "frozen_boundaries": [
+    "Do not merge BUG-0002/0003/0004/0005 scope",
+    "Do not change allow_raw_transactions default or expose raw rows for fix",
+    "Do not rewrite aggregate SQL to read unsigned amounts from payload",
+    "No PrivacyLayer change — new fields aggregate-only (DEC-0032)",
+    "No SQL migration backfill — upsert on next sync only (DEC-0002)"
+  ],
+  "decisions": ["DEC-0059", "DEC-0002", "DEC-0032"],
+  "research": ["R-0060"],
+  "operator_next": "After Q1–R1 deploy: manual Firefly sync on financegnome.omniflow.cc, then P1 verify-work (AI Chat + SQL probe)"
+}

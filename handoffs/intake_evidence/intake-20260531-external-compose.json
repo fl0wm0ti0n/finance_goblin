@@ -1,0 +1,55 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260531-external-compose",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Reuse existing Firefly and Postgres containers; adapt docker-compose.yml; expose Flow Finance AI via Traefik at financegnome.omniflow.cc with password middleware; verify it runs.",
+      "intake_run_id": "intake-20260531-external-compose",
+      "turn_index": 0,
+      "ref": "ie:intake-20260531-external-compose:0:30fd2a3edf1ade94"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "finance_goblin/docker-compose.yml, .env.example, optional docs; host stack /workdir/firefly/docker-compose.yml and /workdir/services (postgres) on network traefik.",
+      "intake_run_id": "intake-20260531-external-compose",
+      "turn_index": 1,
+      "ref": "ie:intake-20260531-external-compose:1:0b7eaa6e2fc46559"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Do not start new firefly-iii or postgres services; join external traefik network; Firefly container name firefly; postgres container postgres; port 8090 already used by firefly_product_manager on host.",
+      "intake_run_id": "intake-20260531-external-compose",
+      "turn_index": 2,
+      "ref": "ie:intake-20260531-external-compose:2:da103cd447af988f"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "docker compose --profile minimal up without duplicate Firefly/Postgres; GET /health on backend; HTTPS reachability via Traefik Host financegnome.omniflow.cc with auth middleware; Firefly API reachable from app container.",
+      "intake_run_id": "intake-20260531-external-compose",
+      "turn_index": 3,
+      "ref": "ie:intake-20260531-external-compose:3:86c909d4c8a76a1d"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Compose documents external mode; operator .env lists required variables; smoke test passes on Debian host; user informed of any missing env values.",
+      "intake_run_id": "intake-20260531-external-compose",
+      "turn_index": 4,
+      "ref": "ie:intake-20260531-external-compose:4:00bd80f56f0a86a8"
+    }
+  ]
+}

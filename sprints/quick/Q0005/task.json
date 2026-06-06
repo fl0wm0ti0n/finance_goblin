@@ -1,0 +1,11 @@
+{
+  "id": "Q0005",
+  "title": "Traefik basic-auth re-prompt loop and stale JS cache",
+  "status": "done",
+  "fixes": [
+    "apiFetch + chat stream: credentials include for Traefik basic-auth",
+    "Remove global QueryClient refetchInterval 5000 (caused /api poll every 5s → auth dialog)",
+    "index.html Cache-Control no-cache so browsers load new hashed bundles",
+    "Skip AuthProvider when OIDC not configured; split OidcProtectedRoute hooks"
+  ]
+}

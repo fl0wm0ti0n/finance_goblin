@@ -1,0 +1,145 @@
+{
+  "id": "Q0014",
+  "title": "BUG-0012 forecast monthly Income/Fixed buckets",
+  "status": "PLANNED",
+  "bug_id": "BUG-0012",
+  "architecture_ref": "architecture-20260605-bug0012",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["AG", "AH"],
+  "acceptance_mapping": {
+    "AG": {
+      "tasks": ["AG1", "T1", "V1"],
+      "primary_verify": "GET /api/v1/forecast/monthly — income > 0 when mirror has income-category recurring inflows"
+    },
+    "AH": {
+      "tasks": ["AH1", "AG1", "T1", "V1"],
+      "primary_verify": "GET /api/v1/forecast/monthly — fixed_costs > 0 when mirror has fixed-cost category outflows"
+    }
+  },
+  "task_count": 5,
+  "estimate_total_hours": 7.5,
+  "tasks": [
+    {
+      "id": "AH1",
+      "title": "RecurringPattern.category_id + recurring bucket path",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0012 (AH) — fixed-category recurring routes to Fixed bucket",
+      "files": [
+        "backend/src/forecast/types.rs",
+        "backend/src/forecast/recurring.rs",
+        "backend/src/forecast/project.rs"
+      ],
+      "decisions": ["DEC-0067", "DEC-0013"],
+      "tests": [
+        "Unit: RecurrenceGroup.category_ids mode → RecurringPattern.category_id",
+        "Unit: subscription override category inherit/lookup"
+      ]
+    },
+    {
+      "id": "AG1",
+      "title": "Income from categorized recurring inflows",
+      "status": "open",
+      "estimate_hours": 2.5,
+      "depends_on": ["AH1"],
+      "acceptance_hook": "BUG-0012 (AG)(AH) — component-level monthly_map per DEC-0067",
+      "files": [
+        "backend/src/forecast/project.rs",
+        "backend/src/forecast/categories.rs"
+      ],
+      "decisions": ["DEC-0067", "DEC-0007"],
+      "tests": [
+        "Unit: rolling → Variable only",
+        "Unit: salary recurring → Income bucket",
+        "Unit: rent recurring → Fixed bucket",
+        "Unit: same-day mixed → both buckets non-zero"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "Unit tests monthly_map component attribution",
+      "status": "open",
+      "estimate_hours": 1.5,
+      "depends_on": ["AG1"],
+      "acceptance_hook": "BUG-0012 (AG)(AH) — frozen test contract",
+      "files": ["backend/src/forecast/project.rs"],
+      "tests": [
+        "Unit: AG income > 0 first forecast month",
+        "Unit: AH fixed_costs > 0",
+        "Unit: Variable regression when fixed moves out",
+        "Unit: map_category wiring with category_names"
+      ]
+    },
+    {
+      "id": "D1",
+      "title": "Retire net-delta categorize_delta for monthly buckets",
+      "status": "open",
+      "estimate_hours": 0.5,
+      "depends_on": ["AG1"],
+      "acceptance_hook": "BUG-0012 (AG)(AH) — no net-delta monthly path remains",
+      "files": [
+        "backend/src/forecast/project.rs",
+        "backend/src/forecast/service.rs"
+      ],
+      "decisions": ["DEC-0067"],
+      "tests": [
+        "grep/assert: categorize_delta not used for monthly_map",
+        "Unit: category_names not dead-bound"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work prep + runbook TOML checklist",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["AH1", "AG1", "T1", "D1"],
+      "operator_gate": "Full Firefly sync + recompute after deploy; TOML extend if label mismatch",
+      "acceptance_hook": "BUG-0012 (AG)(AH) — financegnome.omniflow.cc probes",
+      "files": [
+        "sprints/quick/Q0014/uat.md",
+        "docs/engineering/runbook.md"
+      ],
+      "tests": [
+        "Monthly Income non-zero when categorized inflows exist",
+        "Monthly Fixed non-zero when categorized fixed outflows exist",
+        "Runbook TOML checklist for German/custom labels"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "AH1 + AG1 + T1 + D1 single PR",
+    "Deploy image to omniflow",
+    "Operator manual Full Firefly sync + forecast recompute",
+    "Operator TOML extend [forecast.category_buckets] if label mismatch",
+    "V1 verify-work smoke rows AG/AH + regression footer"
+  ],
+  "execute_order": ["AH1", "AG1", "T1", "D1", "V1"],
+  "operator_gates": [
+    {
+      "id": "FULL_FIREFLY_SYNC_RECOMPUTE",
+      "before_tasks": ["V1"],
+      "action": "Trigger manual Full Firefly sync + forecast recompute on financegnome.omniflow.cc after AH1–D1 deploy",
+      "rationale": "Monthly buckets read latest baseline computation; mirror category data must be current"
+    },
+    {
+      "id": "TOML_CATEGORY_BUCKETS",
+      "before_tasks": ["V1"],
+      "action": "If AG/AH fail, operator adds lowercase category name keys under [forecast.category_buckets] in TOML and recomputes",
+      "rationale": "German/custom Firefly labels (Gehalt, Miete Nebenkosten) absent from default.toml — operator-owned config"
+    }
+  ],
+  "frozen_boundaries": [
+    "Rolling daily_rate → Variable (positive and negative) — not Income",
+    "Unmapped category names → Variable default",
+    "Daily balance / milestones / horizons unchanged",
+    "No frontend changes required",
+    "US-0015 AI buckets out of scope",
+    "US-0013 ML overlay out of scope",
+    "No default.toml code expansion — operator TOML on external profile",
+    "No fuzzy/AI name matching"
+  ],
+  "decisions": ["DEC-0067", "DEC-0007", "DEC-0013"],
+  "research": ["R-0063"],
+  "operator_next": "After AH1–D1 deploy: Full Firefly sync + recompute; extend TOML if needed; then V1 verify-work"
+}

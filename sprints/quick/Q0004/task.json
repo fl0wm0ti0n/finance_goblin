@@ -1,0 +1,8 @@
+{
+  "id": "Q0004",
+  "title": "Fix blank/crash UI after Traefik login — missing BrowserRouter",
+  "status": "done",
+  "root_cause": "App used react-router hooks (Routes, useLocation, useNavigate) without BrowserRouter; React Router invariant de(!1) in production bundle",
+  "fix": "Wrap <App /> in <BrowserRouter> in frontend/src/main.tsx",
+  "acceptance": ["npm run build passes", "SPA loads after Traefik auth without Uncaught Error in index-*.js"]
+}

@@ -1,0 +1,62 @@
+{
+  "sprint": "S0006",
+  "story_id": "US-0006",
+  "verified_at": "2026-05-31T22:03:04Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0006",
+  "tasks_source": "sprints/S0006/tasks.md",
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Chat UI accepts natural-language questions about finances",
+      "tasks": ["T-0067", "T-0068", "T-0069", "T-0072"],
+      "covered": true,
+      "notes": "AiOrchestrator SSE POST /api/v1/chat/stream with JWT auth and tool-calling loop (T-0067); React ChatPanel + useChatStream fetch/SSE parser with message input and streaming tokens (T-0068); header Sheet drawer and /chat full-page route sharing ChatPanel (T-0069); operator guide documents Sheet vs /chat and suggested prompts (T-0072)"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "AI invokes only registered tools (get_transactions, get_subscriptions, get_forecast, get_budget_status, get_portfolio, simulate_plan) — no direct DB access",
+      "tasks": ["T-0065", "T-0066", "T-0067", "T-0071"],
+      "covered": true,
+      "notes": "AiTool trait + ToolContext without DbPool + registry allowlist and OpenAI tools array (T-0065); six tool implementations delegating to in-process services only, no sqlx/Firefly in ai/tools (T-0066); orchestrator validates tool names and executes via registry (T-0067); static audit + unit tests assert no DbPool/Firefly in ai path and six names match migration CHECK (T-0071)"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "OpenAI provider configurable via environment/config",
+      "tasks": ["T-0062", "T-0065", "T-0067", "T-0070", "T-0072"],
+      "covered": true,
+      "notes": "[ai] TOML section + api_key_env overlay + settings API openai_configured flag (T-0062); OpenAI client factory and ProviderNotConfigured when key absent (T-0065); orchestrator streams via OpenAI with structured SSE error on missing key (T-0067); Settings AI section read-only display and configured badge (T-0070); user guide OPENAI_API_KEY and TOML model setup (T-0072)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "Privacy settings: allow_raw_transactions, redact_iban, redact_counterparties honored in tool responses",
+      "tasks": ["T-0062", "T-0064", "T-0066", "T-0067", "T-0070", "T-0071", "T-0072"],
+      "covered": true,
+      "notes": "PrivacyConfig from TOML + TransactionsService aggregate vs raw cap modes (T-0062); PrivacyLayer central redaction + summarize_args for audit (T-0064); tools return payloads sized for layer/orchestrator path (T-0066); orchestrator applies PrivacyLayer before OpenAI and audit on every tool output (T-0067); Settings read-only privacy toggles (T-0070); PrivacyLayer unit + integration redaction tests (T-0071); operator guide privacy defaults and TOML restart workflow (T-0072)"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Example queries work: affordability check, subscription price changes, budget overrun explanation, savings from cancelling subscription, top spending categories",
+      "tasks": ["T-0063", "T-0066", "T-0067", "T-0068", "T-0071", "T-0072"],
+      "covered": true,
+      "notes": "PlanService project_ephemeral/readonly for simulate_plan leasing and savings_mode templates (T-0063); six tools with explicit query-to-tool mapping table for all five examples (T-0066); multi-round orchestrator enables chained tool calls (T-0067); SuggestedPrompts chips match German example queries (T-0068); optional AC-5 smoke tests with mocked services (T-0071); user guide example queries and expected tool behavior (T-0072)"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "Tool call audit log available for operator review",
+      "tasks": ["T-0061", "T-0067", "T-0070", "T-0071", "T-0072"],
+      "covered": true,
+      "notes": "Migration 006 ai_tool_audit schema + retention job + audit repository insert/list (T-0061); orchestrator inserts redacted args_summary per invocation + GET /api/v1/ai/audit (T-0067); Settings AI & Privacy audit table with pagination (T-0070); integration test audit persistence when DATABASE_URL set (T-0071); operator guide audit retention and review workflow (T-0072)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "summary": {
+    "acceptance_criteria_count": 6,
+    "covered_count": 6,
+    "gap_count": 0,
+    "task_count": 12,
+    "tasks_without_acceptance_ref": [],
+    "tasks_without_acceptance_ref_note": "All tasks T-0061–T-0072 map to at least one AC in tasks.md acceptance refs and coverage map"
+  }
+}

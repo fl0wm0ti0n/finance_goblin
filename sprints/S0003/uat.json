@@ -1,0 +1,145 @@
+{
+  "sprint": "S0003",
+  "stories": ["US-0003"],
+  "story_id": "US-0003",
+  "phase": "verify-work",
+  "verified_at": "2026-05-31T19:15:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0003",
+  "qa_evidence": "sprints/S0003/qa-findings.md",
+  "environment": {
+    "env_file_present": false,
+    "database_url_set": false,
+    "timescaledb_extension": false,
+    "firefly_pat_configured": false,
+    "synced_expense_transactions": false,
+    "oidc_or_dev_bypass": false
+  },
+  "automated_checks": [
+    {
+      "id": "AUTO-1",
+      "description": "bash tests/run-tests.sh",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-2",
+      "description": "cargo test --test firefly_readonly",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-3",
+      "description": "cargo test --lib (subscription/recurrence unit tests)",
+      "result": "pass",
+      "notes": "18/18 including confidence tiers, classify, price_change, forecast override/exclusion"
+    },
+    {
+      "id": "AUTO-4",
+      "description": "cargo test --test firefly_integration",
+      "result": "skip",
+      "notes": "DATABASE_URL unset; operator prerequisite for audit-log verification"
+    },
+    {
+      "id": "AUTO-5",
+      "description": "cargo test --test forecast_integration",
+      "result": "skip",
+      "notes": "DATABASE_URL unset; operator prerequisite for hypertable persistence proof"
+    },
+    {
+      "id": "AUTO-6",
+      "description": "cargo test --test subscriptions_integration",
+      "result": "skip",
+      "notes": "DATABASE_URL unset; operator prerequisite for pending persistence and new_detection alert proof"
+    },
+    {
+      "id": "AUTO-7",
+      "description": "npm run build (frontend)",
+      "result": "pass",
+      "notes": "lazy ECharts chunk PriceHistoryChart; route /subscriptions in build"
+    },
+    {
+      "id": "AUTO-8",
+      "description": "docker compose --profile minimal config --services",
+      "result": "pass",
+      "notes": "firefly-iii, flow-finance-ai, grafana (placeholder env for AUTHENTIK_SECRET_KEY etc.)"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "Detection engine identifies recurring patterns with confidence score (95/80/60% tiers)",
+      "result": "pass",
+      "notes": "detect.rs score_confidence; migration 003 CHECK; unit tests confidence_tiers_per_dec_0014, emits_only_at_least_sixty_percent; UI confidence badges"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "User receives notification for new detected subscription with confirm/reject actions",
+      "result": "pass_with_prerequisites",
+      "notes": "new_detection alert, confirm/reject API, pending cards, alerts banner; live flow requires synced recurring expenses and auth"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "Confirmed subscriptions appear in subscription list with interval and amount",
+      "result": "pass_with_prerequisites",
+      "notes": "GET /api/v1/subscriptions, All/Confirmed table, detail drawer; live list requires confirmed patterns after sync"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "Standing-order (Dauerauftrag) patterns detected separately from discretionary subscriptions",
+      "result": "pass",
+      "notes": "classify.rs DEC-0016; Standing orders tab; unit tests large_fixed_monthly_is_standing_order, small_variable_is_subscription"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": "Price increase/decrease detected when amount changes for confirmed subscription",
+      "result": "pass_with_prerequisites",
+      "notes": "price_change.rs dual threshold; price-history API; PriceHistoryChart lazy chunk; live proof requires amount change in synced history"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-6",
+      "description": "Alert fired on new subscription detection and on price change",
+      "result": "pass_with_prerequisites",
+      "notes": "subscription_alerts table; GET alerts; UI banner; subscriptions_integration SKIP without DATABASE_URL"
+    },
+    {
+      "id": "UAT-7",
+      "acceptance_id": "AC-7",
+      "description": "Grafana Dashboard 2 (Subscriptions, price changes, new) provisioned",
+      "result": "pass",
+      "notes": "analytics/subscriptions.json uid subscriptions; FlowFinancePostgreSQL datasource"
+    },
+    {
+      "id": "UAT-8",
+      "acceptance_id": "AC-8",
+      "description": "Rejected patterns do not appear in subscription forecasts or alerts",
+      "result": "pass",
+      "notes": "subscription_rejections fingerprint; project.rs exclude_rejected + apply_subscription_override; unit test rejected_fingerprint_excluded_from_projection"
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_total": 8,
+    "acceptance_criteria_pass": 8,
+    "passed": 4,
+    "pass_with_prerequisites": 4,
+    "skipped": 0,
+    "failed": 0,
+    "automated_pass": 5,
+    "automated_skip": 3
+  },
+  "operator_prerequisites": [
+    "Copy .env.example to .env with DATABASE_*, FIREFLY_*, optional AUTH_DEV_BYPASS",
+    "Provision external TimescaleDB; apply migration 003_subscriptions.sql",
+    "docker compose --profile minimal up --build",
+    "Firefly PAT; sync expense transactions with recurring patterns (≥3 occurrences)",
+    "Open /subscriptions and Grafana dashboard subscriptions",
+    "DATABASE_URL for subscriptions_integration, forecast_integration, and firefly_integration tests"
+  ],
+  "next_phase": "release"
+}

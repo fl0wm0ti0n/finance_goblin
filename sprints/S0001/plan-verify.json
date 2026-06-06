@@ -1,0 +1,76 @@
+{
+  "sprint": "S0001",
+  "story_id": "US-0001",
+  "verified_at": "2026-05-31T21:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0001",
+  "tasks_source": "sprints/S0001/tasks.md",
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Docker Compose starts flow-finance-ai, firefly-iii, and grafana (minimal profile) without embedded PostgreSQL",
+      "tasks": ["T-0001", "T-0011"],
+      "covered": true,
+      "notes": "T-0001 minimal profile; T-0011 Grafana datasource/dashboard provisioning"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "External PostgreSQL connection configurable via TOML/env with database.mode = external",
+      "tasks": ["T-0002"],
+      "covered": true,
+      "notes": "Config module enforces external mode; env overlay documented"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Rust backend serves health endpoint and authenticated API skeleton",
+      "tasks": ["T-0003", "T-0004", "T-0008"],
+      "covered": true,
+      "notes": "Skeleton (T-0003), health/ready (T-0004), JWT-protected /api/v1 (T-0008)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "React UI shell loads with OIDC auth flow wired (login redirect + session)",
+      "tasks": ["T-0009"],
+      "covered": true,
+      "notes": "react-oidc-context redirect, session, protected routes"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Firefly Connector syncs accounts, transactions, categories, budgets, tags, and piggy banks via /api/v1",
+      "tasks": ["T-0005", "T-0006", "T-0010"],
+      "covered": true,
+      "notes": "Mirror schema (T-0005), GET connector (T-0006), Sync Status UI (T-0010)"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "Sync scheduler runs on configurable interval; manual sync trigger available",
+      "tasks": ["T-0005", "T-0007", "T-0010"],
+      "covered": true,
+      "notes": "Scheduler/API (T-0007), sync_runs schema (T-0005), manual trigger in UI (T-0010)"
+    },
+    {
+      "acceptance_id": "AC-7",
+      "criterion": "No write operations issued to Firefly III API (read-only verified in integration test or audit log)",
+      "tasks": ["T-0006", "T-0012"],
+      "covered": true,
+      "notes": "GET-only client + audit (T-0006); integration test assertion (T-0012)"
+    },
+    {
+      "acceptance_id": "AC-8",
+      "criterion": "Dev environment can connect to running local Firefly III instance per operator setup",
+      "tasks": ["T-0001", "T-0002", "T-0012"],
+      "covered": true,
+      "notes": "Compose host-gateway + env (T-0001/T-0002); operator guide (T-0012)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "summary": {
+    "acceptance_criteria_count": 8,
+    "covered_count": 8,
+    "gap_count": 0,
+    "task_count": 12,
+    "tasks_without_acceptance_ref": ["T-0011"],
+    "tasks_without_acceptance_ref_note": "T-0011 supports AC-1 Grafana acceptance via datasource provisioning; mapped in AC-1 notes"
+  }
+}

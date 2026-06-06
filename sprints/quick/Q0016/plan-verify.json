@@ -1,0 +1,121 @@
+{
+  "sprint": "Q0016",
+  "bug_id": "BUG-0009",
+  "orchestrator_run_id": "auto-20260606-bug0009-001",
+  "verified_at": "2026-06-06T20:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0009",
+  "tasks_source": "sprints/quick/Q0016/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0009",
+  "decision_alignment": {
+    "new_dec_required": false,
+    "extends": ["DEC-0009", "DEC-0049", "DEC-0057", "DEC-0065", "DEC-0066"],
+    "decisions": ["DEC-0068"],
+    "research_basis": ["R-0064"],
+    "contract_elements_covered": [
+      "Y1: ORDER BY ABS(COALESCE(balance,0)) DESC, name on cashflow + forecast-horizons; omit current block",
+      "Z1: latest-snapshot subquery + CROSS JOIN LATERAL jsonb_array_elements; remove global LIMIT 1",
+      "Z2: portfolio dashboard stat row + all-accounts table; grid placement; Z3 /wealth supplementary docs",
+      "Y2: ML text banner + noValue ML unavailable; no dynamic hide; US-0013 out of scope",
+      "T1: SQL fixtures 3-row breakdown + ABS variable order; optional provisioning JSON snapshot",
+      "V1: uat.md + omniflow smoke rows Y/Z; six /analytics routes; ds/query 200 regression after provisioning reload"
+    ],
+    "frozen_boundaries_respected": [
+      "Provisioning-only — no backend or React code",
+      "US-0013 ML enablement out of scope",
+      "Seventh overview dashboard rejected",
+      "Grafana dynamic hide rules rejected",
+      "React /forecast API reorder optional follow-up — not required for AC Y",
+      "Overview on portfolio dashboard only — /wealth supplementary",
+      "Omit current block from provisioning JSON",
+      "All-zero balances → alphabetical default — documented edge case"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "Z1 → Z2 → Y1 → Y2 → T1 single PR → deploy → GRAFANA_PROVISIONING_RELOAD → V1 verify-work",
+    "notes": "T1 depends on Z1 and Y1 SQL contracts; may parallelize with Y2 once Z1+Y1 frozen; V1 gated on deploy + Grafana provisioning reload before omniflow smoke"
+  },
+  "test_coverage": {
+    "sql_fixtures": "T1 frozen contract: 3-account breakdown → 3 rows; ABS(balance) variable picks funded acct 114 over zero wallet 116",
+    "provisioning_review": "Z2 grid/stat visibility; Y2 banner + noValue; optional JSON snapshot for Y1 query + Y2 banner",
+    "operator_tests": "V1 default-load /analytics/cashflow non-flat series; /analytics/portfolio overview 3 rows + total_eur stat; /analytics/forecast ML banner; six routes smoke; ds/query 200 regression",
+    "doc_review": "V1 creates uat.md smoke checklist mapping Y/Z + regression footer + runbook current-block warning",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "Y",
+      "criterion": "Representative Grafana analytics dashboards return 200 with non-empty panel values when account_id matches synced Firefly asset accounts — not persistent empty panels post-BUG-0004; six routes smoke; OIDC regression",
+      "tasks": ["Y1", "Y2", "T1", "V1"],
+      "covered": true,
+      "notes": "Y1 fixes alphabetical default to zero-balance acct 116 on cashflow + forecast-horizons; Y2 closes ML perceived emptiness with honest banner+noValue; Z1/Z2 fix portfolio non-empty via breakdown SQL; subscriptions/budgets unaffected by account_id — V1 ds/query 200 regression per architecture Y3; T1 SQL fixtures prove variable order and breakdown rows"
+    },
+    {
+      "acceptance_id": "Z",
+      "criterion": "Cross-account value overview in analytics (Grafana summary panel/table or documented equivalent); six /analytics/{slug} routes smoke; OIDC regression",
+      "tasks": ["Z1", "Z2", "T1", "V1"],
+      "covered": true,
+      "notes": "Z1 removes LIMIT 1 truncation; Z2 stat row + all-accounts table on portfolio dashboard satisfies AC Z primary fix; optional Z3 /wealth link supplementary; V1 six-route smoke + portfolio overview 3-row operator probe on omniflow"
+    },
+    {
+      "acceptance_id": "REGRESSION",
+      "criterion": "OIDC-enabled and bundled-firefly deploy regression checks pass (acceptance footer)",
+      "tasks": [],
+      "covered": true,
+      "notes": "V1 uat.md regression footer post-verify; no dedicated dev task — operator verify-work smoke (ADV-1)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "OIDC + bundled-firefly regression footer has no dedicated dev task; operator verify-work post-V1."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Row Y default-load runtime proof requires deploy + GRAFANA_PROVISIONING_RELOAD before V1 omniflow probes."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "Subscriptions/budgets dashboards lack account_id variable — V1 should include ds/query 200 regression; non-empty not gated on Y1."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "All-zero balance deploy → alphabetical variable default — documented MVP edge case."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "Overview portfolio-dashboard-only — Z3 sidebar/docs mitigate navigation; not AC Z blocker."
+    },
+    {
+      "id": "ADV-6",
+      "severity": "low",
+      "note": "ML charts empty below banner until US-0013 — Y2 honest empty-state closes BUG-0009 Y2 only."
+    },
+    {
+      "id": "ADV-7",
+      "severity": "low",
+      "note": "Manual Grafana UI save may bake current — V1 runbook warning required at execute."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 2,
+    "covered_count": 2,
+    "gap_count": 0,
+    "task_count": 6,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0068_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true
+  },
+  "notes": "QA plan-verify 2026-06-06: sprints/quick/Q0016/tasks.md aligns with docs/product/acceptance.md BUG-0009 rows Y/Z and architecture § BUG-0009 / DEC-0068; 6/6 tasks mapped (Z1, Z2, Y1, Y2, T1, V1); no gaps or orphans. Approved for /execute."
+}

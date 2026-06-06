@@ -1,0 +1,7 @@
+{
+  "id": "Q0006",
+  "title": "Stop Traefik basic-auth popup loop on API polling",
+  "status": "done",
+  "root_cause": "All paths used Traefik auth middleware; each /api fetch without cached Basic header returned 401 WWW-Authenticate Basic → browser re-prompt. AUTH_DEV_BYPASS=false + placeholder OIDC blocked API even when Traefik passed.",
+  "fix": "Split Traefik routers: /api, /analytics, /health without auth (priority 100); SPA with auth. External profile forces AUTH_DEV_BYPASS=true and clears OIDC_ISSUER_URL."
+}

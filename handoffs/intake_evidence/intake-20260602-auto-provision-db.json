@@ -1,0 +1,55 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260602-auto-provision-db",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "On first start, if database flow_finance_ai does not exist on the configured external Postgres, Flow Finance AI creates it automatically then runs migrations—no manual CREATE DATABASE step.",
+      "intake_run_id": "intake-20260602-auto-provision-db",
+      "turn_index": 0,
+      "ref": "ie:intake-20260602-auto-provision-db:0:57a33ac0e631fb90"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "backend/src/db startup path before SQLx migrations; optional DATABASE_BOOTSTRAP_* env for admin connection to maintenance DB postgres; docker-compose docs and .env.example; runbook US-0010 omniflow section.",
+      "intake_run_id": "intake-20260602-auto-provision-db",
+      "turn_index": 1,
+      "ref": "ie:intake-20260602-auto-provision-db:1:fd2553de4feeb6f5"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Shared host postgres may deny CREATEDB for app user—need optional admin URL or bootstrap role; TimescaleDB server packages still operator responsibility; idempotent re-start; must not drop existing DB; US-0010 external-only posture unchanged.",
+      "intake_run_id": "intake-20260602-auto-provision-db",
+      "turn_index": 2,
+      "ref": "ie:intake-20260602-auto-provision-db:2:1afbd698265b07c4"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Integration test or script: empty postgres → first start creates DB and migrations succeed; existing DB unchanged; fail-closed log when bootstrap lacks privilege; document when manual bootstrap still required for TimescaleDB server install.",
+      "intake_run_id": "intake-20260602-auto-provision-db",
+      "turn_index": 3,
+      "ref": "ie:intake-20260602-auto-provision-db:3:97f22cee689da191"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator on omniflow can fix missing-DB startup with only .env credentials; runbook manual SQL optional for TimescaleDB host install only; acceptance checklist in docs/product/acceptance.md.",
+      "intake_run_id": "intake-20260602-auto-provision-db",
+      "turn_index": 4,
+      "ref": "ie:intake-20260602-auto-provision-db:4:f1df64f015e338b9"
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260605-ai-merchant-category-discovery",
+  "intake_work_item_kind": "bug",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "AI Chat must intelligently discover household financial facts from mirror data—enumerating subscription merchants when asked 'liste mir die dienste auf', detecting electricity (Strom) spend, and finding merchant-specific spend (e.g. Amazon Jan–Oct 2023)—without the user naming services or merchants. Success means answers cite detected merchants/categories from tools, not generic industry lists or 'cannot retrieve' when mirror holds recurring expenses.",
+      "intake_run_id": "intake-20260605-ai-merchant-category-discovery",
+      "turn_index": 0,
+      "ref": "ie:intake-20260605-ai-merchant-category-discovery:0:795819f9af83ee16"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "US-0006 AI orchestrator and six-tool registry; get_subscriptions (pending vs confirmed contract, merchant/payee fields); get_transactions (category, description/counterparty, account, amount aggregates); subscription detection engine (11 pending patterns post-BUG-0004); privacy allow_raw_transactions=false aggregate mode. Production host financegnome.omniflow.cc post-BUG-0006 deploy.",
+      "intake_run_id": "intake-20260605-ai-merchant-category-discovery",
+      "turn_index": 1,
+      "ref": "ie:intake-20260605-ai-merchant-category-discovery:1:5a4cc7f18b0eb664"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Preserve post-BUG-0006 aggregate fixes and allow_raw_transactions=false default (DEC-0032); six-tool registry unchanged; BUG-0004 left 11 pending / 0 confirmed subscriptions which may limit get_subscriptions merchant naming; RAG vs richer tool contracts is discovery/architecture scope—not intake fix prescription; do not read operator .env secrets.",
+      "intake_run_id": "intake-20260605-ai-merchant-category-discovery",
+      "turn_index": 2,
+      "ref": "ie:intake-20260605-ai-merchant-category-discovery:2:ded10867b2633313"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Reproduce on US-0010 external profile: (1) ask cancelable streaming total then 'liste mir die dienste auf'—audit get_subscriptions and get_transactions; expect named merchants from mirror not generic Netflix/Disney list. (2) Ask Strom/electricity costs for period with known utility bookings. (3) Ask Amazon spend Jan–Oct 2023. Verify tool JSON exposes payee/description/category/account signals; distinguish empty mirror vs miscategorized vs model/tool contract gap.",
+      "intake_run_id": "intake-20260605-ai-merchant-category-discovery",
+      "turn_index": 3,
+      "ref": "ie:intake-20260605-ai-merchant-category-discovery:3:3bdba560f2d3357c"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator confirms AI lists detected subscription services when mirror has recurring patterns; answers Strom and Amazon queries with data-backed amounts or explicit empty-state backed by merchant/category search evidence; BUG-0007 acceptance rows S+T+U pass; discovery documents fix path (tool payload, subscription state policy, LLM routing, optional RAG) without prescriptive architecture in intake.",
+      "intake_run_id": "intake-20260605-ai-merchant-category-discovery",
+      "turn_index": 4,
+      "ref": "ie:intake-20260605-ai-merchant-category-discovery:4:2febdd52a9fc73da"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug",
+    "rationale": "Operator-reported AI chat failures on merchant/category discovery across get_subscriptions and get_transactions despite post-BUG-0006 mirror data; sub-defects S (subscription enumeration), T (merchant/category keyword misses), U (cross-signal reasoning), V (RAG vs tools—discovery only) share US-0006 intelligence path.",
+    "alternatives_considered": [
+      "Extend BUG-0006 — rejected: BUG-0006 DONE fixed empty aggregates/category ingest; new failures are merchant enumeration and cross-field discovery after fix",
+      "New US story for smarter AI — rejected: defect-shaped production chat failures with existing tools",
+      "Split into four BUG ids — rejected: same operator session, shared AI tool-orchestration surface; independently testable via acceptance sub-rows"
+    ]
+  }
+}

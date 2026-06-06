@@ -1,0 +1,62 @@
+{
+  "sprint": "S0005",
+  "story_id": "US-0005",
+  "verified_at": "2026-05-31T21:27:05Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0005",
+  "tasks_source": "sprints/S0005/tasks.md",
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Net worth view aggregates Firefly-linked accounts (giro, savings, etc.)",
+      "tasks": ["T-0049", "T-0050", "T-0051", "T-0055", "T-0056", "T-0058", "T-0059", "T-0060"],
+      "covered": true,
+      "notes": "Migration net_worth_snapshots + asset account schema (T-0049); wealth repository load_asset_accounts (T-0050); WealthService compute_breakdown + daily snapshots (T-0051); GET /api/v1/wealth + /wealth/history (T-0055); React /wealth page with breakdown table and stat card (T-0056); Dashboard 4 panels query net_worth_snapshots (T-0058); WealthService unit + integration tests (T-0059); operator guide net worth section (T-0060)"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "Scarcity alert fires when projected balance falls below configurable threshold (e.g. 200 €)",
+      "tasks": ["T-0049", "T-0050", "T-0052", "T-0053", "T-0054", "T-0055", "T-0058", "T-0059", "T-0060"],
+      "covered": true,
+      "notes": "alert_config scarcity_threshold_eur + alerts schema (T-0049); TOML [alerts] mirror to alert_config (T-0050); evaluate_scarcity household aggregate evaluator (T-0052); AlertService run_post_sync upsert/resolve (T-0053); sync alerts phase after forecast (T-0054); alert list/unread API (T-0055); Dashboard 1 $scarcity_threshold variable from alert_config (T-0058); scarcity boundary + severity unit tests + sync integration (T-0059); threshold config documented (T-0060)"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Budget drift alert fires when category spending exceeds plan by configurable % (e.g. +20%)",
+      "tasks": ["T-0049", "T-0050", "T-0052", "T-0053", "T-0054", "T-0055", "T-0059", "T-0060"],
+      "covered": true,
+      "notes": "alert_config budget_drift_pct (T-0049); config + repository fetch_config (T-0050); evaluate_budget_drift category-targeted MTD proration (T-0052); AlertService orchestration (T-0053); sync pipeline triggers evaluation (T-0054); alert REST endpoints surface budget_drift rows (T-0055); proration + category-only unit tests (T-0059); operator guide budget drift triggers (T-0060)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "Plan viability alert fires when active scenario becomes infeasible per forecast",
+      "tasks": ["T-0049", "T-0050", "T-0052", "T-0053", "T-0054", "T-0055", "T-0059", "T-0060"],
+      "covered": true,
+      "notes": "plan_viability alert_type enum + alerts table (T-0049); repository + EvalContext plan_computation_id binding (T-0050); evaluate_plan_viability negative month-end logic (T-0052); AlertService lifecycle + stale metadata (T-0053); sync passes active plan computation ID (T-0054); alert API exposes plan_viability alerts (T-0055); skip-without-plan + negative balance unit tests (T-0059); operator guide plan viability section (T-0060)"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Alert inbox in React UI lists active alerts with acknowledge/dismiss",
+      "tasks": ["T-0049", "T-0050", "T-0053", "T-0055", "T-0057", "T-0059", "T-0060"],
+      "covered": true,
+      "notes": "alerts table with status lifecycle + fingerprint dedup (T-0049); acknowledge/dismiss/resolve repository methods (T-0050); AlertService list/unread_count/acknowledge/dismiss (T-0053); PATCH acknowledge/dismiss + GET alerts/unread-count (T-0055); header bell + /alerts inbox UI with Acknowledge/Dismiss actions (T-0057); lifecycle + unread count tests (T-0059); acknowledge vs dismiss semantics in user guide (T-0060)"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "Grafana Dashboard 4 shows total wealth (non-crypto until US-0007)",
+      "tasks": ["T-0049", "T-0051", "T-0056", "T-0058", "T-0060"],
+      "covered": true,
+      "notes": "net_worth_snapshots hypertable for trend data (T-0049); WealthService upsert_daily_snapshot feeds Grafana queries (T-0051); /wealth page Grafana link to uid portfolio (T-0056); portfolio.json Dashboard 4 total wealth stat + wealth-over-time + crypto placeholder (T-0058); operator guide Dashboard 4 access (T-0060)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "summary": {
+    "acceptance_criteria_count": 6,
+    "covered_count": 6,
+    "gap_count": 0,
+    "task_count": 12,
+    "tasks_without_acceptance_ref": [],
+    "tasks_without_acceptance_ref_note": "All tasks T-0049–T-0060 map to at least one AC in tasks.md acceptance refs and coverage map"
+  }
+}

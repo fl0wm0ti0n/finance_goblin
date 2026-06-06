@@ -1,0 +1,117 @@
+{
+  "sprint_id": "Q0010",
+  "bug_id": "BUG-0006",
+  "phase": "verify-work",
+  "orchestrator_run_id": "auto-20260605-bug0006-002",
+  "date": "2026-06-05",
+  "verdict": "PASS",
+  "passed": 15,
+  "failed": 2,
+  "partial": 0,
+  "deferred": 2,
+  "steps": [
+    {
+      "id": "V-1",
+      "description": "Backend cargo test --lib",
+      "result": "pass",
+      "note": "123/123"
+    },
+    {
+      "id": "V-2",
+      "description": "Frontend npm test",
+      "result": "pass",
+      "note": "2/2"
+    },
+    {
+      "id": "V-3",
+      "description": "Frontend npm run build",
+      "result": "pass"
+    },
+    {
+      "id": "V-4",
+      "description": "Q1 category_id upsert code path",
+      "result": "pass"
+    },
+    {
+      "id": "V-5",
+      "description": "Q2 ISO date parse code path",
+      "result": "pass"
+    },
+    {
+      "id": "V-6",
+      "description": "Q3 DEC-0059 amount sign code path",
+      "result": "pass"
+    },
+    {
+      "id": "V-7",
+      "description": "R1 TransactionAggregates totals + period_status code path",
+      "result": "pass"
+    },
+    {
+      "id": "V-8",
+      "description": "DEC-0032 privacy + six-tool registry unit tests",
+      "result": "pass"
+    },
+    {
+      "id": "Q-1",
+      "description": "GET /api/v1/sync/entities transactions >= 922",
+      "result": "pass",
+      "note": "922 count; 75 categories"
+    },
+    {
+      "id": "Q-2",
+      "description": "Post-reset manual Firefly sync backfill",
+      "result": "pass",
+      "note": "run 2ef16cfe finished 2026-06-05T15:41:20Z success"
+    },
+    {
+      "id": "Q-3",
+      "description": "SQL probe category_id dates signed amounts mirror-wide",
+      "result": "pass",
+      "note": "operator attestation: 917 category_id, 919 date, 865 negative of 922 total"
+    },
+    {
+      "id": "R-1",
+      "description": "get_transactions aggregate JSON totals + period_status",
+      "result": "pass",
+      "note": "May 2026, Dec 2025, Jan 2026, Jun 2025 totals/counts; empty pre-ledger months correct no_rows"
+    },
+    {
+      "id": "P-1",
+      "description": "AI Chat category/spending uses aggregate data",
+      "result": "pass",
+      "note": "Populated months PASS; pre-ledger empty responses correct when no mirror rows for period"
+    },
+    {
+      "id": "REG-1",
+      "description": "allow_raw_transactions=false via settings API",
+      "result": "pass"
+    },
+    {
+      "id": "REG-2",
+      "description": "Six-tool registry live confirm",
+      "result": "pass",
+      "note": "audit shows get_transactions + get_subscriptions post-sync"
+    },
+    {
+      "id": "REG-3",
+      "description": "OIDC-enabled deploy regression",
+      "result": "fail",
+      "note": "deferred — dev-bypass profile; oidc_issuer_url empty"
+    },
+    {
+      "id": "REG-4",
+      "description": "Bundled-firefly deploy regression",
+      "result": "fail",
+      "note": "deferred — external profile only on omniflow"
+    }
+  ],
+  "row_verdicts": {
+    "P": "pass",
+    "Q": "pass",
+    "R": "pass"
+  },
+  "blocking_reason_codes": [],
+  "operator_remediation": null,
+  "evidence_ref": "sprints/quick/Q0010/verify-work-findings.md"
+}

@@ -1,0 +1,29 @@
+{
+  "id": "Q0009",
+  "type": "quick",
+  "bug_ids": ["BUG-0003"],
+  "status": "PLANNED",
+  "created": "2026-06-05",
+  "goal": "Close BUG-0003: fix DATABASE_HOST misconfig cascade (F/H), ExchangeService::new effective_enabled parity (G), optional R-0058 futures auth (G2 gated).",
+  "scope": [
+    "F2: .env.example omniflow block + runbook mis-host table",
+    "G1: effective_enabled() in ExchangeService::new",
+    "F1: operator DATABASE_HOST=postgres + recreate flow-finance-ai + grafana",
+    "G2: R-0058 futures header-auth spike (gated on post-G1+F1 smoke)"
+  ],
+  "risks": [
+    "Operator copies greenfield DATABASE_HOST into external deploy — F2 mitigates; F1 required before verify-work",
+    "G2 unnecessary if G1 fixes registry-only 400 — gate on smoke not unknown exchange",
+    "H2 UID dedupe deferred — bookmark breakage if rushed"
+  ],
+  "task_count": 4,
+  "estimate_total_hours": 5.5,
+  "decisions": ["DEC-0056"],
+  "research": ["R-0052", "R-0058"],
+  "acceptance_rows": ["F", "G", "H"],
+  "execute_order": ["F2", "G1", "F1", "G2"],
+  "gated_tasks": ["G2"],
+  "next_phase": "plan-verify",
+  "plan_verify_ref": null,
+  "plan_verify_verdict": null
+}

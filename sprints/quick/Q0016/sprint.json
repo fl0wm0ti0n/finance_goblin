@@ -1,0 +1,55 @@
+{
+  "id": "Q0016",
+  "type": "quick",
+  "bug_ids": ["BUG-0009"],
+  "status": "PLANNED",
+  "created": "2026-06-06",
+  "goal": "Close BUG-0009: Grafana provisioning-only fix (DEC-0068) — ABS(balance) account variable default, portfolio breakdown SQL + cross-account overview, ML honest empty-state; operator verify Y/Z on financegnome.omniflow.cc after provisioning reload.",
+  "scope": [
+    "Z1: Portfolio breakdown SQL — latest-snapshot subquery + LATERAL unnest",
+    "Z2: Cross-account overview table + stat row on portfolio dashboard",
+    "Y1: $account_id ORDER BY ABS(balance) DESC on cashflow + forecast-horizons",
+    "Y2: ML banner + noValue on forecast-horizons ML panels",
+    "T1: SQL fixtures + optional provisioning snapshot test",
+    "V1: verify-work omniflow smoke rows Y/Z + six analytics routes"
+  ],
+  "risks": [
+    "All-zero balances → variable still alphabetical default — documented edge case",
+    "Overview portfolio-only — cashflow-first operators need sidebar navigation",
+    "ML charts empty below banner — acceptable until US-0013",
+    "Manual Grafana save bakes current — runbook warning at execute",
+    "No backend/React code — provisioning JSON + tests only"
+  ],
+  "task_count": 6,
+  "estimate_total_hours": 7,
+  "decisions": ["DEC-0068", "DEC-0009", "DEC-0049", "DEC-0057", "DEC-0065"],
+  "research": ["R-0064"],
+  "acceptance_rows": ["Y", "Z"],
+  "execute_order": ["Z1", "Z2", "Y1", "Y2", "T1", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "GRAFANA_PROVISIONING_RELOAD",
+      "before_tasks": ["V1"],
+      "description": "Deploy Z1–Y2+T1 single PR and reload Grafana provisioning (container restart or poll) before V1 omniflow smoke"
+    }
+  ],
+  "acceptance_mapping": {
+    "Y": {
+      "tasks": ["Y1", "Y2", "T1", "V1"],
+      "verify": "Default-load cashflow/forecast non-empty series; ML banner honest; ds/query 200 for account-scoped dashboards"
+    },
+    "Z": {
+      "tasks": ["Z1", "Z2", "T1", "V1"],
+      "verify": "Portfolio overview shows all synced asset accounts (3 rows on omniflow); six /analytics/{slug} routes smoke"
+    }
+  },
+  "deploy_order": [
+    "Z1 + Z2 + Y1 + Y2 + T1 single PR",
+    "Deploy image / reload Grafana provisioning on omniflow",
+    "V1 verify-work smoke rows Y/Z + regression footer"
+  ],
+  "next_phase": "execute",
+  "sprint_plan_ref": "sprint-plan-20260606-q0016-bug0009",
+  "architecture_ref": "architecture-20260606-bug0009"
+}

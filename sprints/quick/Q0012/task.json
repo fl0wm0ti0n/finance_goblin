@@ -1,0 +1,130 @@
+{
+  "id": "Q0012",
+  "title": "BUG-0005 exchange sync multi-product (Bitunix futures)",
+  "status": "PLANNED",
+  "bug_id": "BUG-0005",
+  "architecture_ref": "architecture-20260605-bug0005",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["M", "N", "O"],
+  "acceptance_mapping": {
+    "M": { "tasks": ["M1", "N2", "O1"], "primary_verify": "GET /api/v1/exchanges — bitunix holdings with product_type futures/linear" },
+    "N": { "tasks": ["N1", "N2", "N3", "N4", "O1"], "primary_verify": "POST /api/v1/exchanges/bitunix/test — 200 with Futures sub-status; fapi header auth" },
+    "O": { "tasks": ["M1", "N2", "O1"], "primary_verify": "GET /api/v1/wealth — crypto.subtotal_eur includes futures wallet" }
+  },
+  "task_count": 6,
+  "estimate_total_hours": 10,
+  "tasks": [
+    {
+      "id": "N1",
+      "title": "Futures header-auth HTTP client per DEC-0062",
+      "status": "open",
+      "estimate_hours": 2.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0005 (N) — fapi.bitunix.com header auth client",
+      "files": ["backend/src/exchanges/http.rs", "backend/src/exchanges/bitunix.rs", "backend/src/config/mod.rs", "backend/config/default.toml"],
+      "decisions": ["DEC-0062"],
+      "tests": [
+        "Unit: futures sign canonical string fixture",
+        "Unit: spot bitunix_sign regression",
+        "Mock HTTP: futures GET header set"
+      ]
+    },
+    {
+      "id": "N3",
+      "title": "effective_enabled_futures policy per DEC-0063",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0005 (N) — futures enabled when credentials present",
+      "files": ["backend/src/config/mod.rs", ".env.example"],
+      "decisions": ["DEC-0063"],
+      "tests": [
+        "Unit: auto-enable with credentials",
+        "Unit: env BITUNIX_ENABLED_FUTURES=false opt-out",
+        "Settings API effective flag"
+      ]
+    },
+    {
+      "id": "M1",
+      "title": "Futures wallet balance ingestion",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["N1", "N3"],
+      "acceptance_hook": "BUG-0005 (M) — product_type futures holdings from account endpoint",
+      "files": ["backend/src/exchanges/bitunix.rs"],
+      "decisions": ["DEC-0064"],
+      "tests": [
+        "Mock HTTP: futures account → product_type futures",
+        "Regression: spot-only when futures disabled"
+      ]
+    },
+    {
+      "id": "N2",
+      "title": "sync_positions get_pending_positions per DEC-0064",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["N1", "N3"],
+      "acceptance_hook": "BUG-0005 (M)(N) — linear position rows populated",
+      "files": ["backend/src/exchanges/bitunix.rs"],
+      "decisions": ["DEC-0064"],
+      "tests": [
+        "Mock HTTP: positions → product_type linear, market_value_usd null",
+        "active_symbols updated"
+      ]
+    },
+    {
+      "id": "N4",
+      "title": "Dual-path test_connection spot + futures",
+      "status": "open",
+      "estimate_hours": 1.5,
+      "depends_on": ["N1", "N3"],
+      "acceptance_hook": "BUG-0005 (N) — test message reports spot and futures status",
+      "files": ["backend/src/exchanges/bitunix.rs"],
+      "tests": [
+        "Unit: partial OK messaging",
+        "Unit: spot fail → ok false"
+      ]
+    },
+    {
+      "id": "O1",
+      "title": "verify-work prep and omniflow acceptance mapping",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["N1", "N2", "N3", "N4"],
+      "operator_gate": "Manual exchange sync after deploy required before O1 smoke",
+      "acceptance_hook": "BUG-0005 (M)(N)(O) — financegnome.omniflow.cc probes",
+      "files": ["sprints/quick/Q0012/uat.md"],
+      "tests": [
+        "Settings enabled_futures effective true",
+        "Bitunix test 200 with Futures message",
+        "Holdings non-spot product_type",
+        "Wealth crypto subtotal"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "N1 + N3 + M1 + N2 + N4 single PR",
+    "Deploy image to omniflow",
+    "Operator manual exchange sync",
+    "O1 verify-work smoke rows M/N/O + regression footer"
+  ],
+  "execute_order": ["N1", "N3", "M1", "N2", "N4", "O1"],
+  "operator_gates": [
+    {
+      "id": "EXCHANGE_SYNC",
+      "before_tasks": ["O1"],
+      "action": "Trigger manual exchange sync on financegnome.omniflow.cc after N1–N4 deploy",
+      "rationale": "Holdings backfill via exchange upsert only on next sync run"
+    }
+  ],
+  "frozen_boundaries": [
+    "Do not merge BUG-0006 scope",
+    "No sync_funding implementation",
+    "USDT margin coin only — no multi-coin loop",
+    "Do not modify Binance/Bybit connectors",
+    "Read-only GET-only guarantee unchanged (DEC-0037)"
+  ],
+  "decisions": ["DEC-0062", "DEC-0063", "DEC-0064", "DEC-0037", "DEC-0038", "DEC-0041"],
+  "research": ["R-0058", "R-0059"],
+  "operator_next": "After N1–N4 deploy: manual exchange sync on financegnome.omniflow.cc, then O1 verify-work"
+}

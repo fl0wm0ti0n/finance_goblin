@@ -1,0 +1,64 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260605-ai-get-transactions-empty",
+  "intake_work_item_kind": "bug",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "AI Chat must answer spending/category questions using synced mirror transactions (922+ in production); get_transactions tool must return meaningful aggregates for the requested period—not responses claiming no expenses or unavailable data when sync entity counts show transactions loaded.",
+      "intake_run_id": "intake-20260605-ai-get-transactions-empty",
+      "turn_index": 0,
+      "ref": "ie:intake-20260605-ai-get-transactions-empty:0:12c01c58c66be3b9"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "backend/src/ai/tools/transactions.rs get_transactions; backend/src/transactions/repository.rs aggregates_by_category; backend/src/firefly/mod.rs sync_transactions + db upsert_transaction (category_id never written); AI orchestrator tool result → LLM interpretation; optional privacy allow_raw_transactions=false aggregate shape.",
+      "intake_run_id": "intake-20260605-ai-get-transactions-empty",
+      "turn_index": 1,
+      "ref": "ie:intake-20260605-ai-get-transactions-empty:1:ec8ef55957861a5f"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "US-0006 AI tool layer; privacy TOML allow_raw_transactions=false returns aggregates only (DEC-0032); do not expose raw rows to model by default; BUG-0004 L (forecast/wealth empty) related but distinct surface—AI chat tool path; German operator UI example at 23:30:13; do not read .env secrets.",
+      "intake_run_id": "intake-20260605-ai-get-transactions-empty",
+      "turn_index": 2,
+      "ref": "ie:intake-20260605-ai-get-transactions-empty:2:492405ab901de4e0"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Reproduce: ask AI about current-month category spending after successful Firefly sync; audit log shows get_transactions with period args; tool JSON includes non-zero transaction_count or explicit totals for period; compare GET /api/v1/sync/entities transaction count vs aggregate query; fix verification: category_id populated from Firefly payload or uncategorized bucket surfaced; regression: privacy redaction unchanged.",
+      "intake_run_id": "intake-20260605-ai-get-transactions-empty",
+      "turn_index": 3,
+      "ref": "ie:intake-20260605-ai-get-transactions-empty:3:39952d48a243080f"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator confirms AI no longer claims no expenses/unavailable data when mirror has transactions for queried month; get_transactions returns usable category/month aggregates; BUG-0006 acceptance rows P+Q+R pass; discovery documents root cause (sync mapping vs date window vs amount sign vs empty tool contract).",
+      "intake_run_id": "intake-20260605-ai-get-transactions-empty",
+      "turn_index": 4,
+      "ref": "ie:intake-20260605-ai-get-transactions-empty:4:f81937edf3a9a280"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug",
+    "rationale": "Operator-reported AI chat failure with get_transactions tool (German no-expenses message) despite 922 synced transactions; sub-defects P (empty/misleading tool output), Q (sync category_id gap), R (aggregate contract/LLM interpretation) share AI↔mirror data path.",
+    "alternatives_considered": [
+      "Merge into BUG-0004 L — rejected: BUG-0004 L targets forecast/wealth/Grafana UI; AI get_transactions is US-0006 tool-layer defect with distinct code path",
+      "US story for AI data quality — rejected: defect-shaped; mirror rows exist but tool/aggregates unusable today"
+    ]
+  }
+}

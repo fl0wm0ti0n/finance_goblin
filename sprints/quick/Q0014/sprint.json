@@ -1,0 +1,60 @@
+{
+  "id": "Q0014",
+  "type": "quick",
+  "bug_ids": ["BUG-0012"],
+  "status": "PLANNED",
+  "created": "2026-06-05",
+  "goal": "Close BUG-0012: component-level monthly bucket attribution (DEC-0067) so Income and Fixed forecast buckets reflect categorized recurring inflows/outflows; operator verify AG/AH on financegnome.omniflow.cc after deploy + recompute.",
+  "scope": [
+    "AH1: RecurringPattern.category_id carry + recurring bucket path (Fixed)",
+    "AG1: Income from categorized recurring inflows via component monthly_map",
+    "T1: Unit tests for monthly_map component attribution (AG/AH)",
+    "D1: Remove/retire net-delta categorize_delta for monthly buckets",
+    "V1: verify-work prep + runbook TOML checklist for German/custom categories"
+  ],
+  "risks": [
+    "Omniflow Firefly categories may use German/custom labels absent from default TOML — operator must extend [forecast.category_buckets] before V1",
+    "Variable totals shrink when fixed recurring moves to Fixed — intended DEC-0007 behavior; regression test required",
+    "Full Firefly sync + forecast recompute required before V1 probes",
+    "No frontend changes — cards already bind API fields; fix is projection write path only"
+  ],
+  "task_count": 5,
+  "estimate_total_hours": 7.5,
+  "decisions": ["DEC-0067", "DEC-0007", "DEC-0013"],
+  "research": ["R-0063"],
+  "acceptance_rows": ["AG", "AH"],
+  "execute_order": ["AH1", "AG1", "T1", "D1", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "FULL_FIREFLY_SYNC_RECOMPUTE",
+      "before_tasks": ["V1"],
+      "description": "Manual Full Firefly sync + forecast recompute after deploy — required before V1 AG/AH probes"
+    },
+    {
+      "id": "TOML_CATEGORY_BUCKETS",
+      "before_tasks": ["V1"],
+      "description": "If AG/AH fail on label mismatch, operator extends [forecast.category_buckets] in TOML for non-English category names (Gehalt, Miete Nebenkosten, etc.) per runbook checklist"
+    }
+  ],
+  "acceptance_mapping": {
+    "AG": {
+      "tasks": ["AG1", "T1", "V1"],
+      "verify": "Monthly forecast Income non-zero when mirror holds income-category recurring inflows in forecast month"
+    },
+    "AH": {
+      "tasks": ["AH1", "AG1", "T1", "V1"],
+      "verify": "Monthly forecast Fixed non-zero when mirror holds fixed-cost category recurring outflows"
+    }
+  },
+  "deploy_order": [
+    "AH1 + AG1 + T1 + D1 single PR",
+    "Deploy image to omniflow",
+    "Operator manual Full Firefly sync + forecast recompute",
+    "Operator TOML extend if German/custom labels miss default keys",
+    "V1 verify-work smoke rows AG/AH + regression footer"
+  ],
+  "next_phase": "execute",
+  "sprint_plan_ref": "sprint-plan-20260605-q0014-bug0012",
+  "architecture_ref": "architecture-20260605-bug0012"
+}

@@ -1,0 +1,30 @@
+{
+  "id": "S0008",
+  "story_ids": ["US-0008"],
+  "status": "PLANNED",
+  "created": "2026-06-02",
+  "goal": "Provider factory, OpenAiCompatibleProvider refactor, ollama/openai_compatible config, migration 008, test endpoint, Settings provider UI, chat Local/Cloud badge, Compose full docs, wiremock AC5 test, unit tests, and operator user guide — tool layer frozen.",
+  "scope": [
+    "AiProvider trait extension + build_provider factory (DEC-0043, R-0040)",
+    "OpenAiCompatibleProvider HTTP client refactor (DEC-0043, DEC-0045)",
+    "AiConfig ollama/openai_compatible presets + settings API fields (DEC-0044, DEC-0047)",
+    "Migration 008 ai_tool_audit provider column (DEC-0048)",
+    "AiOrchestrator dyn AiProvider + local fallback + omit tool_choice (DEC-0043, DEC-0045, DEC-0046)",
+    "POST /api/v1/ai/test endpoint (DEC-0047, R-0042)",
+    "Settings AI provider UI + test connection button (DEC-0047, R-0035)",
+    "ChatPanel Local vs Cloud provider badge (DEC-0047)",
+    "Compose full profile Ollama operator documentation (R-0038)",
+    "Wiremock AC5 network isolation integration test (DEC-0048, R-0042)",
+    "Provider factory and orchestrator unit tests",
+    "Operator user guide docs/user-guides/US-0008.md"
+  ],
+  "risks": [
+    "Ollama tool_choice unsupported — omit field for local (R-0038, DEC-0045)",
+    "Local model tool reliability — graceful fallback + nudge (R-0041, DEC-0046)",
+    "vLLM/LM Studio endpoint variance — test endpoint + user guide (R-0039)",
+    "Orchestrator refactor scope — trait-object only; AC4 freeze (R-0040)",
+    "AC5 isolation — wiremock OpenAI guard (R-0042, DEC-0048)"
+  ],
+  "task_count": 12,
+  "decisions": ["DEC-0043", "DEC-0044", "DEC-0045", "DEC-0046", "DEC-0047", "DEC-0048"]
+}

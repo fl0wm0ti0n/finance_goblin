@@ -1,0 +1,28 @@
+{
+  "id": "S0003",
+  "story_ids": ["US-0003"],
+  "status": "PLANNED",
+  "created": "2026-05-31",
+  "goal": "Deliver subscription intelligence: shared recurrence core, Subscription Engine, migration 003, sync detection hook, forecast override, REST API, React /subscriptions page, Grafana Dashboard 2, tests, and operator user guide.",
+  "scope": [
+    "Extract shared recurrence core from forecast/recurring.rs (DEC-0013)",
+    "SQLx migration 003 — subscription_patterns + satellites + enums (DEC-0015)",
+    "Subscription Engine: classify, detection, price_change, repository, service",
+    "Sync pipeline subscriptions phase before forecast recompute (DEC-0018)",
+    "Forecast override hook: confirmed override + rejected exclusion (AC-8)",
+    "Subscription REST API under /api/v1/subscriptions/*",
+    "React /subscriptions page with tabs, confirm/reject, detail drawer, alerts",
+    "Grafana Dashboard 2 (uid: subscriptions) in Analytics folder",
+    "Subscription tests and operator user guide (docs/user-guides/US-0003.md)"
+  ],
+  "risks": [
+    "Recurrence extraction must not regress US-0002 forecast — preserve existing recurring tests (DEC-0013)",
+    "Sync mutex duration grows with detection pass — log phase timing separately (DEC-0018, R-0013)",
+    "60% confidence tier false positives — strong pending confirm/reject UX before alerts (DEC-0014)",
+    "Dauerauftrag misclassification — rule-based + user kind override on confirm (DEC-0016)",
+    "Grafana monthly-spend SQL normalization for mixed intervals (R-0014)",
+    "Descriptor normalization drift may split payee groups (R-0009)"
+  ],
+  "task_count": 12,
+  "decisions": ["DEC-0013", "DEC-0014", "DEC-0015", "DEC-0016", "DEC-0017", "DEC-0018"]
+}

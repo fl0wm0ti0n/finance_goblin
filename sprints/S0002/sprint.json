@@ -1,0 +1,25 @@
+{
+  "id": "S0002",
+  "story_ids": ["US-0002"],
+  "status": "PLANNED",
+  "created": "2026-05-31",
+  "goal": "Deliver cashflow forecasting MVP: hybrid Forecast Engine, TimescaleDB hypertables, REST API, sync recompute hook, React /forecast with ECharts, and Grafana Dashboards 1 & 5.",
+  "scope": [
+    "SQLx migration 002 — forecast_computations + forecast_balance_daily + forecast_cashflow_monthly hypertables",
+    "Forecast Engine modules (recurring, rolling, categories, project) and ForecastService",
+    "Sync-post recompute hook extending sync mutex (DEC-0010)",
+    "Forecast REST API under /api/v1/forecast/*",
+    "React /forecast page with account selector, horizon tabs, ECharts charts",
+    "Grafana Dashboard 1 (cashflow) and Dashboard 5 (forecast-horizons) with stable uids",
+    "Forecast tests and operator user guide (docs/user-guides/US-0002.md)"
+  ],
+  "risks": [
+    "Recompute latency under sync mutex — monitor per-account duration (DEC-0010)",
+    "Recurring heuristic false positives — low_confidence metadata until US-0003 (DEC-0007)",
+    "Hypertable migration requires operator TimescaleDB extension (R-0007)",
+    "Grafana datasource uid must match dashboard JSON atomically (DEC-0012)",
+    "Sparse transaction history — widen window and flag, do not fail (R-0006)"
+  ],
+  "task_count": 12,
+  "decisions": ["DEC-0007", "DEC-0008", "DEC-0009", "DEC-0010", "DEC-0011", "DEC-0012"]
+}

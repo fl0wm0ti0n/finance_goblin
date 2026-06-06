@@ -1,0 +1,29 @@
+{
+  "id": "S0004",
+  "story_ids": ["US-0004"],
+  "status": "PLANNED",
+  "created": "2026-05-31",
+  "goal": "Deliver Plan Engine delta overlay, migration 004, scenario templates, v1/v2/v3 versioning, daily plan-vs-Ist, forecast hook, plan REST API, React /planning page, Grafana Dashboard 3, tests, and operator user guide.",
+  "scope": [
+    "SQLx migration 004 — plans, versions, adjustments, computations, plan_daily_cashflow hypertable (DEC-0022)",
+    "Plan Engine: overlay, project, templates, repository, service (DEC-0019)",
+    "Versioning: latest editable, freeze on new version, max 3 versions, 409 on v4 (DEC-0020)",
+    "Plan-vs-Ist: household daily net cashflow; deviation = actual − planned (DEC-0021)",
+    "Active plan: single global active; transactional activate (DEC-0024)",
+    "Recompute: async on plan save + post-forecast hook; no sync planning phase (DEC-0023)",
+    "Plan REST API under /api/v1/plans/*",
+    "React /planning page with Scenarios, Compare, Plan vs Actual + ECharts",
+    "Grafana Dashboard 3 (uid: budgets) in Analytics folder",
+    "Plan tests and operator user guide (docs/user-guides/US-0004.md)"
+  ],
+  "risks": [
+    "Baseline staleness — bind forecast_computation_id; expose plan_stale metadata (R-0015, R-0019)",
+    "Savings mode Ist lag — deviation correctly shows plan vs reality mismatch (R-0017)",
+    "Version cap UX at v1/v2/v3 — clear 409 on v4 attempt (R-0016, DEC-0020)",
+    "Active plan switch race — transactional activate + is_latest edit guard (R-0018, DEC-0024)",
+    "Grafana Dashboard 3 empty state when no active plan (R-0020)",
+    "Multi-currency MVP assumes single reporting currency (R-0017)"
+  ],
+  "task_count": 12,
+  "decisions": ["DEC-0019", "DEC-0020", "DEC-0021", "DEC-0022", "DEC-0023", "DEC-0024"]
+}

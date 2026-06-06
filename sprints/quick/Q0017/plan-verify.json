@@ -1,0 +1,130 @@
+{
+  "sprint": "Q0017",
+  "bug_id": "BUG-0007",
+  "orchestrator_run_id": "auto-20260607-bug0007-001",
+  "verified_at": "2026-06-07T06:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0007",
+  "tasks_source": "sprints/quick/Q0017/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0007",
+  "decision_alignment": {
+    "new_dec_required": false,
+    "extends": ["DEC-0032", "DEC-0035", "DEC-0045", "DEC-0034"],
+    "decisions": ["DEC-0069"],
+    "research_basis": ["R-0065"],
+    "contract_elements_covered": [
+      "A-prime: category_search ILIKE resolve cap 10; category_search wins over category_id",
+      "A-prime: mirror_date_bounds on every get_transactions response",
+      "F: kind enum subscription|standing_order; merchant_names[]; patterns_count; Counterparty guard",
+      "E: four SYSTEM_PROMPT rules; audit result_rows for get_transactions and get_subscriptions",
+      "E2: parameter schema descriptions category_id vs category_search",
+      "T1: frozen test contract A1-F1-E1 + privacy six-tool + no raw_rows",
+      "V1: uat.md + omniflow AI Chat smoke S/T/U after BACKEND_DEPLOY"
+    ],
+    "frozen_boundaries_respected": [
+      "Six-tool registry — no seventh tool; no DEC waiver",
+      "allow_raw_transactions=false default unchanged (DEC-0032)",
+      "BUG-0008 coordinate only — additive AI JSON; no alert/list/detection changes",
+      "RAG (note V) out of scope for MVP",
+      "Payee aggregates (group_by merchant) deferred",
+      "BUG-0006 ingest fixes — do not revert",
+      "No Firefly re-sync required",
+      "No frontend changes unless optional audit UI hint (not required for AC)",
+      "Amazon Jan–Oct 2023 is true empty period — V1 verifies bounds citation"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "A1 → A2; F1 parallel; E1 → E2; T1 single backend PR → deploy → BACKEND_DEPLOY → V1 verify-work",
+    "notes": "E1 and E2 depend on A2 + F1; T1 depends on A1–E2; V1 gated on backend deploy before omniflow AI Chat probes"
+  },
+  "test_coverage": {
+    "unit_fixtures": "T1: ILIKE Strom→146 Amazon→47; bounds min/max; Counterparty guard; merchant_names dedup; audit result_rows",
+    "integration": "T1: tool JSON shape category_matches mirror_date_bounds search_attempted; privacy no raw_rows",
+    "operator_tests": "V1: S cancelable total → liste dienste; T-b Strom/Amazon amounts; T-a 2023 Amazon bounds empty-state; U multi-tool fusion; six-tool + privacy footer",
+    "doc_review": "V1 creates uat.md smoke checklist mapping S/T/U + regression footer",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "S",
+      "criterion": "AI enumerates subscription/streaming merchant/payee names from get_subscriptions and/or get_transactions when operator asks to list services — not generic-only or cannot retrieve when mirror holds recurring patterns",
+      "tasks": ["F1", "E1", "E2", "V1"],
+      "covered": true,
+      "notes": "F1 merchant_names + patterns_count; E1 enumerate display_name prompt + enum guard; E2 schema descriptions; V1 cancelable-total → liste dienste probe"
+    },
+    {
+      "acceptance_id": "T",
+      "criterion": "Merchant/category queries Strom/Amazon/streaming return data-backed amounts or explicit empty-state — not blanket no expenses when mirror plausibly contains matches",
+      "tasks": ["A1", "A2", "E1", "E2", "V1"],
+      "covered": true,
+      "notes": "A-prime category_search resolves Strom→146 Amazon→47 on omniflow; mirror_date_bounds closes T-a 2023 empty period; E1 cite bounds on no_rows_in_period; V1 Strom/Amazon in-window + 2023 bounds probes"
+    },
+    {
+      "acceptance_id": "U",
+      "criterion": "AI fuses category, subscription, account, and amount signals in tool orchestration without requiring user-supplied merchant names",
+      "tasks": ["A1", "A2", "F1", "E1", "V1"],
+      "covered": true,
+      "notes": "DEC-0069 U mapping: multi-tool fusion via category names + subscription display_names + orchestrator prompt; description/payee search intentionally deferred under DEC-0032"
+    },
+    {
+      "acceptance_id": "REGRESSION",
+      "criterion": "Six-tool registry; allow_raw_transactions=false default; OIDC-enabled and bundled-firefly deploy regression checks pass (acceptance footer)",
+      "tasks": ["T1", "V1"],
+      "covered": true,
+      "notes": "T1 six-tool count + privacy; V1 settings probe; OIDC/bundled-firefly footer operator post-V1 (ADV-3)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Acceptance T mentions description/account search; frozen fix is category_search + mirror_date_bounds only — discovery split T-a/T-b reconciles scope."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Acceptance U mentions transaction name/description; fix path is category + subscription tool fusion per DEC-0069 — payee search deferred."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "OIDC + bundled-firefly regression footer has no dedicated dev task; operator verify-work post-V1."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "V1 U probe lacks frozen prompt script — execute should define natural-language fusion query without merchant names."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "registry.rs six-tool verification covered by T1 assertion only — acceptable."
+    },
+    {
+      "id": "ADV-6",
+      "severity": "low",
+      "note": "LLM may ignore enriched payloads — E1/E2 + audit mitigate; runtime proof at V1."
+    },
+    {
+      "id": "ADV-7",
+      "severity": "low",
+      "note": "Integration tests require operator DATABASE_URL — documented carry-forward."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 3,
+    "covered_count": 3,
+    "gap_count": 0,
+    "task_count": 7,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0069_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true
+  },
+  "notes": "QA plan-verify 2026-06-07: sprints/quick/Q0017/tasks.md aligns with docs/product/acceptance.md BUG-0007 rows S/T/U and architecture § BUG-0007 / DEC-0069; 7/7 tasks mapped (A1, A2, F1, E1, E2, T1, V1); no gaps or orphans. Approved for /execute."
+}

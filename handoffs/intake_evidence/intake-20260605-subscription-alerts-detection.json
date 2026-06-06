@@ -1,0 +1,65 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260605-subscription-alerts-detection",
+  "intake_work_item_kind": "bug",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Subscription alerts badge count must match subscriptions list rows; detection must surface operator-known recurring merchants beyond current 11 pending; improve rules and/or AI-assisted detection without false-positive flood.",
+      "intake_run_id": "intake-20260605-subscription-alerts-detection",
+      "turn_index": 0,
+      "ref": "ie:intake-20260605-subscription-alerts-detection:0:be13148ac8d5fc2f"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "frontend alerts/unread-count and /subscriptions UI; backend subscription detection engine recurrence/group.rs detection.rs; alert entity subscription-scoped alerts; optional AI get_subscriptions tool chain.",
+      "intake_run_id": "intake-20260605-subscription-alerts-detection",
+      "turn_index": 1,
+      "ref": "ie:intake-20260605-subscription-alerts-detection:1:03b33de25e9a32f6"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "US-0010 financegnome.omniflow.cc 922+ txs post-BUG-0004; relates BUG-0004 J partial fix 11 pending not merged with BUG-0007 AI enumeration; do not read secrets; US-0003 alert vs list contract.",
+      "intake_run_id": "intake-20260605-subscription-alerts-detection",
+      "turn_index": 2,
+      "ref": "ie:intake-20260605-subscription-alerts-detection:2:da129c7bd6455297"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "GET /api/v1/alerts/unread-count vs GET /api/v1/subscriptions pending+confirmed counts reconciled; subscriptions list shows detected patterns for known merchants; detection rerun after sync increases recall without duplicate alert spam; operator smoke 33 vs 11 discrepancy resolved.",
+      "intake_run_id": "intake-20260605-subscription-alerts-detection",
+      "turn_index": 3,
+      "ref": "ie:intake-20260605-subscription-alerts-detection:3:7fbfe1a34c1a963e"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator confirms alert count aligns with list; subscriptions page shows materially more detected recurring charges; BUG-0008 acceptance W+X checked on external profile; OIDC regression pass.",
+      "intake_run_id": "intake-20260605-subscription-alerts-detection",
+      "turn_index": 4,
+      "ref": "ie:intake-20260605-subscription-alerts-detection:4:e2b59dea1227b7ba"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug",
+    "rationale": "Operator issue 1: UI showed 33 subscription alerts but only 11 in subscriptions list plus under-detection overall; sub-defects W (count mismatch) and X (detection recall) share subscription detection + alert pipeline on same US-0010 session.",
+    "alternatives_considered": [
+      "Merge into BUG-0004 J — rejected (BUG-0004 DONE; new alert-vs-list mismatch symptom post-fix)",
+      "Merge into BUG-0007 S — rejected (BUG-0007 is AI chat enumeration surface, not UI alert badge vs list)",
+      "Split W and X into separate BUG ids — rejected (same pipeline, jointly testable)"
+    ]
+  }
+}

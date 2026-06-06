@@ -1,0 +1,114 @@
+{
+  "sprint": "Q0010",
+  "bug_id": "BUG-0006",
+  "orchestrator_run_id": "auto-20260605-bug0006-001",
+  "verified_at": "2026-06-05T20:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0006",
+  "tasks_source": "sprints/quick/Q0010/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0006",
+  "decision_alignment": {
+    "new_dec_required": false,
+    "extends": ["DEC-0002", "DEC-0032"],
+    "decisions": ["DEC-0059"],
+    "research_basis": ["R-0060"],
+    "contract_elements_covered": [
+      "Q1: extract category_id from first split; upsert_transaction bind",
+      "Q2: ISO-8601/RFC3339 datetime → NaiveDate date component only",
+      "Q3: signed amount from split type per DEC-0059 (withdrawal/deposit/transfer)",
+      "R1: total_transaction_count, total_outflow, total_inflow, uncategorized_transaction_count, period_status",
+      "R1: NULL category_id → category_name Uncategorized in service layer",
+      "R1: allow_raw_transactions=false — summary fields present; raw_rows absent (DEC-0032)",
+      "P1: deploy → manual Firefly sync backfill ~922 rows → AI Chat + SQL probe on financegnome.omniflow.cc"
+    ],
+    "frozen_boundaries_respected": [
+      "No merge with BUG-0002/0003/0004/0005",
+      "No PrivacyLayer change — aggregate-only new fields",
+      "No SQL migration backfill — DEC-0002 upsert on next sync only",
+      "Do not rewrite aggregate SQL to read unsigned amounts from payload",
+      "Do not change allow_raw_transactions default or expose raw rows for fix"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "Q1 → Q2 → Q3 → R1 single backend PR → deploy → manual Firefly sync → P1 verify-work",
+    "notes": "Ingest chain Q1→Q2→Q3 must precede R1 aggregates; P1 gated on deploy + operator sync backfill before omniflow smoke"
+  },
+  "test_coverage": {
+    "unit_tests": "Q1 category_id upsert; Q2 ISO date parse + invalid warn; Q3 withdrawal/deposit/transfer sign; R1 privacy raw_rows gated",
+    "integration_tests": "R1 fixture mirror rows → totals + period_status enum priority",
+    "operator_tests": "P1 SQL probe (count, category_id, dates, amount sign); AI Chat spending question; optional get_transactions curl",
+    "doc_review": "P1 uat.md smoke checklist maps P/Q/R",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "Q",
+      "criterion": "Firefly sync persists category_id on mirror transactions rows used by aggregates_by_category; period filter returns rows with non-NULL dates and signed amounts for outflow sums",
+      "tasks": ["Q1", "Q2", "Q3"],
+      "covered": true,
+      "notes": "Three ingest gaps from discovery/backlog (NULL category_id, ISO date parse failure, positive amounts vs amount<0 outflow) each have dedicated ordered tasks; re-sync upsert backfill via DEC-0002 documented in Q3"
+    },
+    {
+      "acceptance_id": "R",
+      "criterion": "get_transactions aggregate JSON includes explicit period transaction totals/counts and distinguishes empty period vs uncategorized/zero-outflow under allow_raw_transactions=false; privacy redaction and six-tool registry preserved",
+      "tasks": ["R1"],
+      "covered": true,
+      "notes": "R1 adds all architecture-frozen fields and period_status priority chain; privacy unit test + frozen boundary DEC-0032; six-tool registry via regression footer at verify-work (ADV-1)"
+    },
+    {
+      "acceptance_id": "P",
+      "criterion": "After Firefly sync with 922+ transactions on US-0010 external profile, AI Chat answers category/spending questions using get_transactions data — not no-expenses/unavailable when mirror rows exist",
+      "tasks": ["P1"],
+      "covered": true,
+      "notes": "P1 operator verify after Q1–R1 deploy + manual sync; downstream of ingest + aggregate fixes; SQL probe cross-checks tool totals"
+    },
+    {
+      "acceptance_id": "REGRESSION",
+      "criterion": "Privacy redaction and six-tool registry constraints preserved; OIDC-enabled deploy regression checks pass (acceptance footer)",
+      "tasks": [],
+      "covered": true,
+      "notes": "uat.md regression row post-P1; R1 privacy test covers raw_rows gate; full OIDC/six-tool smoke at verify-work — not separate dev task (ADV-1)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Acceptance regression footer (OIDC + six-tool registry + privacy) has no dedicated dev task; operator verify-work smoke post-P1 — not a plan-verify blocker."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Row P runtime proof requires operator manual Firefly sync after deploy to backfill ~922 existing rows — P1 blocked until sync completes per DEC-0002 upsert path."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "First-split-only category model may miss transfer destination-leg category — acceptable MVP per architecture; full journal retained in payload."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "BUG-0002/0003 verify-work BLOCKED on parallel tracks — Q0010 frozen boundary forbids merge; independent deploy/verify."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "Six-tool registry count not explicitly asserted in task tests — verify-work should confirm get_transactions remains registered alongside five other tools."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 3,
+    "covered_count": 3,
+    "gap_count": 0,
+    "task_count": 5,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dependency_graph_valid": true
+  },
+  "notes": "QA plan-verify 2026-06-05: sprints/quick/Q0010/tasks.md aligns with docs/product/acceptance.md BUG-0006 rows P/Q/R and architecture § BUG-0006; 5/5 tasks mapped (Q1,Q2,Q3,R1,P1); discovery sub-defects P/Q/Q2/Q3/R covered; no gaps or orphans. Approved for /execute."
+}

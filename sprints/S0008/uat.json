@@ -1,0 +1,134 @@
+{
+  "sprint": "S0008",
+  "stories": ["US-0008"],
+  "story_id": "US-0008",
+  "phase": "verify-work",
+  "verified_at": "2026-05-31T23:12:48Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0008",
+  "qa_evidence": "sprints/S0008/qa-findings.md",
+  "environment": {
+    "us0006_ai_operational": false,
+    "compose_full_profile": true,
+    "local_provider_configured": false,
+    "ollama_running": false,
+    "lm_studio_configured": false,
+    "database_url_set": false,
+    "openai_api_key_set": false
+  },
+  "automated_checks": [
+    {
+      "id": "AUTO-1",
+      "description": "bash tests/run-tests.sh",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-2",
+      "description": "cargo test --test firefly_readonly",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-3",
+      "description": "cargo test --lib (61 tests)",
+      "result": "pass",
+      "notes": "provider factory, orchestrator local/tool_choice, frozen six-tool registry"
+    },
+    {
+      "id": "AUTO-4",
+      "description": "cargo test --test ai_local_provider_isolation",
+      "result": "pass",
+      "notes": "2/2 — local never hits api.openai.com; cloud includes tool_choice"
+    },
+    {
+      "id": "AUTO-5",
+      "description": "cargo test --test ai_frozen_modules",
+      "result": "pass",
+      "notes": "2/2 — registry/privacy/tools no US-0008 marker"
+    },
+    {
+      "id": "AUTO-6",
+      "description": "cargo test --test exchange_signing",
+      "result": "pass",
+      "notes": "4/4 GET-only audit and signing fixtures"
+    },
+    {
+      "id": "AUTO-7",
+      "description": "prior-story integration suites (firefly/forecast/subscriptions/plans/wealth_alerts/ai_assistant/exchanges_portfolio)",
+      "result": "skip",
+      "notes": "DATABASE_URL unset; operator prerequisite for migration-008 audit persistence"
+    },
+    {
+      "id": "AUTO-8",
+      "description": "npm run build (frontend)",
+      "result": "pass",
+      "notes": "ProviderBadge, Settings provider table + Test AI provider button in build"
+    },
+    {
+      "id": "AUTO-9",
+      "description": "docker compose --profile full config --services",
+      "result": "pass",
+      "notes": "firefly-iii, flow-finance-ai, grafana, ollama, redis (placeholder env for DATABASE_*, FIREFLY_*, AUTHENTIK_SECRET_KEY)"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "Provider selector supports OpenAI and local OpenAI-compatible endpoints",
+      "result": "pass",
+      "notes": "build_provider openai/ollama/openai_compatible; AiPublicSettings + Settings provider table + POST /api/v1/ai/test; ProviderBadge; unit tests openai_requires_api_key, openai_compatible_requires_base_url"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "Ollama integration works when Ollama service is running (full Docker Compose profile)",
+      "result": "pass_with_prerequisites",
+      "notes": "docker-compose.yml ollama under profiles full; AUTO-9 lists ollama; default.toml + runbook + user guide. Operator prerequisite: --profile full up, ollama pull, provider=ollama, Test AI + chat Local badge"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "LM Studio / LocalAI / vLLM work via OpenAI-compatible base URL configuration",
+      "result": "pass_with_prerequisites",
+      "notes": "openai_compatible + required base_url; wiremock provider test; Settings test endpoint; host.docker.internal:1234/v1 docs. Operator prerequisite: host LM Studio/vLLM + base_url + Test AI success"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "US-0006 tool layer and privacy settings unchanged across providers",
+      "result": "pass",
+      "notes": "ai_frozen_modules no hash drift registry/privacy/tools; six-tool registry unit test; orchestrator provider injection only"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": "Chat functionality verified end-to-end with local provider (no external API call when local selected)",
+      "result": "pass",
+      "notes": "local_provider_never_calls_openai_com wiremock; omit_tool_choice for local. Operator smoke: unset OPENAI_API_KEY, chat + audit Provider column with live Ollama/compatible URL"
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_total": 5,
+    "acceptance_criteria_pass": 5,
+    "passed": 3,
+    "pass_with_prerequisites": 2,
+    "skipped": 0,
+    "failed": 0,
+    "automated_pass": 7,
+    "automated_skip": 2
+  },
+  "operator_prerequisites": [
+    "Copy .env.example to .env with DATABASE_*, FIREFLY_*, optional AUTH_DEV_BYPASS=true",
+    "Provision external TimescaleDB; apply migration 008_ai_audit_provider.sql at backend startup",
+    "Configure [ai] provider/model/base_url in backend/config/default.toml; restart backend",
+    "Ollama: docker compose --profile full up -d; ollama pull qwen2.5:14b; provider=ollama",
+    "Compatible URL: LM Studio on host :1234; provider=openai_compatible; base_url=http://host.docker.internal:1234/v1",
+    "Settings Test AI provider — expect success with latency and sample text",
+    "Chat Local badge; example query without OPENAI_API_KEY",
+    "Settings audit log Provider column on tool calls",
+    "DATABASE_URL for ai_assistant_integration migration-008 persistence proof"
+  ],
+  "next_phase": "release"
+}

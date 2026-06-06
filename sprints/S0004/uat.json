@@ -1,0 +1,140 @@
+{
+  "sprint": "S0004",
+  "stories": ["US-0004"],
+  "story_id": "US-0004",
+  "phase": "verify-work",
+  "verified_at": "2026-05-31T21:05:17Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0004",
+  "qa_evidence": "sprints/S0004/qa-findings.md",
+  "environment": {
+    "env_file_present": false,
+    "database_url_set": false,
+    "timescaledb_extension": false,
+    "firefly_pat_configured": false,
+    "forecast_recompute_completed": false,
+    "confirmed_subscriptions_present": false,
+    "oidc_or_dev_bypass": false
+  },
+  "automated_checks": [
+    {
+      "id": "AUTO-1",
+      "description": "bash tests/run-tests.sh",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-2",
+      "description": "cargo test --test firefly_readonly",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-3",
+      "description": "cargo test --lib (plan + carry-forward unit tests)",
+      "result": "pass",
+      "notes": "28/28 including 10 plan-specific: overlay, templates, project, versioning cap, deviation sign"
+    },
+    {
+      "id": "AUTO-4",
+      "description": "cargo test --test firefly_integration",
+      "result": "skip",
+      "notes": "DATABASE_URL unset; operator prerequisite for audit-log verification"
+    },
+    {
+      "id": "AUTO-5",
+      "description": "cargo test --test forecast_integration",
+      "result": "skip",
+      "notes": "DATABASE_URL unset; operator prerequisite for hypertable persistence proof"
+    },
+    {
+      "id": "AUTO-6",
+      "description": "cargo test --test subscriptions_integration",
+      "result": "skip",
+      "notes": "DATABASE_URL unset; operator prerequisite for subscription persistence proof"
+    },
+    {
+      "id": "AUTO-7",
+      "description": "cargo test --test plans_integration",
+      "result": "skip",
+      "notes": "DATABASE_URL unset; operator prerequisite for plan CRUD/recompute/plan-vs-actual and Firefly write audit"
+    },
+    {
+      "id": "AUTO-8",
+      "description": "npm run build (frontend)",
+      "result": "pass",
+      "notes": "lazy ECharts chunks CompareChart, PlanVsActualChart; route /planning in build"
+    },
+    {
+      "id": "AUTO-9",
+      "description": "docker compose --profile minimal config --services",
+      "result": "pass",
+      "notes": "firefly-iii, flow-finance-ai, grafana (placeholder env for DATABASE_*, FIREFLY_*, AUTHENTIK_SECRET_KEY)"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "User can create named plan with scenario adjustments",
+      "result": "pass",
+      "notes": "Migration 004 plans/plan_versions/plan_adjustments; POST /api/v1/plans + adjustment CRUD; overlay.rs monthly/weekly/one-time deltas; PlanningPage Scenarios tab; unit tests leasing_template_produces_monthly_outflow, monthly_outflow_applies_on_schedule"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "Built-in scenario templates: current, leasing, savings mode, house purchase",
+      "result": "pass",
+      "notes": "PlanTemplate enum in types.rs; templates.rs defaults + map_savings_suggestions; GET .../templates/savings-mode/suggestions; UI template cards + savings modal; user guide documents all four templates"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "Plan versions v1/v2/v3 created and compared side-by-side",
+      "result": "pass_with_prerequisites",
+      "notes": "max_versions_per_plan=3; VersionCapReached HTTP 409; compare_versions API + Compare tab with lazy CompareChart; unit test version_cap_is_three. Operator prerequisite: DATABASE_URL + forecast baseline to create v2/v3 and exercise live compare UI"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "Daily plan-vs-Ist shows planned, actual, and deviation amounts",
+      "result": "pass_with_prerequisites",
+      "notes": "plan_vs_actual API + Plan vs Actual tab/chart; unit test deviation_sign_is_actual_minus_planned (actual − planned). Operator prerequisite: synced asset transactions for non-empty Ist series"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": "Grafana Dashboard 3 reflects active plan",
+      "result": "pass",
+      "notes": "grafana/provisioning/dashboards/analytics/budgets.json uid budgets; panels Plan/Ist/Abweichung/MTD; SQL filters is_active + is_latest; empty-state annotation. Operator smoke: set active plan for live panel data"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-6",
+      "description": "Scenario changes do not modify Firefly transaction data",
+      "result": "pass",
+      "notes": "Plan module read-only SQL on transactions mirror; no FireflyClient in src/plan/; firefly_readonly PASS; plans_integration::plan_module_has_no_firefly_writes static audit (integration SKIP without DATABASE_URL)"
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_total": 6,
+    "acceptance_criteria_pass": 6,
+    "passed": 4,
+    "pass_with_prerequisites": 2,
+    "skipped": 0,
+    "failed": 0,
+    "automated_pass": 5,
+    "automated_skip": 4
+  },
+  "operator_prerequisites": [
+    "Copy .env.example to .env with DATABASE_*, FIREFLY_*, optional AUTH_DEV_BYPASS",
+    "Provision external TimescaleDB; apply migration 004_plans.sql at backend startup",
+    "docker compose --profile minimal up --build",
+    "Firefly PAT; sync asset transactions; complete US-0002 forecast recompute",
+    "US-0003 confirmed subscriptions for savings-mode template suggestions",
+    "Open /planning — create plan, apply templates, create v2/v3, compare, activate plan",
+    "Open Grafana Analytics dashboard budgets",
+    "DATABASE_URL for plans_integration, forecast_integration, subscriptions_integration, and firefly_integration tests"
+  ],
+  "next_phase": "release"
+}

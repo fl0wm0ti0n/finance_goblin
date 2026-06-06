@@ -1,0 +1,64 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260605-exchange-futures-multi-product",
+  "intake_work_item_kind": "bug",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Exchange sync for Bitunix (and comparable connectors) must ingest futures and other non-spot account balances/positions—not spot wallet only—so wealth and portfolio views reflect total exchange holdings.",
+      "intake_run_id": "intake-20260605-exchange-futures-multi-product",
+      "turn_index": 0,
+      "ref": "ie:intake-20260605-exchange-futures-multi-product:0:fd6d465436ffc117"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "backend/src/exchanges/bitunix.rs (spot-only sync_balances, enabled_futures=false default, empty sync_positions/sync_funding stubs); backend/config/default.toml [exchanges.bitunix]; ExchangeConnector trait sync pipeline; wealth upsert_daily_snapshot and portfolio PnL; optional parity with binance fapi paths and bybit unified wallet labeling.",
+      "intake_run_id": "intake-20260605-exchange-futures-multi-product",
+      "turn_index": 1,
+      "ref": "ie:intake-20260605-exchange-futures-multi-product:1:21fdf11e26ffd9cc"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Read-only API keys only (R-0032); Bitunix futures uses fapi.bitunix.com header auth distinct from spot query-sign (R-0058); BUG-0003 G1/G2 registry+auth track separate; US-0007 spot-first MVP deferred futures—operator now requires futures for accurate wealth; do not read .env secrets.",
+      "intake_run_id": "intake-20260605-exchange-futures-multi-product",
+      "turn_index": 2,
+      "ref": "ie:intake-20260605-exchange-futures-multi-product:2:56a2332525651920"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "With Bitunix credentials and operator futures balance present: post-sync exchange holdings include futures/margin product_type rows (not spot-only); connection test documents spot+futures reachability or explicit partial failure; wealth snapshot crypto_value_eur reflects futures wallet; regression: spot-only keys still sync spot path; Binance/Bybit unchanged unless discovery expands scope.",
+      "intake_run_id": "intake-20260605-exchange-futures-multi-product",
+      "turn_index": 3,
+      "ref": "ie:intake-20260605-exchange-futures-multi-product:3:f7ef17dd40f0758d"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator confirms Bitunix futures/margin balances appear in Wealth and exchange holdings after sync; product no longer spot-only for Bitunix when futures enabled; BUG-0005 acceptance rows M+N+O pass on US-0010 external profile; discovery documents endpoint/auth mapping per R-0058.",
+      "intake_run_id": "intake-20260605-exchange-futures-multi-product",
+      "turn_index": 4,
+      "ref": "ie:intake-20260605-exchange-futures-multi-product:4:77057712a784e081"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug",
+    "rationale": "Operator requirement that Bitunix exchange sync must cover futures and other account types—not spot wallet only—for accurate wealth; sub-defects M (spot-only ingestion), N (futures API/auth gap per R-0058), O (wealth under-report) share one connector/product scope.",
+    "alternatives_considered": [
+      "Extend BUG-0003 G2 futures auth spike only — rejected: G2 targets test-connection auth, not product requirement to sync futures balances into wealth",
+      "US story for multi-product exchange — rejected: defect-shaped gap vs US-0007 spot-first MVP promise; operator reports missing holdings today"
+    ]
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "sprint": "S0002",
+  "stories": ["US-0002"],
+  "story_id": "US-0002",
+  "phase": "verify-work",
+  "verified_at": "2026-05-31T18:33:14Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0002",
+  "qa_evidence": "sprints/S0002/qa-findings.md",
+  "environment": {
+    "env_file_present": false,
+    "database_url_set": false,
+    "timescaledb_extension": false,
+    "firefly_pat_configured": false,
+    "synced_asset_transactions": false,
+    "oidc_or_dev_bypass": false
+  },
+  "automated_checks": [
+    {
+      "id": "AUTO-1",
+      "description": "bash tests/run-tests.sh",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-2",
+      "description": "cargo test --test firefly_readonly",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-3",
+      "description": "cargo test --lib (forecast engine unit tests)",
+      "result": "pass",
+      "notes": "8/8 including milestones, recurring, categories, rolling cap"
+    },
+    {
+      "id": "AUTO-4",
+      "description": "cargo test --test firefly_integration",
+      "result": "skip",
+      "notes": "DATABASE_URL unset; operator prerequisite for audit-log verification"
+    },
+    {
+      "id": "AUTO-5",
+      "description": "cargo test --test forecast_integration",
+      "result": "skip",
+      "notes": "DATABASE_URL unset; operator prerequisite for hypertable persistence proof"
+    },
+    {
+      "id": "AUTO-6",
+      "description": "npm run build (frontend)",
+      "result": "pass",
+      "notes": "lazy ECharts chunks DailyChart, MonthlyChart, LongTermChart"
+    },
+    {
+      "id": "AUTO-7",
+      "description": "docker compose --profile minimal config --services",
+      "result": "pass",
+      "notes": "firefly-iii, flow-finance-ai, grafana"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "Daily forecast shows tomorrow, next week, and month-end projected balance per account",
+      "result": "pass_with_prerequisites",
+      "notes": "API milestones, ForecastPage stat cards, DailyChart; live values require synced asset account data"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "Monthly forecast shows income, fixed costs, variable costs, and free cashflow",
+      "result": "pass_with_prerequisites",
+      "notes": "forecast_cashflow_monthly + /forecast/monthly + MonthlyChart; live series requires sync data"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "Long-term forecasts available for 3, 6, 12, and 24 months",
+      "result": "pass",
+      "notes": "horizon validation, LongTermChart pills, Grafana forecast-horizons stat panels"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "Forecast data persisted in TimescaleDB hypertables",
+      "result": "pass_with_prerequisites",
+      "notes": "migration 002 create_hypertable; forecast_integration SKIP without DATABASE_URL"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": "React UI displays forecast charts (ECharts) for selected account and horizon",
+      "result": "pass_with_prerequisites",
+      "notes": "/forecast route, lazy chart imports, build PASS; live render requires auth + sync data"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-6",
+      "description": "Grafana Dashboard 1 (Cashflow: balance, forecast, scarcity markers) provisioned",
+      "result": "pass",
+      "notes": "analytics/cashflow.json uid cashflow; FlowFinancePostgreSQL datasource"
+    },
+    {
+      "id": "UAT-7",
+      "acceptance_id": "AC-7",
+      "description": "Grafana Dashboard 5 (Forecast horizons) provisioned",
+      "result": "pass",
+      "notes": "analytics/forecast-horizons.json uid forecast-horizons"
+    },
+    {
+      "id": "UAT-8",
+      "acceptance_id": "AC-8",
+      "description": "Forecasts recompute after Firefly sync completes",
+      "result": "pass_with_prerequisites",
+      "notes": "SyncService recompute hook DEC-0010; operator sync smoke for timing and DB rows"
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_total": 8,
+    "acceptance_criteria_pass": 8,
+    "passed": 3,
+    "pass_with_prerequisites": 5,
+    "skipped": 0,
+    "failed": 0,
+    "automated_pass": 5,
+    "automated_skip": 2
+  },
+  "operator_prerequisites": [
+    "Copy .env.example to .env with DATABASE_*, FIREFLY_*, optional AUTH_DEV_BYPASS",
+    "Provision external TimescaleDB with timescaledb extension; apply migration 002",
+    "docker compose --profile minimal up --build",
+    "Firefly PAT; sync asset account transactions",
+    "Open /forecast and Grafana dashboards cashflow, forecast-horizons",
+    "DATABASE_URL for forecast_integration and firefly_integration tests"
+  ],
+  "next_phase": "release"
+}

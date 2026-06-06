@@ -1,0 +1,25 @@
+{
+  "id": "S0012",
+  "story_ids": ["US-0012"],
+  "status": "PLANNED",
+  "created": "2026-06-03",
+  "goal": "Deliver DEC-0058 in-app database bootstrap: ensure_database before connect_with_retry, idempotent CREATE DATABASE OWNER, TimescaleDB extension via maintenance creds, DATABASE_BOOTSTRAP_URL, bootstrap_reason log codes, .env.example + runbook docs, unit + gated integration tests.",
+  "scope": [
+    "backend/src/db/bootstrap.rs ensure_database with reason codes",
+    "config DATABASE_BOOTSTRAP_URL maintenance URL builder and DATABASE_NAME validation",
+    "lib.rs startup ordering and db/mod.rs module export",
+    ".env.example omniflow DATABASE_BOOTSTRAP_URL block",
+    "runbook Omniflow auto-provision preflight delta",
+    "database_bootstrap_integration.rs and run-tests.sh wire",
+    "Unit tests for validation URL builder reason codes and log redaction"
+  ],
+  "risks": [
+    "Bootstrap URL secret leakage in logs — redact in tracing and unit tests",
+    "Extension privilege on shared host — maintenance creds for CREATE EXTENSION",
+    "TimescaleDB absent — fail closed before migrations with runbook pointer",
+    "Integration test flakiness — ephemeral DB names and teardown"
+  ],
+  "task_count": 7,
+  "decisions": ["DEC-0058"],
+  "research": ["R-0055", "R-0053"]
+}

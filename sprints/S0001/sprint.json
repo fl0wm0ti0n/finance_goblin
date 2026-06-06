@@ -1,0 +1,25 @@
+{
+  "id": "S0001",
+  "story_ids": ["US-0001"],
+  "status": "PLANNED",
+  "created": "2026-05-31",
+  "goal": "Deliver deployable platform foundation with read-only Firefly integration, OIDC UI shell, and Grafana datasource provisioning.",
+  "scope": [
+    "Docker Compose profiles minimal/standard/full/oidc without embedded PostgreSQL",
+    "External PostgreSQL config and startup retry",
+    "Rust/Axum backend health and JWT-protected API skeleton",
+    "SQLx mirror schema and migrations",
+    "Firefly GET-only connector and sync scheduler",
+    "React UI shell with OIDC and Sync Status pages",
+    "Grafana datasource provisioning",
+    "Read-only integration test and operator user guide"
+  ],
+  "risks": [
+    "Accidental Firefly writes — GET-only enforcement and integration test",
+    "External TimescaleDB prerequisite — operator documentation",
+    "Large initial sync — progress UI in Sync Status",
+    "Linux host DB connectivity — host-gateway in Compose"
+  ],
+  "task_count": 12,
+  "decisions": ["DEC-0001", "DEC-0002", "DEC-0003", "DEC-0004", "DEC-0005", "DEC-0006"]
+}

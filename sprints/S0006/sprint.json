@@ -1,0 +1,31 @@
+{
+  "id": "S0006",
+  "story_ids": ["US-0006"],
+  "status": "PLANNED",
+  "created": "2026-05-31",
+  "goal": "Deliver AiOrchestrator, six-tool registry, PrivacyLayer, migration 006 audit, TransactionsService, SSE chat API, React Sheet drawer + /chat, Settings AI & Privacy audit UI, tests, and operator user guide.",
+  "scope": [
+    "SQLx migration 006 — ai_tool_audit table + retention job (DEC-0034)",
+    "TOML [ai] + [privacy] + settings API extension (DEC-0032, DEC-0033)",
+    "TransactionsService read-only aggregates (DEC-0035, R-0031)",
+    "PlanService project_ephemeral / project_readonly (DEC-0035, R-0031)",
+    "PrivacyLayer central redaction middleware (DEC-0032)",
+    "AiTool trait registry + OpenAI provider stub (DEC-0031)",
+    "Six AI tools wrapping existing services (DEC-0035)",
+    "AiOrchestrator tool-calling loop + audit persistence (DEC-0031, DEC-0034)",
+    "SSE POST /api/v1/chat/stream + GET /api/v1/ai/audit (DEC-0033)",
+    "React ChatPanel + AiSheet drawer + /chat route (DEC-0036)",
+    "Settings AI & Privacy read-only display + audit table (DEC-0036, DEC-0034)",
+    "AI privacy orchestrator and tool tests + operator user guide (docs/user-guides/US-0006.md)"
+  ],
+  "risks": [
+    "Privacy bypass via nested JSON — central walker + tests (R-0028, DEC-0032)",
+    "OpenAI key handling — env-only; graceful degrade when unset (R-0027)",
+    "Ephemeral plan projection drift — share plan::overlay (R-0031, DEC-0035)",
+    "SSE proxy buffering — X-Accel-Buffering: no (R-0029, DEC-0033)",
+    "get_budget_status must align with Alert Engine rules (R-0022, DEC-0035)",
+    "US-0008 scope creep — provider stub only (R-0027)"
+  ],
+  "task_count": 12,
+  "decisions": ["DEC-0031", "DEC-0032", "DEC-0033", "DEC-0034", "DEC-0035", "DEC-0036"]
+}

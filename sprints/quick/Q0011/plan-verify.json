@@ -1,0 +1,131 @@
+{
+  "sprint": "Q0011",
+  "bug_id": "BUG-0004",
+  "orchestrator_run_id": "auto-20260605-bug0004-001",
+  "verified_at": "2026-06-05T20:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0004",
+  "tasks_source": "sprints/quick/Q0011/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0004",
+  "decision_alignment": {
+    "new_dec_required": false,
+    "extends": ["DEC-0002", "DEC-0014", "DEC-0041"],
+    "decisions": ["DEC-0060", "DEC-0061"],
+    "research_basis": ["R-0061"],
+    "contract_elements_covered": [
+      "I1: finish_sync_run on RunMode::ExchangesOnly success/failed; no double-finish Full",
+      "K1: portfolio pie panel id 8 UNION subquery parentheses wrap",
+      "L1: parse_split_amount for Firefly current_balance string/number per DEC-0060",
+      "L2: load_asset_accounts COALESCE(balance, 0) >= 0 filter",
+      "J1: extract_payee_source priority chain per DEC-0061 in by_payee()",
+      "J2: SubscriptionsPage threshold copy + pending-count banner; Full-sync-only note",
+      "L3: deploy → manual Full Firefly sync gate → omniflow probes rows I/J/K/L"
+    ],
+    "frozen_boundaries_respected": [
+      "No merge with BUG-0005/0006 scope",
+      "No SQL migration backfill — DEC-0002 upsert on next Full sync only",
+      "No deploy-time cleanup of historical stuck sync_runs",
+      "Do not auto-confirm subscription patterns",
+      "Do not merge BUG-0005 exchange multi-product work"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "I1 → K1 → L1 → L2 → J1 → J2 single PR → deploy → manual Full Firefly sync → L3 verify-work",
+    "notes": "L2 depends on L1; J2 depends on J1; L3 gated on I1–J2 deploy plus operator FULL_FIREFLY_SYNC before wealth/forecast probes"
+  },
+  "test_coverage": {
+    "unit_tests": "I1 ExchangesOnly finish_sync_run; L1 balance parse string/number; L2 NULL balance inclusion; J1 payee fallback grouping",
+    "integration_tests": "L2 wealth query; sync mod tests for I1",
+    "operator_tests": "L3 exchange terminal status; portfolio ds/query 200; wealth non-empty; forecast daily non-zero; subscriptions pending/threshold UX",
+    "doc_review": "L3 uat.md smoke checklist maps I/J/K/L; J2 threshold copy documents detection rules",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "I",
+      "criterion": "After manual exchange sync on US-0010 external profile with 922+ synced transactions, GET /api/v1/sync/status does not remain state: running with finished_at: null once exchange phase completes; terminal sync run status is persisted",
+      "tasks": ["I1", "L3"],
+      "covered": true,
+      "notes": "I1 fixes ExchangesOnly path missing finish_sync_run per architecture; L3 operator probe confirms terminal status on new runs after deploy"
+    },
+    {
+      "acceptance_id": "J",
+      "criterion": "Subscription detection surfaces recurring patterns for operator-known subscription merchants (not permanently empty [] when ledger contains ≥3 recurring expenses per payee) or documents detection thresholds in UI empty-state",
+      "tasks": ["J1", "J2", "L3"],
+      "covered": true,
+      "notes": "Acceptance OR satisfied: J1 improves payee grouping (DEC-0061) for detection on Full sync; J2 documents ≥3 txs / ≥60% confidence thresholds and pending banner when confirmed tabs empty; L3 verifies UX"
+    },
+    {
+      "acceptance_id": "K",
+      "criterion": "Portfolio analytics Grafana panel SQL executes without pq: syntax error at or near UNION; POST /analytics/grafana/api/ds/query returns 200 for fixed portfolio allocation query",
+      "tasks": ["K1", "L3"],
+      "covered": true,
+      "notes": "K1 parenthesizes ORDER BY/LIMIT branches before UNION ALL in portfolio.json panel 8; L3 ds/query probe"
+    },
+    {
+      "acceptance_id": "L",
+      "criterion": "Forecast and wealth product views show account-level data after successful sync/recompute; net_worth_snapshots and forecast series populate for representative accounts; analytics dashboards show non-empty values when account_id variable matches synced accounts",
+      "tasks": ["L1", "L2", "L3"],
+      "covered": true,
+      "notes": "L1 DEC-0060 balance parse + L2 NULL filter fix wealth/forecast data path; Full sync backfill gate documented; L3 probes GET /api/v1/wealth and forecast/daily; K1 portfolio pie uses net_worth_snapshots — cascades from L1 backfill"
+    },
+    {
+      "acceptance_id": "REGRESSION",
+      "criterion": "OIDC-enabled and bundled-firefly deploy regression checks pass (acceptance footer)",
+      "tasks": [],
+      "covered": true,
+      "notes": "uat.md regression row post-L3; full OIDC/bundled-firefly smoke at verify-work — not separate dev task (ADV-1)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Acceptance regression footer (OIDC + bundled-firefly) has no dedicated dev task; operator verify-work smoke post-L3 — not a plan-verify blocker."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Rows I/L runtime proof for wealth/forecast requires operator manual Full Firefly sync after deploy before L3 — blocked until FULL_FIREFLY_SYNC gate completes."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "Historical stuck sync_runs remain until manual cleanup — I1 forward fix only per frozen boundary; acceptance probes new runs."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "net_worth_snapshots populate implicitly via wealth recompute after L1 backfill — L3 probes wealth API and portfolio pie SQL, not explicit snapshot table SQL."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "Acceptance L mentions analytics dashboards with account_id variable — plan fixes NULL-balance root cause cascade; only portfolio pie explicitly probed in K1/L3."
+    },
+    {
+      "id": "ADV-6",
+      "severity": "low",
+      "note": "BUG-0006 Q0010 DEC-0059 amount sign may improve J1 expense filter after separate deploy — coordinate, not blocking."
+    },
+    {
+      "id": "ADV-7",
+      "severity": "low",
+      "note": "Row J detection runs on Full Firefly sync only (DEC-0018) — J2 documents; exchange-only sync does not trigger detection."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 4,
+    "covered_count": 4,
+    "gap_count": 0,
+    "task_count": 7,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dependency_graph_valid": true
+  },
+  "notes": "QA plan-verify 2026-06-05: sprints/quick/Q0011/tasks.md aligns with docs/product/acceptance.md BUG-0004 rows I/J/K/L and architecture § BUG-0004; 7/7 tasks mapped (I1,K1,L1,L2,J1,J2,L3); discovery sub-defects I/J/K/L covered; no gaps or orphans. Approved for /execute."
+}

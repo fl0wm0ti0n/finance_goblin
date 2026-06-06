@@ -1,0 +1,76 @@
+{
+  "sprint": "S0002",
+  "story_id": "US-0002",
+  "verified_at": "2026-05-31T18:26:55Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0002",
+  "tasks_source": "sprints/S0002/tasks.md",
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Daily forecast shows tomorrow, next week, and month-end projected balance per account",
+      "tasks": ["T-0015", "T-0018", "T-0020", "T-0023"],
+      "covered": true,
+      "notes": "Engine milestone derivation (T-0015); daily API with milestones (T-0018); ECharts stat cards + line chart per account (T-0020); unit/integration tests (T-0023)"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "Monthly forecast shows income, fixed costs, variable costs, and free cashflow",
+      "tasks": ["T-0015", "T-0018", "T-0020", "T-0023"],
+      "covered": true,
+      "notes": "Category buckets and monthly decomposition (T-0015); monthly API series (T-0018); four-bucket bar chart (T-0020); projection unit tests (T-0023)"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Long-term forecasts available for 3, 6, 12, and 24 months",
+      "tasks": ["T-0015", "T-0018", "T-0020", "T-0023"],
+      "covered": true,
+      "notes": "730-day projection with 3/6/12/24 month end balances (T-0015); long-term API with horizon param (T-0018); horizon pills 3/6/12/24 (T-0020); API contract tests (T-0023)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "Forecast data persisted in TimescaleDB hypertables",
+      "tasks": ["T-0013", "T-0014", "T-0016", "T-0023"],
+      "covered": true,
+      "notes": "Migration 002 hypertables (T-0013); repository read/write (T-0014); ForecastService persist + retention (T-0016); integration test recompute → hypertable → API (T-0023)"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "React UI displays forecast charts (ECharts) for selected account and horizon",
+      "tasks": ["T-0019", "T-0020", "T-0024"],
+      "covered": true,
+      "notes": "Forecast page shell, account selector, Daily|Monthly|Long-term tabs (T-0019); ECharts views per tab and horizon (T-0020); operator guide for /forecast UI (T-0024)"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "Grafana Dashboard 1 (Cashflow: balance, forecast, scarcity markers) provisioned",
+      "tasks": ["T-0021"],
+      "covered": true,
+      "notes": "cashflow.json with balance + forecast overlay panels, static €200 scarcity threshold line, FlowFinancePostgreSQL uid (T-0021)"
+    },
+    {
+      "acceptance_id": "AC-7",
+      "criterion": "Grafana Dashboard 5 (Forecast horizons) provisioned",
+      "tasks": ["T-0022"],
+      "covered": true,
+      "notes": "forecast-horizons.json with 1/3/6/12/24 month horizon panels, latest computation_id filter (T-0022)"
+    },
+    {
+      "acceptance_id": "AC-8",
+      "criterion": "Forecasts recompute after Firefly sync completes",
+      "tasks": ["T-0014", "T-0016", "T-0017", "T-0023", "T-0024"],
+      "covered": true,
+      "notes": "ForecastService.recompute + retention (T-0016); sync hook after successful ingest, mutex covers recompute (T-0017); repository supports computation lifecycle (T-0014); sync hook test (T-0023); user guide + optional Sync Status sub-state (T-0024)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "summary": {
+    "acceptance_criteria_count": 8,
+    "covered_count": 8,
+    "gap_count": 0,
+    "task_count": 12,
+    "tasks_without_acceptance_ref": [],
+    "tasks_without_acceptance_ref_note": "All tasks T-0013–T-0024 map to at least one AC in tasks.md acceptance refs and coverage map"
+  }
+}

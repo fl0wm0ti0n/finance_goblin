@@ -1,0 +1,134 @@
+{
+  "id": "Q0011",
+  "title": "BUG-0004 post-sync pipeline empty analytics",
+  "status": "PLANNED",
+  "bug_id": "BUG-0004",
+  "architecture_ref": "architecture-20260605-bug0004",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["I", "J", "K", "L"],
+  "acceptance_mapping": {
+    "I": { "tasks": ["I1"], "primary_verify": "GET /api/v1/sync/status — terminal exchange run; finished_at set" },
+    "J": { "tasks": ["J1", "J2"], "primary_verify": "Subscriptions UI — payee grouping + pending/threshold UX" },
+    "K": { "tasks": ["K1"], "primary_verify": "POST /analytics/grafana/api/ds/query portfolio pie — 200" },
+    "L": { "tasks": ["L1", "L2", "L3"], "primary_verify": "GET /api/v1/wealth + forecast daily — non-empty after Full sync" }
+  },
+  "task_count": 7,
+  "estimate_total_hours": 9.5,
+  "tasks": [
+    {
+      "id": "I1",
+      "title": "finish_sync_run on ExchangesOnly terminal path",
+      "status": "open",
+      "estimate_hours": 1.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0004 (I) — exchange sync run terminal status persisted",
+      "files": ["backend/src/sync/mod.rs"],
+      "tests": [
+        "Unit: ExchangesOnly success → finish_sync_run success",
+        "Unit: ExchangesOnly error → finish_sync_run failed"
+      ]
+    },
+    {
+      "id": "K1",
+      "title": "Portfolio pie UNION SQL subquery wrap",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0004 (K) — portfolio ds/query 200 without UNION syntax error",
+      "files": ["grafana/provisioning/dashboards/analytics/portfolio.json"],
+      "tests": ["SQL probe: portfolio pie rawSql executes"]
+    },
+    {
+      "id": "L1",
+      "title": "Firefly account current_balance parse per DEC-0060",
+      "status": "open",
+      "estimate_hours": 1.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0004 (L) — mirror accounts.balance populated after Full sync",
+      "files": ["backend/src/firefly/mod.rs"],
+      "decisions": ["DEC-0060"],
+      "tests": [
+        "Unit: string and numeric current_balance → f64 on upsert",
+        "Re-sync upsert backfill (no SQL migration)"
+      ]
+    },
+    {
+      "id": "L2",
+      "title": "Wealth asset query COALESCE NULL balances",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["L1"],
+      "acceptance_hook": "BUG-0004 (L) — GET /api/v1/wealth returns asset accounts",
+      "files": ["backend/src/wealth/repository.rs"],
+      "tests": ["Unit/integration: NULL balance asset row included"]
+    },
+    {
+      "id": "J1",
+      "title": "Payee key fallbacks per DEC-0061",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0004 (J) — recurring patterns grouped by merchant identity fields",
+      "files": ["backend/src/recurrence/group.rs"],
+      "decisions": ["DEC-0061"],
+      "tests": [
+        "Unit: counterparty_name fallback grouping",
+        "Unit: description-only unchanged when present"
+      ]
+    },
+    {
+      "id": "J2",
+      "title": "Subscriptions empty-state UX and pending banner",
+      "status": "open",
+      "estimate_hours": 1.5,
+      "depends_on": ["J1"],
+      "acceptance_hook": "BUG-0004 (J) — thresholds documented; pending patterns surfaced in UI",
+      "files": ["frontend/src/pages/SubscriptionsPage.tsx"],
+      "tests": [
+        "Empty state shows ≥3 txs / ≥60% confidence / Full sync copy",
+        "Pending banner when filtered tab empty but pending_count > 0"
+      ]
+    },
+    {
+      "id": "L3",
+      "title": "verify-work prep and omniflow acceptance mapping",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["I1", "K1", "L1", "L2", "J1", "J2"],
+      "operator_gate": "Manual Full Firefly sync after deploy required before L3 smoke",
+      "acceptance_hook": "BUG-0004 (I)(J)(K)(L) — financegnome.omniflow.cc probes",
+      "files": ["sprints/quick/Q0011/uat.md"],
+      "tests": [
+        "Exchange sync terminal status",
+        "Portfolio ds/query 200",
+        "Wealth + forecast non-empty for funded account",
+        "Subscriptions pending/threshold UX"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "I1 + K1 + L1 + L2 + J1 + J2 single PR",
+    "Deploy image to omniflow",
+    "Operator manual Full Firefly sync (account balance backfill via DEC-0002 upsert)",
+    "L3 verify-work smoke rows I/J/K/L + regression footer"
+  ],
+  "execute_order": ["I1", "K1", "L1", "L2", "J1", "J2", "L3"],
+  "operator_gates": [
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["L3"],
+      "action": "Trigger manual Full Firefly sync on financegnome.omniflow.cc after I1–J2 deploy",
+      "rationale": "L1 balance parse backfills mirror accounts.balance via DEC-0002 upsert only on next Full sync"
+    }
+  ],
+  "frozen_boundaries": [
+    "Do not merge BUG-0005/0006 scope",
+    "No SQL migration backfill — upsert on next Full sync only (DEC-0002)",
+    "No deploy-time cleanup of historical stuck sync_runs",
+    "Do not auto-confirm subscription patterns",
+    "Do not merge BUG-0005 exchange multi-product work"
+  ],
+  "decisions": ["DEC-0060", "DEC-0061", "DEC-0002", "DEC-0014", "DEC-0041"],
+  "research": ["R-0061"],
+  "operator_next": "After I1–J2 deploy: manual Full Firefly sync on financegnome.omniflow.cc, then L3 verify-work"
+}

@@ -1,0 +1,9 @@
+{
+  "id": "Q0003",
+  "title": "Fix financegnome 404 — TimescaleDB on omniflow postgres",
+  "status": "done",
+  "root_cause": "flow-finance-ai crash-loop: TimescaleDB missing on vanilla postgres:latest; Traefik returned 404 with no healthy backend",
+  "resolution": "Installed timescaledb-2-postgresql-16 in postgres container, timescaledb-tune, CREATE EXTENSION on flow_finance_ai, restarted postgres + app",
+  "operator_note": "Pin omniflow postgres to timescale/timescaledb:latest-pg16 on next compose change so TimescaleDB survives image rebuilds",
+  "browser_noise": "contentscript.js warnings are wallet/browser extensions — not app bugs"
+}

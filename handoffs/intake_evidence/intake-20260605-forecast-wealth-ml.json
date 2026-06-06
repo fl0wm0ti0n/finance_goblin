@@ -1,0 +1,64 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260605-forecast-wealth-ml",
+  "intake_work_item_kind": "bug",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Forecast and Wealth UI show usable non-empty correct-sign balances; End balance 3 months must not show implausible -25365.78 without explanation; ML forecast path either works or degrades gracefully with accurate baseline per DEC-0007.",
+      "intake_run_id": "intake-20260605-forecast-wealth-ml",
+      "turn_index": 0,
+      "ref": "ie:intake-20260605-forecast-wealth-ml:0:93fa2122e642e4d7"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "backend forecast recompute ML pipeline US-0009; forecast_balance_daily net_worth_snapshots; React /forecast /wealth; ML skipped banner; subscription-adjusted forecast US-0003 integration.",
+      "intake_run_id": "intake-20260605-forecast-wealth-ml",
+      "turn_index": 1,
+      "ref": "ie:intake-20260605-forecast-wealth-ml:1:d6d62e9f6de44ec9"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "BUG-0004 L partial fix; US-0009 marked DONE but ML unavailable in prod; amount sign subscription outflows may cause negative drift; epic scope deferred to US-0013; do not read secrets.",
+      "intake_run_id": "intake-20260605-forecast-wealth-ml",
+      "turn_index": 2,
+      "ref": "ie:intake-20260605-forecast-wealth-ml:2:b98e93b24c16e483"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "GET /api/v1/forecast/daily monthly long-term return plausible balances for funded account; GET /api/v1/wealth non-empty accounts total_eur; ML status endpoint or UI banner accurate; end balance 3mo sanity vs baseline DEC-0007; recompute after sync populates series.",
+      "intake_run_id": "intake-20260605-forecast-wealth-ml",
+      "turn_index": 3,
+      "ref": "ie:intake-20260605-forecast-wealth-ml:3:36c7e4925fdbd6be"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator confirms forecast wealth usable; wrong -25365.78 resolved or explained; ML path documented; BUG-0010 acceptance AA+AB+AC checked; US-0013 tracks epic hardening if needed.",
+      "intake_run_id": "intake-20260605-forecast-wealth-ml",
+      "turn_index": 4,
+      "ref": "ie:intake-20260605-forecast-wealth-ml:4:a7b79bc32066252d"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug-plus-us-epic",
+    "rationale": "Operator issue 3: forecast/wealth unusable, wrong End balance (3 months) -25365.78, ML skipped message; sub-defects AA AB AC are jointly testable product API/UI defects; full ML production hardening deferred to US-0013 when discovery exceeds quick-fix scope.",
+    "alternatives_considered": [
+      "Merge into BUG-0004 L — rejected (BUG-0004 DONE; wrong forecast numbers and ML skip are new/post-fix symptoms)",
+      "Force entire ML implementation into one BUG — rejected; US-0013 epic for production ML path per operator full-feature request"
+    ]
+  }
+}

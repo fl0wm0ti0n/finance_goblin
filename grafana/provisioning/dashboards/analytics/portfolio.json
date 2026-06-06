@@ -1,0 +1,169 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": { "defaults": { "unit": "currencyEUR" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT total_eur::float AS value FROM net_worth_snapshots ORDER BY snapshot_date DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Total wealth",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": { "defaults": { "unit": "currencyEUR" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 7,
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT COALESCE(crypto_value_eur, 0)::float AS value FROM net_worth_snapshots ORDER BY snapshot_date DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Crypto value",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "colorMode": "value", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT account_count AS value FROM net_worth_snapshots ORDER BY snapshot_date DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Account count",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 3,
+      "options": { "content": "Mixed-currency warning: latest snapshot has mixed_currency=true. Headline total sums native balances without FX.", "mode": "markdown" },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT CASE WHEN mixed_currency THEN '⚠ Mixed currencies — no FX conversion' ELSE 'Single reporting currency' END AS info FROM net_worth_snapshots ORDER BY snapshot_date DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Mixed-currency warning",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": { "defaults": { "unit": "currencyEUR" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+      "id": 5,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT elem->>'name' AS name, elem->>'account_role' AS role, elem->>'currency' AS currency, (elem->>'balance')::float AS balance FROM (SELECT payload FROM net_worth_snapshots ORDER BY snapshot_date DESC LIMIT 1) latest CROSS JOIN LATERAL jsonb_array_elements(latest.payload->'accounts') AS elem ORDER BY ABS((elem->>'balance')::float) DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "All accounts (latest snapshot)",
+      "type": "table"
+    },
+    {
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 12 },
+      "id": 12,
+      "options": { "content": "Detailed wealth analysis (per-account trends, crypto allocation) is also available in the React **Wealth** page at `/wealth`.", "mode": "markdown" },
+      "title": "Supplementary wealth view",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "gridPos": { "h": 4, "w": 12, "x": 0, "y": 14 },
+      "id": 8,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "(SELECT 'Firefly' AS metric, COALESCE(firefly_value_eur, total_eur)::float AS value FROM net_worth_snapshots ORDER BY snapshot_date DESC LIMIT 1) UNION ALL (SELECT 'Crypto', COALESCE(crypto_value_eur, 0)::float FROM net_worth_snapshots ORDER BY snapshot_date DESC LIMIT 1)",
+          "refId": "A"
+        }
+      ],
+      "title": "Firefly vs crypto allocation",
+      "type": "piechart"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "gridPos": { "h": 4, "w": 12, "x": 12, "y": 14 },
+      "id": 9,
+      "options": { "content": "FX incomplete: one or more crypto assets could not be priced in EUR.", "mode": "markdown" },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT CASE WHEN COALESCE(payload->>'fx_incomplete', 'false') = 'true' THEN '⚠ FX incomplete — some crypto excluded' ELSE 'FX complete' END AS info FROM net_worth_snapshots ORDER BY snapshot_date DESC LIMIT 1",
+          "refId": "A"
+        }
+      ],
+      "title": "FX incomplete",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": { "defaults": { "unit": "currencyEUR" }, "overrides": [] },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 18 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT snapshot_date::timestamptz AS time, total_eur::float AS value FROM net_worth_snapshots WHERE $__timeFilter(snapshot_date::timestamptz) ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Wealth over time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 18 },
+      "id": 10,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT snapshot_date::timestamptz AS time, total_return_pct::float AS value FROM net_worth_snapshots WHERE total_return_pct IS NOT NULL AND $__timeFilter(snapshot_date::timestamptz) ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Portfolio performance (total return %)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["analytics", "portfolio", "wealth"],
+  "templating": { "list": [] },
+  "time": { "from": "now-90d", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Portfolio",
+  "uid": "portfolio",
+  "version": 3,
+  "folder": "Analytics"
+}

@@ -1,0 +1,64 @@
+{
+  "id": "Q0011",
+  "type": "quick",
+  "bug_ids": ["BUG-0004"],
+  "status": "PLANNED",
+  "created": "2026-06-05",
+  "goal": "Close BUG-0004: exchange sync terminal status, portfolio Grafana SQL, account balance parse + wealth NULL handling, subscription payee fallbacks + empty-state UX; operator verify after Full sync backfill.",
+  "scope": [
+    "I1: finish_sync_run on RunMode::ExchangesOnly terminal path",
+    "K1: portfolio pie UNION subquery wrap",
+    "L1: parse Firefly current_balance string/number per DEC-0060",
+    "L2: wealth load_asset_accounts COALESCE(balance,0) filter",
+    "J1: payee key fallbacks per DEC-0061",
+    "J2: subscriptions pending banner + detection threshold copy",
+    "L3: verify-work omniflow probes rows I-L"
+  ],
+  "risks": [
+    "Account balances need manual Full sync post-deploy before L3 wealth/forecast probes",
+    "Historical stuck sync_runs remain until manual cleanup — I1 forward fix only",
+    "J1 payee over-merge possible — confidence tiers + operator confirm unchanged",
+    "BUG-0006 Q3 amount sign may improve subscription expense filter after Q0010 deploy — coordinate, not blocking"
+  ],
+  "task_count": 7,
+  "estimate_total_hours": 9.5,
+  "decisions": ["DEC-0060", "DEC-0061", "DEC-0002", "DEC-0014", "DEC-0041"],
+  "research": ["R-0061"],
+  "acceptance_rows": ["I", "J", "K", "L"],
+  "execute_order": ["I1", "K1", "L1", "L2", "J1", "J2", "L3"],
+  "gated_tasks": ["L3"],
+  "operator_gates": [
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["L3"],
+      "description": "Manual Full Firefly sync after deploy — account balance backfill via DEC-0002 upsert (required before L3 wealth/forecast probes)"
+    }
+  ],
+  "acceptance_mapping": {
+    "I": {
+      "tasks": ["I1"],
+      "verify": "Exchange sync run terminal status persisted; finished_at set on new runs"
+    },
+    "J": {
+      "tasks": ["J1", "J2"],
+      "verify": "Recurring payee grouping improved; pending banner + detection threshold copy in UI"
+    },
+    "K": {
+      "tasks": ["K1"],
+      "verify": "Portfolio ds/query 200; no pq UNION syntax error"
+    },
+    "L": {
+      "tasks": ["L1", "L2", "L3"],
+      "verify": "Wealth accounts non-empty; forecast series non-zero; net_worth_snapshots populate after Full sync"
+    }
+  },
+  "deploy_order": [
+    "I1 + K1 + L1 + L2 + J1 + J2 single PR",
+    "Deploy image to omniflow",
+    "Operator manual Full Firefly sync (account balance backfill via DEC-0002 upsert)",
+    "L3 verify-work smoke rows I/J/K/L + regression footer"
+  ],
+  "next_phase": "execute",
+  "sprint_plan_ref": "sprint-plan-20260605-q0011-bug0004",
+  "architecture_ref": "architecture-20260605-bug0004"
+}

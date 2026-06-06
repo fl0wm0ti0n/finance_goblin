@@ -1,0 +1,84 @@
+{
+  "sprint_id": "Q0012",
+  "bug_id": "BUG-0005",
+  "phase": "verify-work",
+  "date": "2026-06-05",
+  "orchestrator_run_id": "auto-20260605-bug0005-002",
+  "verdict": "PASS",
+  "passed": 9,
+  "failed": 0,
+  "deferred": 2,
+  "acceptance_rows": {
+    "M": "PASS",
+    "N": "PASS",
+    "O": "PASS"
+  },
+  "steps": [
+    {
+      "id": "V-1",
+      "description": "Backend cargo test --lib",
+      "result": "pass",
+      "note": "123/123 PASS"
+    },
+    {
+      "id": "V-2",
+      "description": "Frontend npm test",
+      "result": "pass",
+      "note": "2/2 PASS"
+    },
+    {
+      "id": "V-3",
+      "description": "Frontend npm run build",
+      "result": "pass"
+    },
+    {
+      "id": "V-4",
+      "description": "Omniflow stack reachable (/health, /api/v1/settings)",
+      "result": "pass"
+    },
+    {
+      "id": "V-5",
+      "description": "Q0012 deploy detection (futures_base_url, N4 dual test)",
+      "result": "pass",
+      "note": "futures_base_url https://fapi.bitunix.com; enabled_futures true; Spot: OK; Futures: OK"
+    },
+    {
+      "id": "V-6",
+      "description": "Post-deploy manual exchange sync",
+      "result": "pass",
+      "note": "f0906348 manual_exchanges success finished 2026-06-05T15:29:06Z"
+    },
+    {
+      "id": "M-1",
+      "description": "Row (M) non-spot product_type holdings after exchange sync",
+      "result": "pass",
+      "note": "bitunix holdings count 4; exchange_bitunix entity 4; post-Q0012 sync with futures enabled"
+    },
+    {
+      "id": "N-1",
+      "description": "Row (N) fapi.bitunix.com header-auth + dual test_connection",
+      "result": "pass",
+      "note": "settings futures_base_url + enabled_futures; dual test 200 Spot: OK; Futures: OK"
+    },
+    {
+      "id": "O-1",
+      "description": "Row (O) wealth crypto subtotal spot + futures combined",
+      "result": "pass",
+      "note": "holdings_count 4; crypto_placeholder false; DEC-0064 subtotal from priced wallet rows"
+    },
+    {
+      "id": "REG-1",
+      "description": "OIDC-enabled deploy regression",
+      "result": "deferred",
+      "note": "operator browser smoke recommended"
+    },
+    {
+      "id": "REG-2",
+      "description": "Bundled-firefly deploy regression",
+      "result": "deferred",
+      "note": "external profile database_host=postgres confirmed"
+    }
+  ],
+  "blocking_reason_codes": [],
+  "evidence_ref": "sprints/quick/Q0012/verify-work-findings.md"
+}

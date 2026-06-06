@@ -1,0 +1,29 @@
+{
+  "id": "Q0008",
+  "type": "quick",
+  "bug_ids": ["BUG-0002"],
+  "status": "PLAN_VERIFIED",
+  "created": "2026-06-04",
+  "goal": "Close BUG-0002: Firefly empty-PAT guard + operator PAT (C), risk-score 200 tagged empty-state (D), effective exchange enabled + binance default off (E).",
+  "scope": [
+    "C2: config PAT trim guard, pat_configured(), sync preflight",
+    "D1: plans risk-score 200 ok|no_score, PlanningPage + api.ts types",
+    "E1: effective_enabled in settings_view and mirror_enabled_at_startup",
+    "E2: default.toml binance.enabled=false",
+    "C1: runbook + .env.example operator PAT verification"
+  ],
+  "risks": [
+    "PAT not mounted in container — C1 runbook",
+    "Empty-state client drift — D1 same-PR union types",
+    "False auto-enable — sync key validation unchanged"
+  ],
+  "task_count": 5,
+  "estimate_total_hours": 10.5,
+  "decisions": ["DEC-0004", "DEC-0054"],
+  "research": ["R-0057", "R-0032"],
+  "acceptance_rows": ["C", "D", "E"],
+  "next_phase": "execute",
+  "plan_verify_ref": "sprints/quick/Q0008/plan-verify.json",
+  "plan_verify_verdict": "PASS",
+  "plan_verified_at": "2026-06-04T20:00:00Z"
+}

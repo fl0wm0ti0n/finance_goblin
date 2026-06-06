@@ -1,0 +1,134 @@
+{
+  "sprint": "S0007",
+  "stories": ["US-0007"],
+  "story_id": "US-0007",
+  "phase": "verify-work",
+  "verified_at": "2026-06-01T00:30:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0007",
+  "qa_evidence": "sprints/S0007/qa-findings.md",
+  "environment": {
+    "env_file_present": false,
+    "database_url_set": false,
+    "exchange_api_keys_set": false,
+    "us0001_to_us0006_operational": false
+  },
+  "automated_checks": [
+    {
+      "id": "AUTO-1",
+      "description": "bash tests/run-tests.sh",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-2",
+      "description": "cargo test --test firefly_readonly",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-3",
+      "description": "cargo test --lib (54 tests)",
+      "result": "pass",
+      "notes": "exchange/PnL/sync phase ordering/AI portfolio 8KB cap included"
+    },
+    {
+      "id": "AUTO-4",
+      "description": "cargo test --test exchange_signing",
+      "result": "pass",
+      "notes": "4/4 GET-only audit and signing fixtures"
+    },
+    {
+      "id": "AUTO-5",
+      "description": "cargo test --test exchanges_portfolio_integration",
+      "result": "skip",
+      "notes": "DATABASE_URL unset; operator prerequisite for migration-007 persistence"
+    },
+    {
+      "id": "AUTO-6",
+      "description": "prior-story integration suites (firefly/forecast/subscriptions/plans/wealth_alerts/ai_assistant)",
+      "result": "skip",
+      "notes": "DATABASE_URL unset"
+    },
+    {
+      "id": "AUTO-7",
+      "description": "npm run build (frontend)",
+      "result": "pass",
+      "notes": "WealthPage Crypto tab, Settings exchange section, SyncStatus exchange rows in build"
+    },
+    {
+      "id": "AUTO-8",
+      "description": "docker compose --profile minimal config --services",
+      "result": "pass",
+      "notes": "firefly-iii, flow-finance-ai, grafana (placeholder env for DATABASE_*, FIREFLY_*, AUTHENTIK_SECRET_KEY)"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "Connectors for Binance, Bybit, and Bitunix import balances, positions, trades, transfers, funding, and PnL",
+      "result": "pass_with_prerequisites",
+      "notes": "ExchangeConnector trait + three implementations; run_post_sync upserts all entities; migration 007; GET-only audit + signing tests. Operator prerequisite: read-only keys + Sync exchanges now"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "Portfolio Engine calculates realized gains, unrealized gains, and total return",
+      "result": "pass",
+      "notes": "compute_hybrid_pnl PnlBreakdown; total_return_pct; unit tests avg_cost_fallback_unrealized, avg_cost_from_buys; REST /portfolio/pnl and wealth PnL row"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "Crypto holdings included in net worth view (extends US-0005)",
+      "result": "pass_with_prerequisites",
+      "notes": "Migration 007 crypto_value_eur/firefly_value_eur columns; WealthService compute_extended; /wealth Overview + Crypto tab. Operator prerequisite: PostgreSQL + exchange sync for live combined total"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "Portfolio allocation scenarios supported (e.g. 50% ETF / 50% crypto)",
+      "result": "pass_with_prerequisites",
+      "notes": "allocation_target plan enum + 50/50 template; allocation_gap in wealth service; PlanningPage + WealthPage gap card. Operator prerequisite: active allocation_target plan + synced wealth"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": "Grafana Dashboard 4 shows crypto slice and portfolio performance",
+      "result": "pass",
+      "notes": "portfolio.json uid=portfolio: crypto_value_eur stat, Firefly vs crypto pie, total_return_pct series, FX incomplete panel. Operator smoke: post-sync snapshot"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-6",
+      "description": "API keys stored in self-hosted secrets/config, not transmitted externally",
+      "result": "pass",
+      "notes": "TOML env var names only; std::env::var credentials; Settings no secret values; exchange_api_responses_contain_no_secrets test path; .env.example; read-only design"
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_total": 6,
+    "acceptance_criteria_pass": 6,
+    "passed": 3,
+    "pass_with_prerequisites": 3,
+    "skipped": 0,
+    "failed": 0,
+    "automated_pass": 5,
+    "automated_skip": 3
+  },
+  "operator_prerequisites": [
+    "Copy .env.example to .env with DATABASE_*, FIREFLY_*, read-only BINANCE_*/BYBIT_*/BITUNIX_*",
+    "Provision external TimescaleDB; apply migration 007_exchanges_portfolio.sql at backend startup",
+    "Enable exchanges in backend/config/default.toml; restart backend",
+    "docker compose --profile minimal up --build",
+    "Settings Test connection per enabled exchange",
+    "Sync Status Sync exchanges now — verify exchanges phase and per-exchange rows",
+    "Open /wealth — Overview combined total; Crypto tab holdings and PnL",
+    "Create allocation_target plan on /planning; confirm gap card on /wealth",
+    "Open Grafana dashboard portfolio — crypto stat, allocation pie, total return series",
+    "AI chat get_portfolio includes crypto when connected",
+    "DATABASE_URL for exchanges_portfolio_integration persistence proof"
+  ],
+  "next_phase": "release"
+}

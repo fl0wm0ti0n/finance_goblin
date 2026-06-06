@@ -1,0 +1,118 @@
+{
+  "sprint": "Q0014",
+  "bug_id": "BUG-0012",
+  "orchestrator_run_id": "auto-20260605-bug0012-001",
+  "verified_at": "2026-06-06T00:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0012",
+  "tasks_source": "sprints/quick/Q0014/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0012",
+  "decision_alignment": {
+    "new_dec_required": false,
+    "extends": ["DEC-0007", "DEC-0013"],
+    "decisions": ["DEC-0067"],
+    "research_basis": ["R-0063"],
+    "contract_elements_covered": [
+      "AH1: RecurringPattern.category_id from RecurrenceGroup.mode; subscription override inherit/lookup",
+      "AG1: per-component monthly_map; rolling → Variable; recurring due → resolve_bucket via category_id",
+      "T1: frozen unit contract — salary+rent, same-day mixed, Variable regression, map_category wiring",
+      "D1: retire categorize_delta for monthly bucket path; wire category_names through projection",
+      "V1: uat.md + runbook TOML checklist; omniflow probes rows AG/AH after deploy + sync"
+    ],
+    "frozen_boundaries_respected": [
+      "Rolling daily_rate → Variable (positive and negative) — not Income",
+      "Unmapped categories → Variable default",
+      "Daily balance / milestones / horizons unchanged",
+      "No frontend changes",
+      "US-0015 AI buckets out of scope",
+      "US-0013 ML overlay out of scope",
+      "No default.toml code expansion — operator TOML on external profile",
+      "No fuzzy/AI name matching"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "AH1 → AG1 → T1 → D1 single PR → deploy → manual Full Firefly sync + recompute → operator TOML extend if needed → V1 verify-work",
+    "notes": "AG1 depends on AH1 for recurring category carry; T1 and D1 depend on AG1; V1 gated on deploy + operator Full sync/recompute + conditional TOML extend before omniflow smoke"
+  },
+  "test_coverage": {
+    "unit_tests": "T1 frozen contract: AG income > 0, AH fixed_costs > 0, same-day mixed, Variable regression, subscription override category carry, map_category wiring",
+    "integration_tests": "Optional post-BUG-0006 DB fixture → recompute → monthly API (architecture); not required for plan-verify",
+    "operator_tests": "V1 GET /api/v1/forecast/monthly + /forecast Monthly tab rows AG/AH; runbook TOML checklist for German/custom labels",
+    "doc_review": "V1 creates uat.md smoke checklist mapping AG/AH + regression footer",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AG",
+      "criterion": "Monthly forecast API/UI shows non-zero Income for funded account when mirror holds income-category inflows in forecast month — not permanently Income: 0 while categorized rows exist",
+      "tasks": ["AG1", "T1", "V1"],
+      "covered": true,
+      "notes": "AG1 component monthly_map routes salary recurring via category_id → map_category → Income; T1 unit-proves first-month income > 0; V1 operator runtime on financegnome.omniflow.cc; D1 removes net-delta path that zeroed Income; AH1 prerequisite for recurring category resolution"
+    },
+    {
+      "acceptance_id": "AH",
+      "criterion": "Monthly forecast shows non-zero Fixed when mirror holds fixed-cost category outflows — not Fixed: 0 with all spend under Variable only",
+      "tasks": ["AH1", "AG1", "T1", "D1", "V1"],
+      "covered": true,
+      "notes": "AH1 carries category_id on RecurringPattern; AG1 routes recurring due to Fixed via resolve_bucket; D1 retires categorize_delta(None) path that forced Variable; T1 unit-proves fixed_costs > 0; V1 operator verify after sync + optional TOML extend"
+    },
+    {
+      "acceptance_id": "REGRESSION",
+      "criterion": "OIDC-enabled and bundled-firefly deploy regression checks pass (acceptance footer)",
+      "tasks": [],
+      "covered": true,
+      "notes": "V1 uat.md regression footer post-verify; no dedicated dev task — operator verify-work smoke (ADV-1)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Acceptance regression footer (OIDC + bundled-firefly) has no dedicated dev task; operator verify-work post-V1 — not a plan-verify blocker."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Rows AG/AH runtime proof requires operator manual Full Firefly sync + forecast recompute after deploy — V1 blocked until sync per operator gate FULL_FIREFLY_SYNC_RECOMPUTE."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "Architecture D1 runbook-only split: sprint D1 adds code cleanup (categorize_delta retire) and V1 carries runbook TOML checklist — aligned enhancement, not a gap."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "German/custom Firefly labels (Gehalt, Miete Nebenkosten) may require operator TOML extend under [forecast.category_buckets] — conditional gate TOML_CATEGORY_BUCKETS before V1 pass."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "DEC-0067: Income via categorized recurring only — positive rolling residual stays Variable; one-off refunds without recurring detection remain out of AG scope by design."
+    },
+    {
+      "id": "ADV-6",
+      "severity": "low",
+      "note": "Variable totals shrink when fixed recurring moves to Fixed — intended DEC-0007 behavior; T1 regression test required."
+    },
+    {
+      "id": "ADV-7",
+      "severity": "low",
+      "note": "US-0015 AI bucket mapping and US-0013 ML overlay explicitly out of scope per frozen boundaries."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 2,
+    "covered_count": 2,
+    "gap_count": 0,
+    "task_count": 5,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dependency_graph_valid": true
+  },
+  "notes": "QA plan-verify 2026-06-06: sprints/quick/Q0014/tasks.md aligns with docs/product/acceptance.md BUG-0012 rows AG/AH and architecture § BUG-0012; 5/5 tasks mapped (AH1, AG1, T1, D1, V1); discovery sub-defects AG/AH covered; no gaps or orphans. Approved for /execute."
+}

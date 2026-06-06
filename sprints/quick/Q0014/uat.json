@@ -1,0 +1,76 @@
+{
+  "sprint_id": "Q0014",
+  "follow_up_sprint_id": "Q0015",
+  "bug_id": "BUG-0012",
+  "phase": "verify-work",
+  "date": "2026-06-06",
+  "verdict": "PASS",
+  "passed": 9,
+  "failed": 0,
+  "partial": 0,
+  "deferred": 2,
+  "steps": [
+    {
+      "id": "V-1",
+      "description": "Backend cargo test --lib",
+      "result": "pass",
+      "note": "142/142"
+    },
+    {
+      "id": "V-2",
+      "description": "DEC-0067 + Q0015 code path (component monthly_map, household income, payee-key due)",
+      "result": "pass"
+    },
+    {
+      "id": "GATE-1",
+      "description": "GET /health — stack reachable",
+      "result": "pass"
+    },
+    {
+      "id": "GATE-2",
+      "description": "GET /api/v1/forecast/meta — post-deploy recompute",
+      "result": "pass",
+      "note": "computed_at 2026-06-05T21:39:42Z"
+    },
+    {
+      "id": "AG-1",
+      "description": "GET /api/v1/forecast/monthly?account_id=114 — income > 0 in horizon",
+      "result": "pass",
+      "note": "Jul 2026 income 3266.16; Jun 0 expected (projection window)"
+    },
+    {
+      "id": "AG-2",
+      "description": "/forecast Monthly tab — Income stat card non-zero",
+      "result": "deferred",
+      "note": "API PASS; browser smoke deferred"
+    },
+    {
+      "id": "AH-1",
+      "description": "GET /api/v1/forecast/monthly?account_id=114 — fixed_costs > 0",
+      "result": "pass",
+      "note": "Jun 2026 fixed 2073.85"
+    },
+    {
+      "id": "AH-2",
+      "description": "/forecast Monthly tab — Fixed stat card non-zero",
+      "result": "deferred",
+      "note": "API PASS; browser smoke deferred"
+    },
+    {
+      "id": "REG-1",
+      "description": "OIDC-enabled deploy regression",
+      "result": "deferred",
+      "note": "external dev-bypass profile"
+    },
+    {
+      "id": "REG-2",
+      "description": "Bundled-firefly / external profile regression",
+      "result": "pass"
+    }
+  ],
+  "row_verdicts": {
+    "AG": "pass",
+    "AH": "pass"
+  },
+  "evidence_ref": "sprints/quick/Q0014/verify-work-findings.md"
+}

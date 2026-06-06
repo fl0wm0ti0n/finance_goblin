@@ -1,0 +1,73 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260605-forecast-monthly-buckets",
+  "intake_work_item_kind": "bug",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Forecast monthly view shows non-zero Income and Fixed aligned with mirror transaction categories—not Income 0 and Fixed 0 while Variable absorbs all spend despite real salary rent and fixed-cost bookings in Firefly mirror.",
+      "intake_run_id": "intake-20260605-forecast-monthly-buckets",
+      "turn_index": 0,
+      "ref": "ie:intake-20260605-forecast-monthly-buckets:0:1d9bc645d259de2f"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "backend forecast project.rs categorize_delta map_category; ForecastConfig category bucket map DEC-0007; monthly cashflow API GET forecast monthly; React ForecastPage Monthly tab stat cards; Firefly mirror category_id post-BUG-0006.",
+      "intake_run_id": "intake-20260605-forecast-monthly-buckets",
+      "turn_index": 1,
+      "ref": "ie:intake-20260605-forecast-monthly-buckets:1:d20297e12a69b64c"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "BUG-0010 DONE baseline balances; US-0013 OPEN ML epic separate; BUG-0007 OPEN AI chat categorization different surface; AI-assisted mapping deferred US-0015; do not read secrets; OIDC regression pass.",
+      "intake_run_id": "intake-20260605-forecast-monthly-buckets",
+      "turn_index": 2,
+      "ref": "ie:intake-20260605-forecast-monthly-buckets:2:12e7ef45e829fb62"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "GET forecast monthly for funded account with known salary and rent categories returns income fixed variable split matching category config; UI Monthly tab non-zero Income Fixed when mirror has categorized inflows and fixed outflows; recompute after Full sync; regression Variable still populated.",
+      "intake_run_id": "intake-20260605-forecast-monthly-buckets",
+      "turn_index": 3,
+      "ref": "ie:intake-20260605-forecast-monthly-buckets:3:8f1bfc0d0ea68375"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator confirms monthly Income Fixed reflect categorized transactions; BUG-0012 acceptance AG AH checked; US-0015 tracks optional AI bucket mapping epic if hardcoded path insufficient.",
+      "intake_run_id": "intake-20260605-forecast-monthly-buckets",
+      "turn_index": 4,
+      "ref": "ie:intake-20260605-forecast-monthly-buckets:4:92c78dfa3592cb82"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug-plus-us-epic",
+    "rationale": "Operator issue 2: monthly Income 0 Fixed 0 despite categorized mirror transactions; code gap categorize_delta passes None for category on negative deltas; AI categorization expectation exceeds quick defect fix—defer to US-0015.",
+    "alternatives_considered": [
+      "Merge into BUG-0010 AA — rejected (DONE; monthly bucket decomposition is distinct symptom)",
+      "Merge into BUG-0007 — rejected (AI chat merchant discovery vs forecast monthly buckets)",
+      "Force AI into BUG-0012 — rejected; US-0015 epic for AI-assisted forecast category mapping"
+    ],
+    "overlap_decisions": {
+      "US-0013": "update-only — ML external profile already tracked; operator confirms priority; no new BUG for ML",
+      "BUG-0010": "DONE — baseline numbers fixed; monthly bucket split is post-fix gap",
+      "BUG-0007": "OPEN — coordinate only; chat surface not forecast projection",
+      "DEC-0007": "category config exists; projection path broken in project.rs"
+    }
+  },
+  "candidate_bug_ids": ["BUG-0012"],
+  "candidate_story_ids": ["US-0015"]
+}

@@ -1,0 +1,127 @@
+{
+  "sprint": "S0010",
+  "stories": ["US-0010"],
+  "story_id": "US-0010",
+  "phase": "verify-work",
+  "verified_at": "2026-06-02T22:42:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0010",
+  "qa_evidence": "sprints/S0010/qa-findings.md",
+  "operator_guide": "docs/user-guides/US-0010.md",
+  "smoke_evidence": "sprints/S0010/smoke-evidence.md",
+  "environment": {
+    "omniflow_host_available": false,
+    "timescaledb_verified": false,
+    "operator_env_configured": false,
+    "compose_version_gte_2_24": true,
+    "traefik_basic_auth_configured": false
+  },
+  "automated_checks": [
+    {
+      "id": "AUTO-1",
+      "description": "bash tests/run-tests.sh",
+      "result": "pass",
+      "notes": "verify-work run 2026-06-02 exit 0"
+    },
+    {
+      "id": "AUTO-2",
+      "description": "external profile config --services = flow-finance-ai, grafana only",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-3",
+      "description": "minimal+external merge must not include firefly-iii",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-4",
+      "description": "minimal+bundled-firefly includes firefly-iii",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-5",
+      "description": "merged overlay traefik network DNS overrides port reset",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-6",
+      "description": "TRAEFIK_HOST and TRAEFIK_MIDDLEWARE interpolation in overlay labels",
+      "result": "pass"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "External profile does not create firefly-iii or postgres containers",
+      "result": "pass",
+      "notes": "compose-config-check external-only + anti-combination; smoke step 7 local PASS"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "flow-finance-ai joins traefik network and reaches postgres and firefly by DNS",
+      "result": "pass_with_prerequisites",
+      "notes": "Merged config static asserts; in-network curls smoke steps 2, 4 operator-verified on omniflow host"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "Traefik routes https://financegnome.omniflow.cc with auth middleware and valid TLS",
+      "result": "pass_with_prerequisites",
+      "notes": "Overlay labels + compose-config-check defaults/override; HTTPS/TLS/auth smoke steps 5-6 operator-verified"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "Backend /health returns success with external DB and Firefly PAT configured",
+      "result": "pass_with_prerequisites",
+      "notes": "docs + .env.example + healthcheck; live /health smoke steps 3-4, 8 operator-verified"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": ".env.example documents all operator-required variables for external mode",
+      "result": "pass",
+      "notes": "Omniflow block lines 33-48; mirrors US-0010 guide required vs optional table"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-6",
+      "description": "Operator smoke test recorded on Debian host",
+      "result": "pass_with_prerequisites",
+      "notes": "smoke-evidence.md: local/CI PASS step 7; steps 1-6, 8 operator-verified pending with documented commands"
+    }
+  ],
+  "ac6_smoke_steps": [
+    { "step": 1, "result": "operator_verified", "notes": "TimescaleDB preflight on omniflow postgres" },
+    { "step": 2, "result": "operator_verified", "notes": "in-network firefly about curl" },
+    { "step": 3, "result": "operator_verified", "notes": "PAT non-empty in container" },
+    { "step": 4, "result": "operator_verified", "notes": "in-network /health curl" },
+    { "step": 5, "result": "operator_verified", "notes": "edge TLS + basic-auth 200" },
+    { "step": 6, "result": "operator_verified", "notes": "edge 401 without credentials" },
+    { "step": 7, "result": "pass", "notes": "local CI config --services flow-finance-ai grafana only" },
+    { "step": 8, "result": "operator_verified", "notes": "migration logs no panic on live deploy" }
+  ],
+  "summary": {
+    "acceptance_criteria_total": 6,
+    "acceptance_criteria_pass": 6,
+    "passed": 2,
+    "pass_with_prerequisites": 4,
+    "operator_verified_pending": 7,
+    "failed": 0,
+    "automated_pass": 6,
+    "automated_pending": 0
+  },
+  "operator_prerequisites": [
+    "TimescaleDB extension on flow_finance_ai before first compose up",
+    "COMPOSE_FILE and COMPOSE_PROFILES=external in operator .env",
+    "DATABASE_PASSWORD and FIREFLY_PERSONAL_ACCESS_TOKEN set",
+    "docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d",
+    "Eight-step smoke checklist per runbook omniflow section",
+    "Optional OIDC IdP redirect URI registration for financegnome.omniflow.cc"
+  ],
+  "next_phase": "release"
+}

@@ -1,0 +1,180 @@
+{
+  "id": "Q0017",
+  "title": "BUG-0007 AI merchant/category discovery",
+  "status": "PLANNED",
+  "bug_id": "BUG-0007",
+  "architecture_ref": "architecture-20260607-bug0007",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["S", "T", "U"],
+  "acceptance_mapping": {
+    "S": {
+      "tasks": ["F1", "E1", "E2", "V1"],
+      "primary_verify": "After cancelable streaming total, follow-up lists named merchants from get_subscriptions — not generic-only or cannot retrieve"
+    },
+    "T": {
+      "tasks": ["A1", "A2", "E1", "E2", "V1"],
+      "primary_verify": "Strom/Amazon amounts via category_search in mirror window; Amazon Jan–Oct 2023 cites mirror_date_bounds (2025-06-05…)"
+    },
+    "U": {
+      "tasks": ["A1", "A2", "F1", "E1", "V1"],
+      "primary_verify": "AI fuses category, subscription, account, and amount signals without user-supplied merchant names"
+    }
+  },
+  "task_count": 7,
+  "estimate_total_hours": 13.5,
+  "tasks": [
+    {
+      "id": "A1",
+      "title": "Category search SQL + mirror bounds",
+      "status": "open",
+      "estimate_hours": 3,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0007 (T)(U) — ILIKE resolves Strom/Amazon; mirror_date_bounds min/max",
+      "files": [
+        "backend/src/transactions/repository.rs",
+        "backend/src/transactions/types.rs"
+      ],
+      "decisions": ["DEC-0069", "DEC-0032"],
+      "tests": [
+        "Unit: ILIKE resolves Strom → 146, Amazon → 47 fixture categories",
+        "Unit: bounds query returns mirror min/max dates",
+        "Unit: cap 10 matches; category_matches_truncated when exceeded"
+      ]
+    },
+    {
+      "id": "A2",
+      "title": "Tool schema + response assembly",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["A1"],
+      "acceptance_hook": "BUG-0007 (T)(U) — category_search param + category_matches + mirror_date_bounds in tool JSON",
+      "files": [
+        "backend/src/transactions/service.rs",
+        "backend/src/ai/tools/transactions.rs"
+      ],
+      "decisions": ["DEC-0069", "DEC-0032"],
+      "tests": [
+        "Integration: tool JSON includes category_matches, mirror_date_bounds, search_attempted",
+        "Integration: category_search wins over category_id when both supplied",
+        "Privacy: no raw_rows when allow_raw_transactions=false"
+      ]
+    },
+    {
+      "id": "F1",
+      "title": "Subscriptions schema + response + guard",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0007 (S) — kind enum, merchant_names[], patterns_count; Counterparty-* rejected",
+      "files": ["backend/src/ai/tools/subscriptions.rs"],
+      "decisions": ["DEC-0069"],
+      "tests": [
+        "Unit: Counterparty-* args rejected → InvalidArgs",
+        "Unit: merchant_names deduped display_name order",
+        "Unit: kind enum subscription|standing_order in schema",
+        "Regression: REST list_patterns behavior unchanged (BUG-0008 isolation)"
+      ]
+    },
+    {
+      "id": "E1",
+      "title": "SYSTEM_PROMPT + audit result_rows",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["A2", "F1"],
+      "acceptance_hook": "BUG-0007 (S)(T)(U) — enumerate subscriptions; category_search keywords; cite bounds on empty period",
+      "files": ["backend/src/ai/orchestrator.rs"],
+      "decisions": ["DEC-0069", "DEC-0045"],
+      "tests": [
+        "Unit: audit insert receives non-NULL result_rows for get_transactions (bucket count)",
+        "Unit: audit insert receives patterns_count for get_subscriptions",
+        "Review: four SYSTEM_PROMPT rules frozen per DEC-0069"
+      ]
+    },
+    {
+      "id": "E2",
+      "title": "Parameter schema descriptions",
+      "status": "open",
+      "estimate_hours": 0.5,
+      "depends_on": ["A2", "F1"],
+      "acceptance_hook": "BUG-0007 (S)(T) — enriched category_id + category_search parameter docs",
+      "files": [
+        "backend/src/ai/tools/transactions.rs",
+        "backend/src/ai/tools/subscriptions.rs"
+      ],
+      "decisions": ["DEC-0069"],
+      "tests": [
+        "Review: category_search min 2 chars documented",
+        "Review: kind/status enum values documented; never Counterparty-*"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "Unit/integration tests",
+      "status": "open",
+      "estimate_hours": 3,
+      "depends_on": ["A1", "A2", "F1", "E1", "E2"],
+      "acceptance_hook": "BUG-0007 regression — frozen test contract from architecture § Test strategy",
+      "files": [
+        "backend/src/transactions/repository.rs",
+        "backend/src/ai/tools/transactions.rs",
+        "backend/src/ai/tools/subscriptions.rs",
+        "backend/src/ai/orchestrator.rs"
+      ],
+      "decisions": ["DEC-0069", "DEC-0032"],
+      "tests": [
+        "A1: ILIKE + bounds fixtures",
+        "A2: tool response shape integration",
+        "F1: Counterparty guard + merchant_names dedup",
+        "E1: audit result_rows population",
+        "Privacy: six-tool registry count; allow_raw_transactions=false → no raw_rows"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work omniflow AI Chat smoke",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["A1", "A2", "F1", "E1", "E2", "T1"],
+      "operator_gate": "Backend deploy after A1–E2+T1 before runtime AI Chat probes",
+      "acceptance_hook": "BUG-0007 (S)(T)(U) — financegnome.omniflow.cc AI Chat probes",
+      "files": [
+        "sprints/quick/Q0017/uat.md",
+        "docs/engineering/runbook.md"
+      ],
+      "tests": [
+        "Probe S: cancelable streaming total → liste mir die dienste auf → named merchants",
+        "Probe T-b: Strom and Amazon spend in mirror window → category_search-backed amounts",
+        "Probe T-a: Amazon Jan–Oct 2023 → explicit empty-state with mirror_date_bounds",
+        "Regression: six-tool count; settings allow_raw_transactions=false"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "A1 + A2 + F1 + E1 + E2 + T1 single backend PR",
+    "Deploy backend image on omniflow",
+    "V1 verify-work AI Chat smoke rows S/T/U + regression footer"
+  ],
+  "execute_order": ["A1", "A2", "F1", "E1", "E2", "T1", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "Deploy A1–E2+T1 single backend PR before V1 AI Chat omniflow smoke",
+      "rationale": "Intelligence-layer changes require backend deploy before operator chat probes reflect new tool contracts"
+    }
+  ],
+  "frozen_boundaries": [
+    "Six-tool registry — no seventh tool; no DEC waiver",
+    "allow_raw_transactions=false default unchanged (DEC-0032)",
+    "BUG-0008 coordinate only — additive AI JSON; no alert/list/detection changes",
+    "RAG (note V) out of scope for MVP",
+    "Payee aggregates (group_by merchant) deferred",
+    "BUG-0006 ingest fixes — do not revert",
+    "No Firefly re-sync required",
+    "No frontend changes unless optional audit UI hint (not required for AC)",
+    "Amazon Jan–Oct 2023 is true empty period — V1 must verify bounds citation not miscategorization"
+  ],
+  "decisions": ["DEC-0069", "DEC-0032", "DEC-0035", "DEC-0045"],
+  "research": ["R-0065"],
+  "operator_next": "After A1–E2+T1 deploy: backend image on omniflow; then V1 verify-work AI Chat on financegnome.omniflow.cc"
+}

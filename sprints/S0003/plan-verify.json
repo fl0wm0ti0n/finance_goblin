@@ -1,0 +1,76 @@
+{
+  "sprint": "S0003",
+  "story_id": "US-0003",
+  "verified_at": "2026-05-31T18:40:51Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0003",
+  "tasks_source": "sprints/S0003/tasks.md",
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Detection engine identifies recurring patterns with confidence score (95/80/60% tiers)",
+      "tasks": ["T-0025", "T-0028", "T-0029", "T-0036"],
+      "covered": true,
+      "notes": "Shared recurrence core with 95/80/60 tiers (T-0025); detection pipeline orchestrates classify + fingerprint dedup (T-0028); run_detection upserts pending with confidence metadata (T-0029); unit tests for confidence scoring (T-0036)"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "User receives notification for new detected subscription with confirm/reject actions",
+      "tasks": ["T-0029", "T-0030", "T-0032", "T-0033", "T-0034"],
+      "covered": true,
+      "notes": "Alerts inserted on new detection (T-0029); post-sync detection hook (T-0030); confirm/reject REST endpoints (T-0032); pending cards with confirm/reject + kind override dialog (T-0033); alerts banner, toast after sync poll (T-0034)"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Confirmed subscriptions appear in subscription list with interval and amount",
+      "tasks": ["T-0026", "T-0027", "T-0032", "T-0033"],
+      "covered": true,
+      "notes": "subscription_patterns schema with interval_days and current_amount (T-0026); repository fetch by status (T-0027); GET /api/v1/subscriptions list with filters (T-0032); confirmed/all table with interval and amount (T-0033)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "Standing-order (Dauerauftrag) patterns detected separately from discretionary subscriptions",
+      "tasks": ["T-0026", "T-0028", "T-0032", "T-0033"],
+      "covered": true,
+      "notes": "subscription_kind enum subscription|standing_order (T-0026); classify module Dauerauftrag rules (T-0028); list filter by kind (T-0032); Standing orders tab + confirm kind override (T-0033)"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Price increase/decrease detected when amount changes for confirmed subscription",
+      "tasks": ["T-0027", "T-0028", "T-0032", "T-0034"],
+      "covered": true,
+      "notes": "price_change_min_eur/pct config (T-0027); price_change dual-threshold on confirmed only (T-0028); GET /price-history endpoint (T-0032); ECharts price history line in detail drawer (T-0034)"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "Alert fired on new subscription detection and on price change",
+      "tasks": ["T-0026", "T-0027", "T-0028", "T-0029", "T-0030", "T-0032", "T-0034"],
+      "covered": true,
+      "notes": "subscription_alerts table + alert_type enum (T-0026); alert CRUD + unread filter (T-0027); emit new_detection/price_change/interval_change (T-0028); run_detection inserts alerts (T-0029); sync triggers detection (T-0030); alerts list + mark-read API (T-0032); banner + toast UX (T-0034)"
+    },
+    {
+      "acceptance_id": "AC-7",
+      "criterion": "Grafana Dashboard 2 (Subscriptions, price changes, new) provisioned",
+      "tasks": ["T-0035"],
+      "covered": true,
+      "notes": "subscriptions.json uid subscriptions: confirmed/pending stat panels, monthly spend, price changes 90d table, new detections time series (T-0035)"
+    },
+    {
+      "acceptance_id": "AC-8",
+      "criterion": "Rejected patterns do not appear in subscription forecasts or alerts",
+      "tasks": ["T-0027", "T-0030", "T-0031", "T-0032", "T-0036"],
+      "covered": true,
+      "notes": "rejection fingerprint lookup prevents re-detection (T-0027); sync passes DetectionResult to forecast (T-0030); forecast override excludes rejected_fingerprints + confirmed override (T-0031); reject endpoint persists fingerprint (T-0032); unit/integration tests for override and exclusion (T-0036)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "summary": {
+    "acceptance_criteria_count": 8,
+    "covered_count": 8,
+    "gap_count": 0,
+    "task_count": 12,
+    "tasks_without_acceptance_ref": [],
+    "tasks_without_acceptance_ref_note": "All tasks T-0025–T-0036 map to at least one AC in tasks.md acceptance refs and coverage map"
+  }
+}

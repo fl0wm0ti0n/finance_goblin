@@ -1,0 +1,16 @@
+# Secrets & environment — exclude from Cursor indexing and AI context
+.env
+.env.*
+!.env.example
+
+# Operator-local overrides (may contain tokens or host-specific values)
+.cursor/scratchpad.local.md
+
+# Common credential / key material
+credentials.passwd
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+**/secrets/**

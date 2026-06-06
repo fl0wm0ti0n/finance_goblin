@@ -1,0 +1,31 @@
+{
+  "id": "Q0010",
+  "type": "quick",
+  "bug_ids": ["BUG-0006"],
+  "status": "PLANNED",
+  "created": "2026-06-05",
+  "goal": "Close BUG-0006: fix Firefly mirror ingest (category_id, ISO dates, DEC-0059 amount sign) and extend get_transactions aggregates (totals, period_status); operator verify after sync backfill.",
+  "scope": [
+    "Q1: extract category_id from first split; upsert_transaction bind",
+    "Q2: ISO datetime → NaiveDate date component",
+    "Q3: signed amount from split type per DEC-0059",
+    "R1: TransactionAggregates totals + period_status + Uncategorized label",
+    "P1: verify-work prep / acceptance mapping on financegnome.omniflow.cc"
+  ],
+  "risks": [
+    "Existing ~922 rows need manual sync post-deploy — P1 blocked until operator sync",
+    "First-split-only category may miss transfer destination leg — acceptable MVP",
+    "Transfer sign edge cases — mitigated by period_status and payload audit trail",
+    "LLM may ignore period_status — mitigated by explicit totals in R1"
+  ],
+  "task_count": 5,
+  "estimate_total_hours": 9.5,
+  "decisions": ["DEC-0059", "DEC-0002", "DEC-0032"],
+  "research": ["R-0060"],
+  "acceptance_rows": ["P", "Q", "R"],
+  "execute_order": ["Q1", "Q2", "Q3", "R1", "P1"],
+  "gated_tasks": [],
+  "next_phase": "execute",
+  "plan_verify_ref": "sprints/quick/Q0010/plan-verify.json",
+  "plan_verify_verdict": "PASS"
+}

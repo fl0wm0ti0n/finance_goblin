@@ -1,0 +1,53 @@
+# US-0010 — attach to host Firefly/Postgres/Traefik (omniflow)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d
+# Requires Docker Compose >= 2.24 (!reset support)
+
+services:
+  flow-finance-ai:
+    ports: !reset []
+    networks:
+      traefik:
+    environment:
+      # BUG-0003: operator .env must use postgres on traefik — not host.docker.internal (see runbook)
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      FIREFLY_BASE_URL: ${FIREFLY_BASE_URL:-http://firefly:8080}
+      # Traefik basic-auth protects the UI only; API must not require JWT until IdP is configured.
+      AUTH_DEV_BYPASS: "true"
+      OIDC_ISSUER_URL: ""
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+      - traefik.http.services.financegnome.loadbalancer.server.port=8080
+      # API + analytics proxy: no Traefik basic-auth (fetch/iframes cannot re-prompt per poll; US-0011 / Q0005)
+      - traefik.http.routers.financegnome-api.rule=Host(`${TRAEFIK_HOST:-financegnome.omniflow.cc}`) && (PathPrefix(`/api`) || PathPrefix(`/analytics`) || Path(`/health`))
+      - traefik.http.routers.financegnome-api.entrypoints=websecure
+      - traefik.http.routers.financegnome-api.tls=true
+      - traefik.http.routers.financegnome-api.tls.certresolver=myresolver
+      - traefik.http.routers.financegnome-api.priority=100
+      - traefik.http.routers.financegnome-api.service=financegnome
+      # SPA shell + static assets: Traefik basic-auth (homelab edge)
+      - traefik.http.routers.financegnome.rule=Host(`${TRAEFIK_HOST:-financegnome.omniflow.cc}`)
+      - traefik.http.routers.financegnome.entrypoints=websecure
+      - traefik.http.routers.financegnome.tls=true
+      - traefik.http.routers.financegnome.tls.certresolver=myresolver
+      - traefik.http.routers.financegnome.priority=1
+      - traefik.http.routers.financegnome.middlewares=${TRAEFIK_MIDDLEWARE:-auth}
+      - traefik.http.routers.financegnome.service=financegnome
+
+  grafana:
+    ports: !reset []
+    networks:
+      traefik:
+    labels:
+      - traefik.enable=${GRAFANA_TRAEFIK_HOST:+true}
+      - traefik.docker.network=traefik
+      - traefik.http.routers.grafana-financegnome.rule=Host(`${GRAFANA_TRAEFIK_HOST}`)
+      - traefik.http.routers.grafana-financegnome.entrypoints=websecure
+      - traefik.http.routers.grafana-financegnome.tls=true
+      - traefik.http.routers.grafana-financegnome.tls.certresolver=myresolver
+      - traefik.http.routers.grafana-financegnome.middlewares=${TRAEFIK_MIDDLEWARE:-auth}
+      - traefik.http.services.grafana-financegnome.loadbalancer.server.port=3000
+
+networks:
+  traefik:
+    external: true

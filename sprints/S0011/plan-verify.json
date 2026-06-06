@@ -1,0 +1,129 @@
+{
+  "sprint": "S0011",
+  "story_id": "US-0011",
+  "verified_at": "2026-06-02T20:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0011",
+  "tasks_source": "sprints/S0011/tasks.md",
+  "decision_alignment": {
+    "decision_id": "DEC-0057",
+    "aligned": true,
+    "research_basis": ["R-0054", "R-0056"],
+    "contract_elements_covered": [
+      "GRAFANA_UPSTREAM allowlist (T-0119)",
+      "Analytics proxy /analytics/grafana/ prefix strip + WebSocket + framing rewrite (T-0120)",
+      "Grafana anonymous Viewer compose env (T-0121)",
+      "VITE_GRAFANA_EMBED_BASE + deprecated VITE_GRAFANA_URL (T-0122)",
+      "Six /analytics/{slug} kiosk iframe routes (T-0123)",
+      "Analytics sidebar nav group (T-0124)",
+      "Wealth in-app /analytics/portfolio migration (T-0125)",
+      "SPA CSP frame-src self (T-0126)",
+      "Proxy outside /api/v1 JWT stack (T-0120)",
+      "Future-chart guideline + canonical UX table (T-0129)"
+    ],
+    "frozen_boundaries_respected": [
+      "No public GRAFANA_TRAEFIK_HOST default embed path",
+      "No GF_SERVER_SERVE_FROM_SUB_PATH",
+      "No Grafana uid/SQL changes",
+      "ECharts product pages remain authoritative"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "T-0119 ∥ T-0121 → T-0120 → T-0122 → T-0123 → T-0124/T-0125 → T-0126 → T-0127 → T-0128 → T-0129",
+    "notes": "Parallel foundation (T-0119/T-0121) before proxy; frontend shell after env contract (T-0122); tests after proxy/frontend; docs last"
+  },
+  "test_coverage": {
+    "proxy_integration": "T-0127 — reachability, prefix strip, framing headers, WebSocket forward",
+    "echarts_regression": "T-0128 — /forecast, /wealth, /planning, /subscriptions, /alerts",
+    "uat_mapping": "sprints/S0011/uat.md UAT-1..UAT-7 aligned to AC-1..AC-7",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Sidebar Analytics section lists every provisioned Grafana dashboard (Platform Health + dashboards 1–5) with in-app routes under financegnome host",
+      "tasks": ["T-0123", "T-0124"],
+      "covered": true,
+      "notes": "Six routes per discovery map (T-0123); Analytics nav group with six in-app links (T-0124); platform-health + cashflow/subscriptions/budgets/portfolio/forecast-horizons"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "User can open each dashboard without leaving financegnome (no target=_blank Grafana tab required for default flows)",
+      "tasks": ["T-0120", "T-0123", "T-0126", "T-0127"],
+      "covered": true,
+      "notes": "Same-origin proxy (T-0120); kiosk iframe shell without target=_blank (T-0123); CSP frame-src self (T-0126); proxy smoke validates embed path (T-0127)"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Embedded or proxied views work with omniflow Traefik + auth middleware (or documented operator auth-off dev path)",
+      "tasks": ["T-0120", "T-0121", "T-0126", "T-0127", "T-0129"],
+      "covered": true,
+      "notes": "Proxy outside JWT stack; anonymous Grafana Viewer behind internal network (T-0120/T-0121); CSP + framing rewrite (T-0126); automated proxy/WS tests (T-0127); Traefik auth + dev bypass documented in user guide (T-0129)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "Existing React chart pages (Forecast, Wealth, Planning, Subscriptions, Alerts) remain functional (regression)",
+      "tasks": ["T-0128"],
+      "covered": true,
+      "notes": "Regression tests for five product routes; ECharts primary surfaces preserved per DEC-0057 UX table"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Wealth page no longer relies on external-only Grafana link as the primary portfolio analytics entry",
+      "tasks": ["T-0125", "T-0122"],
+      "covered": true,
+      "notes": "WealthPage → /analytics/portfolio in-app (T-0125); VITE_GRAFANA_URL deprecated in env contract (T-0122)"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "Future-chart guideline documented: new product charts added inside financegnome shell (React + API default; Grafana embed exception list)",
+      "tasks": ["T-0129"],
+      "covered": true,
+      "notes": "User guide future-chart guideline + canonical UX table per DEC-0057"
+    },
+    {
+      "acceptance_id": "AC-7",
+      "criterion": "Operator guide describes single-URL analytics UX; optional separate Grafana public host not required for acceptance",
+      "tasks": ["T-0122", "T-0129"],
+      "covered": true,
+      "notes": "Env contract documents embed vars and deprecated external URL (T-0122); operator guide single-URL UX + troubleshooting (T-0129)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "AC-3 Traefik auth + iframe runtime proof is operator-host dependent; no dedicated omniflow smoke task (unlike S0010 T-0118). T-0127 automated proxy tests + T-0129 troubleshooting cover plan level; UAT-3 and QA phase must close runtime proof on omniflow or document PASS-with-prerequisites."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "T-0127 tasks.md acceptance refs list AC-2 only; coverage map and task description also satisfy AC-3 proxy/WebSocket — refs are understated, not a coverage gap."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "No per-dashboard E2E iframe load test for all six slugs in sprint scope; proxy smoke + UAT-1/UAT-2 post-execute acceptable per DEC-0057 decision gate."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "DEC-0057 decision gate (anonymous Grafana insufficient → auth-proxy sub-decision) documented in sprint risks and T-0129; execute must stop if omniflow smoke triggers gate — not a plan-verify blocker."
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_count": 7,
+    "covered_count": 7,
+    "gap_count": 0,
+    "task_count": 11,
+    "tasks_without_acceptance_ref": [],
+    "tasks_without_acceptance_ref_note": "All tasks T-0119–T-0129 map to at least one AC in tasks.md acceptance refs and coverage map",
+    "dec_0057_aligned": true,
+    "dependency_graph_valid": true
+  },
+  "notes": "QA plan-verify 2026-06-02: sprints/S0011/tasks.md acceptance coverage map aligns with docs/product/acceptance.md US-0011; 11/11 tasks mapped; 7/7 AC covered; DEC-0057 contract fully tasked; no gaps or orphans. Approved for /execute."
+}

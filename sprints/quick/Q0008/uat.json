@@ -1,0 +1,94 @@
+{
+  "sprint_id": "Q0008",
+  "bug_id": "BUG-0002",
+  "phase": "verify-work",
+  "orchestrator_run_id": "auto-20260605-bug0002-002",
+  "date": "2026-06-05",
+  "verdict": "PASS",
+  "passed": 12,
+  "failed": 0,
+  "deferred": 2,
+  "steps": [
+    {
+      "id": "V-1",
+      "description": "Backend cargo test --lib",
+      "result": "pass",
+      "note": "103/103"
+    },
+    {
+      "id": "V-2",
+      "description": "Frontend npm test",
+      "result": "pass",
+      "note": "2/2"
+    },
+    {
+      "id": "V-3",
+      "description": "Frontend npm run build",
+      "result": "pass"
+    },
+    {
+      "id": "C-1",
+      "description": "GET /api/v1/sync/status — success, no 401",
+      "result": "pass",
+      "note": "last_run.status success; error_message null; finished 2026-06-05T13:35:14Z"
+    },
+    {
+      "id": "C-2",
+      "description": "GET /api/v1/sync/entities — entity counts",
+      "result": "pass",
+      "note": "922 transactions; 375 accounts"
+    },
+    {
+      "id": "C-3",
+      "description": "GET /api/v1/sync/runs — no blocking 404",
+      "result": "pass"
+    },
+    {
+      "id": "D-1",
+      "description": "GET /api/v1/plans/risk-score HTTP 200",
+      "result": "pass"
+    },
+    {
+      "id": "D-2",
+      "description": "risk-score body status ok or no_score",
+      "result": "pass",
+      "note": "no_score / no_active_plan"
+    },
+    {
+      "id": "E-1",
+      "description": "GET /api/v1/settings bitunix enabled+configured",
+      "result": "pass"
+    },
+    {
+      "id": "E-2",
+      "description": "GET /api/v1/settings binance/bybit match env",
+      "result": "pass",
+      "note": "binance enabled false configured false"
+    },
+    {
+      "id": "E-3",
+      "description": "POST /api/v1/exchanges/bitunix/test",
+      "result": "pass",
+      "note": "200 Spot balance read OK"
+    },
+    {
+      "id": "REG-1",
+      "description": "External profile database_host postgres",
+      "result": "pass"
+    },
+    {
+      "id": "REG-2",
+      "description": "OIDC-enabled deploy regression browser",
+      "result": "fail",
+      "note": "deferred — operator advisory non-blocking"
+    },
+    {
+      "id": "REG-3",
+      "description": "Bundled-firefly deploy regression",
+      "result": "fail",
+      "note": "deferred — external profile only"
+    }
+  ],
+  "blocking_reason_codes": [],
+  "evidence_ref": "sprints/quick/Q0008/verify-work-findings.md"
+}

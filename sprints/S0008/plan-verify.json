@@ -1,0 +1,56 @@
+{
+  "sprint": "S0008",
+  "story_id": "US-0008",
+  "verified_at": "2026-06-02T20:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0008",
+  "tasks_source": "sprints/S0008/tasks.md",
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Provider selector supports OpenAI and local OpenAI-compatible endpoints",
+      "tasks": ["T-0085", "T-0086", "T-0087", "T-0089", "T-0091", "T-0092", "T-0095", "T-0096"],
+      "covered": true,
+      "notes": "build_provider factory three modes (T-0085); OpenAiCompatibleProvider HTTP (T-0086); TOML + settings API provider fields (T-0087); orchestrator dyn AiProvider injection (T-0089); Settings provider table + test connection (T-0091); chat Local vs Cloud badge (T-0092); factory unit tests (T-0095); operator guide modes (T-0096)"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "Ollama integration works when Ollama service is running (full Docker Compose profile)",
+      "tasks": ["T-0086", "T-0087", "T-0090", "T-0091", "T-0092", "T-0093", "T-0096"],
+      "covered": true,
+      "notes": "Ollama preset URL http://ollama:11434/v1 + omit_tool_choice (T-0086, T-0087); POST /api/v1/ai/test probes Ollama (T-0090); Settings test button (T-0091); Local badge (T-0092); Compose full runbook + model pull (T-0093); operator UAT steps (T-0096)"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "LM Studio / LocalAI / vLLM work via OpenAI-compatible base URL configuration",
+      "tasks": ["T-0086", "T-0087", "T-0090", "T-0091", "T-0093", "T-0096"],
+      "covered": true,
+      "notes": "openai_compatible mode + required base_url (T-0087); shared HTTP client (T-0086); test endpoint surfaces vLLM errors (T-0090); Settings displays base_url (T-0091); host.docker.internal + vLLM flags in runbook (T-0093); LM Studio examples in user guide (T-0096)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "US-0006 tool layer and privacy settings unchanged across providers",
+      "tasks": ["T-0085", "T-0088", "T-0089", "T-0095"],
+      "covered": true,
+      "notes": "Explicit freeze on registry/privacy/tools in T-0085/T-0089; migration 008 additive provider column only (T-0088); orchestrator HTTP-layer refactor only (T-0089); static AC4 audit in unit tests (T-0095)"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Chat functionality verified end-to-end with local provider (no external API call when local selected)",
+      "tasks": ["T-0089", "T-0094", "T-0095", "T-0096"],
+      "covered": true,
+      "notes": "No OpenAI fallback on local failure (T-0089); wiremock zero api.openai.com guard integration test (T-0094); orchestrator isolation unit tests (T-0095); operator UAT without OPENAI_API_KEY (T-0096)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "summary": {
+    "acceptance_criteria_count": 5,
+    "covered_count": 5,
+    "gap_count": 0,
+    "task_count": 12,
+    "tasks_without_acceptance_ref": [],
+    "tasks_without_acceptance_ref_note": "All tasks T-0085–T-0096 map to at least one AC in tasks.md acceptance refs and coverage map"
+  },
+  "notes": "Sprint at SPRINT_MAX_TASKS=12 threshold; no split required. Orchestrator refactor (T-0089) and unit tests (T-0095) added beyond PO discovery task names to satisfy DEC-0043/0046 and AC4/AC5."
+}

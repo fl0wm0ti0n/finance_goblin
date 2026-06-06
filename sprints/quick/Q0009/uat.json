@@ -1,0 +1,81 @@
+{
+  "sprint_id": "Q0009",
+  "bug_id": "BUG-0003",
+  "phase": "verify-work",
+  "date": "2026-06-05",
+  "orchestrator_run_id": "auto-20260605-bug0003-002",
+  "verdict": "PASS",
+  "passed": 11,
+  "failed": 0,
+  "deferred": 2,
+  "steps": [
+    {
+      "id": "V-1",
+      "description": "Backend cargo test --lib",
+      "result": "pass"
+    },
+    {
+      "id": "V-2",
+      "description": "Frontend npm test",
+      "result": "pass"
+    },
+    {
+      "id": "V-3",
+      "description": "Frontend npm run build",
+      "result": "pass"
+    },
+    {
+      "id": "V-4",
+      "description": "F2 doc guardrail (.env.example, runbook, compose)",
+      "result": "pass"
+    },
+    {
+      "id": "V-5",
+      "description": "G1 effective_enabled in deployed image",
+      "result": "pass"
+    },
+    {
+      "id": "F-1",
+      "description": "GET /api/v1/settings database_host=postgres",
+      "result": "pass"
+    },
+    {
+      "id": "F-2",
+      "description": "GET /api/v1/alerts/unread-count 200 <2s",
+      "result": "pass"
+    },
+    {
+      "id": "F-3",
+      "description": "GET /api/v1/sync/entities 200 <2s",
+      "result": "pass"
+    },
+    {
+      "id": "F-4",
+      "description": "GET /api/v1/exchanges 200 <2s",
+      "result": "pass"
+    },
+    {
+      "id": "G-1",
+      "description": "POST /api/v1/exchanges/bitunix/test not 400 unknown exchange",
+      "result": "pass"
+    },
+    {
+      "id": "H-1",
+      "description": "POST /analytics/grafana/api/ds/query 200",
+      "result": "pass"
+    },
+    {
+      "id": "REG-1",
+      "description": "OIDC-enabled deploy regression",
+      "result": "deferred",
+      "note": "operator browser smoke recommended"
+    },
+    {
+      "id": "REG-2",
+      "description": "Bundled-firefly deploy regression",
+      "result": "deferred",
+      "note": "static pass — external profile database_host=postgres"
+    }
+  ],
+  "evidence_ref": "sprints/quick/Q0009/verify-work-findings.md"
+}

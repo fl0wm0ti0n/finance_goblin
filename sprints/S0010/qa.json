@@ -1,0 +1,124 @@
+{
+  "sprint": "S0010",
+  "story_id": "US-0010",
+  "phase": "qa",
+  "verified_at": "2026-06-02T22:36:00Z",
+  "result": "PASS",
+  "verdict": "PASS",
+  "ready_for_verify_work": true,
+  "ready_for_release": false,
+  "acceptance_source": "docs/product/acceptance.md#US-0010",
+  "inputs": [
+    "handoffs/dev_to_qa.md",
+    "sprints/S0010/summary.md",
+    "sprints/S0010/smoke-evidence.md",
+    "sprints/S0010/plan-verify.json"
+  ],
+  "automated_checks": [
+    {
+      "id": "QA-AUTO-1",
+      "description": "bash tests/run-tests.sh",
+      "result": "pass",
+      "evidence": "QA run 2026-06-02 exit 0"
+    },
+    {
+      "id": "QA-AUTO-2",
+      "description": "scripts/compose-config-check.sh (via harness)",
+      "result": "pass",
+      "evidence": "external-only, anti-combination, Traefik defaults/override, overlay network/DNS/ports, Grafana gate"
+    },
+    {
+      "id": "QA-AUTO-3",
+      "description": "cargo test --lib + firefly_readonly + forecast_ml_integration + ai_frozen_modules",
+      "result": "pass",
+      "evidence": "via tests/run-tests.sh"
+    },
+    {
+      "id": "QA-AUTO-4",
+      "description": "frontend npm run build",
+      "result": "pass",
+      "evidence": "via tests/run-tests.sh"
+    }
+  ],
+  "acceptance": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "External profile does not create firefly-iii or postgres containers",
+      "verdict": "PASS",
+      "method": "compose-config-check + smoke step 7 local",
+      "runtime_pending": false
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "flow-finance-ai joins traefik network and reaches postgres and firefly by Docker DNS",
+      "verdict": "PASS",
+      "method": "merged config static asserts",
+      "runtime_pending": true,
+      "runtime_note": "smoke steps 2, 4 on omniflow host"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Traefik routes https://financegnome.omniflow.cc with auth middleware and valid TLS",
+      "verdict": "PASS",
+      "method": "overlay labels + compose-config-check defaults/override",
+      "runtime_pending": true,
+      "runtime_note": "smoke steps 5-6 on omniflow host"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "Backend /health returns success with external DB and Firefly PAT configured",
+      "verdict": "PASS",
+      "method": "docs + .env.example + healthcheck definition",
+      "runtime_pending": true,
+      "runtime_note": "smoke steps 3-4, 8 on omniflow host"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": ".env.example documents all operator-required variables for external mode",
+      "verdict": "PASS",
+      "method": "static review .env.example + US-0010.md",
+      "runtime_pending": false
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "Operator smoke test recorded on Debian host",
+      "verdict": "PASS-with-prerequisites",
+      "method": "sprints/S0010/smoke-evidence.md",
+      "runtime_pending": true,
+      "runtime_note": "steps 1-6, 8 PENDING; step 7 local PASS; operator checklist documented"
+    }
+  ],
+  "advisories": [
+    {
+      "id": "QA-ADV-1",
+      "severity": "low",
+      "note": "Omniflow host smoke steps 1-6 and 8 PENDING; acceptable PASS-with-prerequisites per execute/smoke-evidence contract."
+    },
+    {
+      "id": "QA-ADV-2",
+      "severity": "low",
+      "note": "External profile docker build not re-run in QA; dev handoff PASS + compose-config-check coverage sufficient."
+    },
+    {
+      "id": "QA-ADV-3",
+      "severity": "low",
+      "note": "Integration tests skipped without DATABASE_URL (harness convention; no US-0010 app code changes)."
+    }
+  ],
+  "blockers": [],
+  "summary": {
+    "acceptance_criteria_count": 6,
+    "pass_count": 6,
+    "pass_with_prerequisites_count": 1,
+    "fail_count": 0,
+    "automated_pass": 4,
+    "runtime_deferred": true
+  },
+  "artifacts": {
+    "qa_findings": "sprints/S0010/qa-findings.md",
+    "handoff": "handoffs/qa_to_release.md",
+    "smoke_evidence": "sprints/S0010/smoke-evidence.md"
+  },
+  "next_phase": "verify-work",
+  "notes": "QA 2026-06-02: PASS with advisories for host-pending omniflow smoke. No dev rework. Proceed /verify-work in fresh subagent."
+}

@@ -1,0 +1,75 @@
+{
+  "sprint": "S0010",
+  "story_id": "US-0010",
+  "verified_at": "2026-06-02T14:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0010",
+  "tasks_source": "sprints/S0010/tasks.md",
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "`docker compose --profile external up` (or documented equivalent) does not create `firefly-iii` or `postgres` containers",
+      "tasks": ["T-0109", "T-0111", "T-0113", "T-0115", "T-0117", "T-0118"],
+      "covered": true,
+      "notes": "bundled-firefly profile split (T-0109); Grafana port reset on external merge (T-0111); CI external-only + anti-combination guards (T-0113); US-0001 guide profile-only rule (T-0115); merged config asserts no postgres/firefly/firefly-iii services (T-0117); smoke step 7 ps services check (T-0118)"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "`flow-finance-ai` joins external `traefik` network and reaches `postgres` and `firefly` by Docker DNS",
+      "tasks": ["T-0111", "T-0114", "T-0117", "T-0118"],
+      "covered": true,
+      "notes": "Grafana traefik network on overlay (T-0111); runbook omniflow DNS/network section (T-0114); compose config asserts traefik membership, DATABASE_HOST=postgres, FIREFLY_BASE_URL=http://firefly:8080 (T-0117); smoke curl firefly + in-network /health (T-0118 steps 2, 4)"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Traefik routes `https://financegnome.omniflow.cc` to Flow Finance AI with `auth` middleware and valid TLS",
+      "tasks": ["T-0110", "T-0112", "T-0114", "T-0116", "T-0118"],
+      "covered": true,
+      "notes": "Env-parameterized Traefik labels with defaults (T-0110); TRAEFIK_HOST/TRAEFIK_MIDDLEWARE in .env.example (T-0112); runbook Traefik overrides + AC-6 table (T-0114); operator guide public URL + basic-auth note (T-0116); smoke HTTPS /health with auth and 401 without (T-0118 steps 5–6)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "Backend `/health` returns success when wired to external DB and Firefly PAT is configured",
+      "tasks": ["T-0112", "T-0114", "T-0116", "T-0117", "T-0118"],
+      "covered": true,
+      "notes": "PAT and DB vars documented in .env.example (T-0112); runbook prerequisites (T-0114); user guide /health + PAT (T-0116); merged config DNS/env validation (T-0117); smoke PAT non-empty, in-network and public /health, migration log check (T-0118 steps 3–4, 8)"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "`.env.example` documents all operator-required variables for external mode",
+      "tasks": ["T-0112", "T-0116"],
+      "covered": true,
+      "notes": "Omniflow block expansion with COMPOSE_FILE, profiles, Traefik, Grafana gate, OIDC, TimescaleDB bootstrap (T-0112); operator guide mirrors required vs optional vars (T-0116)"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "Operator smoke test recorded (compose up + health + Traefik route check on Debian host)",
+      "tasks": ["T-0114", "T-0116", "T-0118"],
+      "covered": true,
+      "notes": "Runbook eight-step AC-6 table (T-0114); UAT checklist in US-0010 guide (T-0116); dedicated smoke-evidence.md recording with host-unavailable blocker path (T-0118)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "AC-3 TLS and AC-4/AC-6 runtime checks depend on Debian omniflow host availability during T-0118; tasks allow PENDING evidence with documented blocker — acceptable for plan-verify, must be closed at QA/verify-work."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "AC-1 acceptance text allows single-profile `external up`; sprint canonical path is two-file merge per DEC-0056 — covered as documented equivalent in T-0114/T-0116."
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_count": 6,
+    "covered_count": 6,
+    "gap_count": 0,
+    "task_count": 10,
+    "tasks_without_acceptance_ref": [],
+    "tasks_without_acceptance_ref_note": "All tasks T-0109–T-0118 map to at least one AC in tasks.md acceptance refs and coverage map"
+  },
+  "notes": "QA plan-verify 2026-06-02: sprints/S0010/tasks.md acceptance coverage map aligns with docs/product/acceptance.md US-0010; 10/10 tasks mapped; 6/6 AC covered; no gaps or orphans. Approved for /execute."
+}

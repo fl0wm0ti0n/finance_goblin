@@ -1,0 +1,137 @@
+{
+  "id": "Q0013",
+  "title": "BUG-0010 forecast/wealth/ML posture",
+  "status": "PLANNED",
+  "bug_id": "BUG-0010",
+  "architecture_ref": "architecture-20260605-bug0010",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["AA", "AB", "AC"],
+  "acceptance_mapping": {
+    "AA": { "tasks": ["AA1", "AA3", "V1"], "primary_verify": "GET /forecast/long-term + meta balance_warnings — plausible or warned" },
+    "AB": { "tasks": ["AB1", "AB2", "V1"], "primary_verify": "GET /api/v1/wealth — acct 114 included; total_eur honest" },
+    "AC": { "tasks": ["AC1", "AC2", "V1"], "primary_verify": "GET /forecast/meta ml_skipped_reason sidecar_disabled; UI not-enabled copy" }
+  },
+  "task_count": 7,
+  "estimate_total_hours": 11,
+  "tasks": [
+    {
+      "id": "AA1",
+      "title": "Balance mirror ingest + diagnostics",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0010 (AA) — Firefly current_balance mirror fidelity",
+      "files": ["backend/src/firefly/mod.rs"],
+      "decisions": ["DEC-0060"],
+      "tests": [
+        "Unit: DEC-0060 parse regression",
+        "Unit: balance_ingest structured log fields"
+      ]
+    },
+    {
+      "id": "AB1",
+      "title": "Negative asset wealth visibility (DEC-0065)",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0010 (AB) — negative Giro included in wealth",
+      "files": [
+        "backend/src/wealth/repository.rs",
+        "backend/src/wealth/types.rs",
+        "backend/src/wealth/service.rs",
+        "frontend/src/pages/WealthPage.tsx"
+      ],
+      "decisions": ["DEC-0065"],
+      "tests": ["Unit/integration: negative balance asset row included with is_overdrawn"]
+    },
+    {
+      "id": "AC1",
+      "title": "sidecar_disabled metadata (DEC-0066)",
+      "status": "open",
+      "estimate_hours": 1.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0010 (AC) — ML disabled metadata honest",
+      "files": ["backend/src/sync/mod.rs", "backend/src/api/forecast.rs"],
+      "decisions": ["DEC-0066", "DEC-0049"],
+      "tests": [
+        "Unit: disabled config records sidecar_disabled on baseline",
+        "Unit: meta derive fallback for stale rows"
+      ]
+    },
+    {
+      "id": "AA3",
+      "title": "Negative starting balance warning",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["AA1"],
+      "acceptance_hook": "BUG-0010 (AA) — warn on negative start with tx history",
+      "files": [
+        "backend/src/forecast/service.rs",
+        "backend/src/api/forecast.rs",
+        "frontend/src/pages/ForecastPage.tsx",
+        "frontend/src/lib/api.ts"
+      ],
+      "tests": ["Unit: meta balance_warnings when negative start + txs"]
+    },
+    {
+      "id": "AB2",
+      "title": "Wealth zero-total empty-state",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["AB1"],
+      "acceptance_hook": "BUG-0010 (AB) — operator guidance when total zero",
+      "files": ["frontend/src/pages/WealthPage.tsx"],
+      "tests": ["Manual: zero-total callout with Full sync guidance"]
+    },
+    {
+      "id": "AC2",
+      "title": "Forecast ML three-state UI",
+      "status": "open",
+      "estimate_hours": 1.5,
+      "depends_on": ["AC1"],
+      "acceptance_hook": "BUG-0010 (AC) — not enabled vs skipped copy",
+      "files": ["frontend/src/pages/ForecastPage.tsx"],
+      "tests": ["Manual: three ML posture copy states"]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work prep and omniflow acceptance mapping",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["AA1", "AB1", "AC1", "AA3", "AB2", "AC2"],
+      "operator_gate": "Manual Full Firefly sync after deploy required before V1 smoke",
+      "acceptance_hook": "BUG-0010 (AA)(AB)(AC) — financegnome.omniflow.cc probes",
+      "files": ["sprints/quick/Q0013/uat.md"],
+      "tests": [
+        "Forecast plausible or warned",
+        "Wealth non-empty honest total",
+        "ML not-enabled meta + UI"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "AA1 + AB1 + AC1 + AA3 + AB2 + AC2 single PR",
+    "Deploy image to omniflow",
+    "Operator manual Full Firefly sync (DEC-0002 upsert backfill + recompute)",
+    "V1 verify-work smoke rows AA/AB/AC + regression footer"
+  ],
+  "execute_order": ["AA1", "AB1", "AC1", "AA3", "AB2", "AC2", "V1"],
+  "operator_gates": [
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "action": "Trigger manual Full Firefly sync on financegnome.omniflow.cc after AA1–AC2 deploy",
+      "rationale": "Account balance mirror refreshes on Full sync only; baseline/wealth recompute required for V1 probes"
+    }
+  ],
+  "frozen_boundaries": [
+    "Do not merge BUG-0009/0011 scope",
+    "AC3 ML sidecar on external profile → US-0013 epic only",
+    "No transaction-sum balance recompute from mirror",
+    "No SQL migration backfill — upsert on next Full sync (DEC-0002)",
+    "Do not enable forecast_ml by default on external profile"
+  ],
+  "decisions": ["DEC-0065", "DEC-0066", "DEC-0060", "DEC-0049", "DEC-0025", "DEC-0007"],
+  "research": ["R-0062"],
+  "operator_next": "After AA1–AC2 deploy: manual Full Firefly sync on financegnome.omniflow.cc, then V1 verify-work"
+}

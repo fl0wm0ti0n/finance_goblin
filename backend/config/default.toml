@@ -1,0 +1,163 @@
+[server]
+host = "0.0.0.0"
+port = 8080
+
+[database]
+mode = "external"
+host = "localhost"
+port = 5432
+name = "flow_finance_ai"
+user = "finance"
+# password via DATABASE_PASSWORD env
+max_connections = 10
+startup_retry_initial_ms = 1000
+startup_retry_max_ms = 8000
+startup_retry_total_ms = 60000
+
+[firefly]
+base_url = "http://localhost:8081"
+# personal_access_token via FIREFLY_PERSONAL_ACCESS_TOKEN env
+page_limit = 500
+audit_enabled = true
+
+[sync]
+interval_seconds = 3600
+overlap_days = 7
+
+[oidc]
+# issuer via OIDC_ISSUER_URL env
+# audience via OIDC_AUDIENCE env
+dev_bypass = false
+
+[forecast]
+rolling_window_days = 90
+sparse_history_days = 90
+retention_count = 5
+recurring_amount_tolerance_pct = 5.0
+
+# US-0009 ML overlay — requires `docker compose --profile full` + stats-forecast sidecar
+[forecast_ml]
+enabled = false
+sidecar_url = "http://stats-forecast:8090"
+min_monthly_points = 12
+min_portfolio_weeks = 8
+interval_level = 90
+sidecar_timeout_secs = 60
+mstl_min_months = 24
+mstl_seasonal_strength_threshold = 0.35
+wmape_low_confidence_threshold = 0.35
+
+[forecast.category_buckets]
+salary = "income"
+payroll = "income"
+# German Firefly category names (lowercase keys match map_category)
+"einnahmen - regelmäßige bezüge" = "income"
+"einnahmen - rückerstattungen" = "income"
+"einnahmen - versicherungszahlung" = "income"
+rent = "fixed"
+mortgage = "fixed"
+insurance = "fixed"
+utilities = "fixed"
+"wohnen - miete & co" = "fixed"
+"wohnen - versorgungsunternehmen" = "fixed"
+"wohnen - stromkosten" = "fixed"
+"wohnen - gaskosten" = "fixed"
+"wohnen - internet & telefonie" = "fixed"
+"wohnen - dienstleistungen" = "fixed"
+"sonstiges - versicherung sonstiges" = "fixed"
+"hobby & freizeit - streaming" = "fixed"
+
+[subscriptions]
+detection_window_days = 365
+full_rescan_interval_days = 7
+price_change_min_eur = 1.0
+price_change_min_pct = 5.0
+inactive_grace_days = 5
+standing_order_category_patterns = ["rent", "miete", "insurance", "versicherung", "utilities", "nebenkosten", "loan", "darlehen", "strom", "versorgung", "betriebskosten", "wohnen"]
+standing_order_payee_patterns = []
+
+[subscriptions.confidence_tolerance_pct]
+high = 5
+medium = 10
+low = 15
+
+[plans]
+leasing_default_monthly_eur = 300.0
+house_purchase_default_savings_eur = 500.0
+savings_mode_discretionary_cut_eur = 100.0
+max_versions_per_plan = 3
+computation_retention_per_version = 3
+reporting_currency = "EUR"
+
+[alerts]
+scarcity_threshold_eur = 200.0
+budget_drift_pct = 20.0
+reporting_currency = "EUR"
+
+[wealth]
+snapshot_retention_days = 365
+
+# US-0011: Grafana reverse proxy upstream (override via GRAFANA_UPSTREAM env)
+[analytics]
+grafana_upstream = "http://grafana:3000"
+
+[exchanges]
+enabled = true
+interval_seconds = 3600
+
+[exchanges.binance]
+enabled = false
+api_key_env = "BINANCE_API_KEY"
+api_secret_env = "BINANCE_API_SECRET"
+base_url = "https://api.binance.com"
+
+[exchanges.bybit]
+enabled = false
+api_key_env = "BYBIT_API_KEY"
+api_secret_env = "BYBIT_API_SECRET"
+base_url = "https://api.bybit.com"
+
+[exchanges.bitunix]
+enabled = false
+api_key_env = "BITUNIX_API_KEY"
+api_secret_env = "BITUNIX_API_SECRET"
+spot_base_url = "https://openapi.bitunix.com"
+futures_base_url = "https://fapi.bitunix.com"
+enabled_futures = false
+
+[portfolio]
+trade_retention_days = 730
+frankfurter_base_url = "https://api.frankfurter.dev"
+
+[ai]
+# Provider: openai | ollama | openai_compatible
+provider = "openai"
+# base_url required for openai_compatible; optional override for ollama (default http://ollama:11434/v1)
+base_url = ""
+model = "gpt-4o-mini"
+api_key_env = "OPENAI_API_KEY"
+# temperature: unset uses 0.7 (openai) or 0.3 (local)
+# temperature = 0.7
+local_tool_nudge_retry = true
+max_tool_rounds = 5
+max_completion_tokens = 1024
+max_tool_result_bytes = 8192
+request_timeout_secs = 60
+rate_limit_per_min = 20
+audit_retention_days = 90
+audit_max_rows = 500
+
+# Ollama Compose full profile example:
+# provider = "ollama"
+# model = "qwen2.5:14b"
+# api_key_env = "OLLAMA_API_KEY"
+
+# LM Studio on host (Docker Desktop / Linux extra_hosts):
+# provider = "openai_compatible"
+# base_url = "http://host.docker.internal:1234/v1"
+# model = "local-model"
+
+[privacy]
+allow_raw_transactions = false
+redact_iban = true
+redact_counterparties = true

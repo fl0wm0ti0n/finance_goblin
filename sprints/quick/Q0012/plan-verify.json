@@ -1,0 +1,123 @@
+{
+  "sprint": "Q0012",
+  "bug_id": "BUG-0005",
+  "orchestrator_run_id": "auto-20260605-bug0005-001",
+  "verified_at": "2026-06-05T15:08:35Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0005",
+  "tasks_source": "sprints/quick/Q0012/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0005",
+  "decision_alignment": {
+    "new_dec_required": false,
+    "extends": ["DEC-0037", "DEC-0038", "DEC-0039", "DEC-0041"],
+    "decisions": ["DEC-0062", "DEC-0063", "DEC-0064"],
+    "research_basis": ["R-0058", "R-0059"],
+    "contract_elements_covered": [
+      "N1: bitunix_futures_sign + futures_signed_get; futures_base_url fapi.bitunix.com per DEC-0062",
+      "N3: effective_enabled_futures auto-enable with credentials; settings API effective flag per DEC-0063",
+      "M1: sync_balances futures account path product_type futures USDT marginCoin",
+      "N2: sync_positions get_pending_positions product_type linear market_value_usd None per DEC-0064",
+      "N4: dual-path test_connection spot + futures sub-status messaging",
+      "O1: deploy → manual exchange sync gate → omniflow probes rows M/N/O"
+    ],
+    "frozen_boundaries_respected": [
+      "No merge with BUG-0006 scope",
+      "No sync_funding implementation",
+      "USDT marginCoin MVP only — no multi-coin loop",
+      "Do not modify Binance/Bybit connectors",
+      "Read-only GET-only guarantee unchanged (DEC-0037)"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "N1 → N3 → M1 → N2 → N4 single PR → deploy → manual exchange sync → O1 verify-work",
+    "notes": "M1/N2/N4 depend on N1+N3; O1 gated on N1–N4 deploy plus operator EXCHANGE_SYNC before holdings/wealth probes"
+  },
+  "test_coverage": {
+    "unit_tests": "N1 futures sign fixture + spot regression; N3 effective_enabled_futures matrix; N4 partial OK messaging",
+    "integration_tests": "M1 mock HTTP futures account; N2 mock HTTP positions + active_symbols",
+    "operator_tests": "O1 settings effective flag; bitunix test Futures sub-status; holdings non-spot product_type; wealth crypto subtotal",
+    "doc_review": "uat.md smoke checklist maps M/N/O; operator gate documented in task.json",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "M",
+      "criterion": "Bitunix exchange sync ingests futures/margin account balances and positions (not spot wallet only); post-sync holdings include non-spot product_type rows when operator has futures exposure",
+      "tasks": ["M1", "N2", "O1"],
+      "covered": true,
+      "notes": "M1 ingests futures wallet product_type futures; N2 ingests open positions product_type linear; O1 operator probe confirms non-spot holdings after exchange sync"
+    },
+    {
+      "acceptance_id": "N",
+      "criterion": "Bitunix futures REST uses fapi.bitunix.com header-auth client per R-0058; sync_positions / balance endpoints populate data when read-only keys permit — not empty stubs behind enabled_futures=false default alone",
+      "tasks": ["N1", "N2", "N3", "N4", "O1"],
+      "covered": true,
+      "notes": "N1 fapi header auth; N3 effective_enabled_futures overrides false default when creds present; N2/M1 populate endpoints; N4 dual test_connection; O1 verifies Futures sub-status on omniflow"
+    },
+    {
+      "acceptance_id": "O",
+      "criterion": "Wealth snapshot and portfolio crypto totals reflect combined spot + futures exchange holdings on US-0010 external profile",
+      "tasks": ["M1", "N2", "O1"],
+      "covered": true,
+      "notes": "Architecture: wealth under-report downstream of spot-only connector — no separate aggregation bug; DEC-0064 wallet priced futures rows flow to WealthService subtotal; O1 probes GET /api/v1/wealth crypto subtotal after sync backfill"
+    },
+    {
+      "acceptance_id": "REGRESSION",
+      "criterion": "Read-only key constraint preserved; OIDC-enabled and bundled-firefly deploy regression checks pass (acceptance footer)",
+      "tasks": [],
+      "covered": true,
+      "notes": "uat.md regression row post-O1; DEC-0037 read-only GET-only preserved in N1 contract; full OIDC/bundled-firefly smoke at verify-work — not separate dev task (ADV-1)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Acceptance regression footer (OIDC + bundled-firefly) and read-only constraint have no dedicated dev task; operator verify-work smoke post-O1 — not a plan-verify blocker."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Rows M/O runtime proof requires operator manual exchange sync after deploy before O1 — blocked until EXCHANGE_SYNC gate completes."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "Acceptance O mentions portfolio crypto totals — O1 probes wealth API only; DEC-0064 states no WealthService change; portfolio totals cascade from same holdings pipeline."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "DEC-0064 excludes linear positions from wealth subtotal (market_value_usd None) — O subtotal driven by spot + futures wallet rows; positions satisfy M visibility."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "USDT marginCoin MVP only — multi-coin margin wallets deferred per frozen boundary."
+    },
+    {
+      "id": "ADV-6",
+      "severity": "low",
+      "note": "sync_funding remains stub no-op — out of sprint scope per architecture deferral."
+    },
+    {
+      "id": "ADV-7",
+      "severity": "low",
+      "note": "BUG-0006 Q0010 parallel track — frozen boundary forbids merge."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 3,
+    "covered_count": 3,
+    "gap_count": 0,
+    "task_count": 6,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dependency_graph_valid": true
+  },
+  "notes": "QA plan-verify 2026-06-05: sprints/quick/Q0012/tasks.md aligns with docs/product/acceptance.md BUG-0005 rows M/N/O and architecture § BUG-0005; 6/6 tasks mapped (N1,N3,M1,N2,N4,O1); discovery sub-defects M/N/O covered; no gaps or orphans. Approved for /execute."
+}

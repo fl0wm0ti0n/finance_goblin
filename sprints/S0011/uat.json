@@ -1,0 +1,154 @@
+{
+  "sprint": "S0011",
+  "stories": ["US-0011"],
+  "story_id": "US-0011",
+  "phase": "verify-work",
+  "verified_at": "2026-06-03T00:30:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0011",
+  "qa_evidence": "sprints/S0011/qa-findings.md",
+  "operator_guide": "docs/user-guides/US-0011.md",
+  "decisions": ["DEC-0057"],
+  "research": ["R-0054", "R-0056"],
+  "environment": {
+    "omniflow_host_available": false,
+    "traefik_basic_auth_configured": false,
+    "grafana_anonymous_embed_configured": true,
+    "compose_config_check_verified": false
+  },
+  "automated_checks": [
+    {
+      "id": "VW-AUTO-1",
+      "description": "cargo test --test analytics_proxy_integration",
+      "result": "pass",
+      "notes": "verify-work run 2026-06-03 — 4/4"
+    },
+    {
+      "id": "VW-AUTO-2",
+      "description": "cargo test --test product_routes_regression",
+      "result": "pass",
+      "notes": "verify-work run 2026-06-03 — 4/4"
+    },
+    {
+      "id": "VW-AUTO-3",
+      "description": "cargo test grafana_upstream --lib",
+      "result": "pass",
+      "notes": "verify-work run 2026-06-03 — 3/3"
+    },
+    {
+      "id": "VW-AUTO-4",
+      "description": "frontend npm run build",
+      "result": "pass",
+      "notes": "verify-work run 2026-06-03 exit 0"
+    },
+    {
+      "id": "VW-AUTO-5",
+      "description": "DEC-0057 static contract review",
+      "result": "pass",
+      "notes": "proxy path, compose anonymous env, CSP, no subpath, JWT boundary, SSRF allowlist"
+    },
+    {
+      "id": "VW-AUTO-6",
+      "description": "Sprint task completion T-0119–T-0129",
+      "result": "pass",
+      "notes": "11/11 done per sprints/S0011/tasks.md summary table"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "Analytics sidebar lists six provisioned dashboards with in-app routes",
+      "result": "pass",
+      "tasks": ["T-0124"],
+      "evidence": "AppLayout analyticsNavItems + analytics_routes_registered"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "Each dashboard opens in-app via iframe without default new tab",
+      "result": "pass_with_prerequisites",
+      "tasks": ["T-0120", "T-0123", "T-0126"],
+      "evidence": "AnalyticsEmbedPage kiosk iframe; runtime iframe load deferred",
+      "runtime_pending": true
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "Embed works with Traefik auth or documented dev bypass",
+      "result": "pass_with_prerequisites",
+      "tasks": ["T-0120", "T-0121", "T-0127"],
+      "evidence": "proxy outside JWT + US-0011.md; omniflow proxy health deferred",
+      "runtime_pending": true
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "ECharts product pages remain functional",
+      "result": "pass",
+      "tasks": ["T-0128"],
+      "evidence": "product_routes_regression 4/4"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": "Wealth uses in-app portfolio analytics entry",
+      "result": "pass",
+      "tasks": ["T-0125"],
+      "evidence": "WealthPage Link + wealth_uses_in_app_portfolio_analytics"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-6",
+      "description": "Future-chart guideline documented",
+      "result": "pass",
+      "tasks": ["T-0129"],
+      "evidence": "docs/user-guides/US-0011.md"
+    },
+    {
+      "id": "UAT-7",
+      "acceptance_id": "AC-7",
+      "description": "Single-URL operator guide; no public Grafana host required",
+      "result": "pass",
+      "tasks": ["T-0122", "T-0129"],
+      "evidence": "US-0011.md + .env.example"
+    }
+  ],
+  "omniflow_runtime": [
+    { "check": "GET /health", "result": "deferred", "http_code": 404, "verified_at": "2026-06-03T00:30:00Z" },
+    { "check": "GET /analytics/grafana/api/health", "result": "deferred", "http_code": 404, "verified_at": "2026-06-03T00:30:00Z" },
+    { "check": "iframe six slugs under Traefik auth", "result": "deferred" },
+    { "check": "grafana live websocket panel refresh", "result": "deferred" }
+  ],
+  "runtime_reason_code": "OMNIFLOW_HOST_UNAVAILABLE",
+  "advisories": [
+    {
+      "id": "VW-ADV-1",
+      "severity": "low",
+      "note": "Omniflow host returns HTTP 404 for health and analytics proxy paths — operator closes post-deploy smoke per US-0011.md."
+    },
+    {
+      "id": "VW-ADV-2",
+      "severity": "low",
+      "note": "compose-config-check env-dependent DATABASE_HOST failure per dev handoff — re-run on CI/host with DATABASE_HOST=postgres."
+    },
+    {
+      "id": "VW-ADV-3",
+      "severity": "low",
+      "note": "DEC-0057 decision gate: if anonymous Grafana insufficient on omniflow, escalate auth-proxy DEC."
+    }
+  ],
+  "blockers": [],
+  "summary": {
+    "acceptance_criteria_total": 7,
+    "acceptance_criteria_pass": 7,
+    "passed": 5,
+    "pass_with_prerequisites": 2,
+    "failed": 0,
+    "automated_pass": 6,
+    "runtime_deferred": true
+  },
+  "next_phase": "release"
+}

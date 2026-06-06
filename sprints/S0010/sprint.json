@@ -1,0 +1,27 @@
+{
+  "id": "S0010",
+  "story_ids": ["US-0010"],
+  "status": "PLANNED",
+  "created": "2026-06-02",
+  "goal": "Complete DEC-0056 omniflow external deploy: bundled-firefly split, env Traefik labels, Grafana internal-only overlay, .env.example alignment, compose CI guards, operator docs, AC-6 smoke evidence.",
+  "scope": [
+    "bundled-firefly profile split in docker-compose.yml (DEC-0056, R-0053 §2)",
+    "Traefik env-parameterized labels in docker-compose.external.yml",
+    "Grafana ports !reset and optional GRAFANA_TRAEFIK_HOST router gate",
+    ".env.example omniflow external block completion",
+    "Compose config CI guard in tests/run-tests.sh",
+    "Merged compose config validation for traefik network and DNS overrides",
+    "Runbook greenfield and omniflow deploy section updates",
+    "US-0001 user guide bundled-firefly start command update",
+    "Operator user guide docs/user-guides/US-0010.md",
+    "Operator AC-6 smoke test execution and evidence record"
+  ],
+  "risks": [
+    "TimescaleDB absent on shared Postgres — operator preflight (R-0053 §1)",
+    "Profile union duplicate Firefly — bundled-firefly split + CI guard (DEC-0056)",
+    "Compose !reset requires ≥2.24 — runbook documents minimum",
+    "AC-6 requires live Debian host — operator smoke task T-0118"
+  ],
+  "task_count": 10,
+  "decisions": ["DEC-0056"]
+}

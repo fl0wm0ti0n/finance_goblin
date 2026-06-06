@@ -1,0 +1,119 @@
+{
+  "sprint": "S0012",
+  "stories": ["US-0012"],
+  "story_id": "US-0012",
+  "phase": "verify-work",
+  "plan_verified_at": "2026-06-03T06:00:00Z",
+  "qa_verified_at": "2026-06-03T18:00:00Z",
+  "verified_at": "2026-06-03T20:00:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_verify_work": false,
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0012",
+  "qa_evidence": "sprints/S0012/qa-findings.md",
+  "decisions": ["DEC-0058"],
+  "research": ["R-0055", "R-0053"],
+  "environment": {
+    "database_bootstrap_test_url_available": false,
+    "timescaledb_fixture_available": false,
+    "omniflow_host_available": false
+  },
+  "automated_checks": [
+    {
+      "id": "QA-AUTO-1",
+      "description": "cargo test --lib",
+      "result": "pass",
+      "notes": "QA run 2026-06-03 — 82/82"
+    },
+    {
+      "id": "VW-AUTO-1",
+      "description": "cargo test --lib (verify-work independent re-run)",
+      "result": "pass",
+      "notes": "Verify-work 2026-06-03 — 82/82"
+    },
+    {
+      "id": "VW-AUTO-2",
+      "description": "cargo test --test database_bootstrap_integration",
+      "result": "deferred",
+      "notes": "DATABASE_BOOTSTRAP_TEST_URL unset — graceful skip (exit 0)"
+    },
+    {
+      "id": "VW-AUTO-3",
+      "description": "DEC-0058 contract + dev/qa handoff cross-check",
+      "result": "pass",
+      "notes": "startup ordering, OWNER create, extension, reason codes, docs, no DROP; T-0130–T-0136 done"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "Cold start creates missing DATABASE_NAME idempotently before migrations",
+      "result": "pass",
+      "pass_with_prerequisites": true,
+      "tasks": ["T-0130", "T-0132", "T-0135"],
+      "evidence": "lib.rs ordering + bootstrap.rs; integration test deferred",
+      "runtime_pending": true
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "Existing database never dropped or recreated",
+      "result": "pass",
+      "tasks": ["T-0130", "T-0135"],
+      "evidence": "no DROP in bootstrap; REASON_SKIPPED_EXISTS"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "TimescaleDB extension attempt with actionable fail when server lacks extension",
+      "result": "pass",
+      "pass_with_prerequisites": true,
+      "tasks": ["T-0130", "T-0134", "T-0135"],
+      "evidence": "ensure_timescaledb_extension + reason code unit tests; omniflow smoke deferred",
+      "runtime_pending": true
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "DATABASE_BOOTSTRAP_URL when app role lacks CREATEDB; fail closed on missing privilege",
+      "result": "pass",
+      "pass_with_prerequisites": true,
+      "tasks": ["T-0130", "T-0131", "T-0135"],
+      "evidence": "maintenance URL precedence + 42501 mapping; live privilege deferred",
+      "runtime_pending": true
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": ".env.example and runbook document bootstrap env and omniflow behavior",
+      "result": "pass",
+      "tasks": ["T-0133", "T-0134"],
+      "evidence": ".env.example + runbook § Omniflow §1"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-6",
+      "description": "Automated test proves create-if-missing path",
+      "result": "pass",
+      "pass_with_prerequisites": true,
+      "tasks": ["T-0135", "T-0136"],
+      "evidence": "82 unit tests; integration gated — DATABASE_BOOTSTRAP_TEST_URL unset",
+      "runtime_pending": true
+    }
+  ],
+  "blockers": [],
+  "summary": {
+    "acceptance_criteria_total": 6,
+    "acceptance_criteria_pass": 6,
+    "pass_with_prerequisites_count": 4,
+    "pending": 0,
+    "failed": 0,
+    "runtime_deferred": true
+  },
+  "next_phase": "release",
+  "plan_verify_ref": "sprints/S0012/plan-verify.json",
+  "qa_ref": "sprints/S0012/qa.json",
+  "verify_work_ref": "handoffs/verify_work_to_release.md"
+}

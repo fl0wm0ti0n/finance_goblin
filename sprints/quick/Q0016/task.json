@@ -1,0 +1,148 @@
+{
+  "id": "Q0016",
+  "title": "BUG-0009 Grafana empty panels & account overview",
+  "status": "PLANNED",
+  "bug_id": "BUG-0009",
+  "architecture_ref": "architecture-20260606-bug0009",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["Y", "Z"],
+  "acceptance_mapping": {
+    "Y": {
+      "tasks": ["Y1", "Y2", "T1", "V1"],
+      "primary_verify": "Default-load /analytics/cashflow and /analytics/forecast — non-empty panel values; ML banner + noValue; ds/query 200"
+    },
+    "Z": {
+      "tasks": ["Z1", "Z2", "T1", "V1"],
+      "primary_verify": "/analytics/portfolio — overview table all synced asset accounts; total_eur stat visible; six routes smoke"
+    }
+  },
+  "task_count": 6,
+  "estimate_total_hours": 7,
+  "tasks": [
+    {
+      "id": "Z1",
+      "title": "Portfolio breakdown SQL subquery + LATERAL",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0009 (Z) — breakdown returns all accounts from latest snapshot",
+      "files": ["grafana/provisioning/dashboards/analytics/portfolio.json"],
+      "decisions": ["DEC-0068", "DEC-0065"],
+      "tests": [
+        "SQL fixture: 3-account snapshot → 3 rows (not 1)",
+        "Review: no global LIMIT 1 on cross-join"
+      ]
+    },
+    {
+      "id": "Z2",
+      "title": "Cross-account overview table + grid layout",
+      "status": "open",
+      "estimate_hours": 1.5,
+      "depends_on": ["Z1"],
+      "acceptance_hook": "BUG-0009 (Z) — portfolio-only overview satisfies AC Z",
+      "files": ["grafana/provisioning/dashboards/analytics/portfolio.json"],
+      "decisions": ["DEC-0068", "DEC-0057"],
+      "tests": [
+        "Provisioning review: stat row + all-accounts table above fold",
+        "Grid placement: overview below stat row"
+      ]
+    },
+    {
+      "id": "Y1",
+      "title": "$account_id ABS(balance) variable query",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0009 (Y) — default variable picks funded account over zero wallet",
+      "files": [
+        "grafana/provisioning/dashboards/analytics/cashflow.json",
+        "grafana/provisioning/dashboards/analytics/forecast-horizons.json"
+      ],
+      "decisions": ["DEC-0068", "DEC-0009"],
+      "tests": [
+        "SQL fixture: ABS(balance) DESC picks acct 114 over 116",
+        "Snapshot: no current block in templating JSON"
+      ]
+    },
+    {
+      "id": "Y2",
+      "title": "ML banner + noValue on ML panels",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0009 (Y) — honest ML empty-state; US-0013 boundary",
+      "files": ["grafana/provisioning/dashboards/analytics/forecast-horizons.json"],
+      "decisions": ["DEC-0068", "DEC-0049", "DEC-0066"],
+      "tests": [
+        "Provisioning review: text banner above ML section",
+        "Provisioning review: noValue on ML panels"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "SQL fixtures + provisioning snapshot test",
+      "status": "open",
+      "estimate_hours": 1.5,
+      "depends_on": ["Z1", "Y1"],
+      "acceptance_hook": "BUG-0009 (Y)(Z) — frozen test contract",
+      "files": [
+        "grafana/provisioning/dashboards/analytics/portfolio.json",
+        "grafana/provisioning/dashboards/analytics/cashflow.json",
+        "grafana/provisioning/dashboards/analytics/forecast-horizons.json"
+      ],
+      "decisions": ["DEC-0068"],
+      "tests": [
+        "SQL fixture: breakdown 3-row",
+        "SQL fixture: variable ABS sort order",
+        "Optional JSON snapshot: Y1 query + Y2 banner"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work omniflow smoke",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["Z1", "Z2", "Y1", "Y2", "T1"],
+      "operator_gate": "Grafana provisioning reload after deploy before runtime probes",
+      "acceptance_hook": "BUG-0009 (Y)(Z) — financegnome.omniflow.cc probes",
+      "files": [
+        "sprints/quick/Q0016/uat.md",
+        "docs/engineering/runbook.md"
+      ],
+      "tests": [
+        "Default-load cashflow non-flat series",
+        "Portfolio overview 3 rows + total_eur stat",
+        "ML banner visible on forecast-horizons",
+        "Six /analytics/{slug} routes smoke",
+        "ds/query 200 regression (BUG-0003 H)"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "Z1 + Z2 + Y1 + Y2 + T1 single PR",
+    "Deploy image / reload Grafana provisioning on omniflow",
+    "V1 verify-work smoke rows Y/Z + regression footer"
+  ],
+  "execute_order": ["Z1", "Z2", "Y1", "Y2", "T1", "V1"],
+  "operator_gates": [
+    {
+      "id": "GRAFANA_PROVISIONING_RELOAD",
+      "before_tasks": ["V1"],
+      "action": "Deploy Z1–Y2+T1 and reload Grafana provisioning (container restart or poll) before V1 omniflow smoke",
+      "rationale": "Provisioning JSON changes require reload before operator probes reflect new SQL and variables"
+    }
+  ],
+  "frozen_boundaries": [
+    "Provisioning-only — no backend or React code",
+    "US-0013 ML enablement out of scope",
+    "Seventh overview dashboard rejected",
+    "Grafana dynamic hide rules rejected",
+    "React /forecast API reorder optional follow-up — not required for AC Y",
+    "Overview on portfolio dashboard only — /wealth supplementary (Z3 docs)",
+    "Omit current block from provisioning JSON — never bake operator-specific IDs",
+    "All-zero balances → alphabetical default — documented edge case"
+  ],
+  "decisions": ["DEC-0068", "DEC-0009", "DEC-0049", "DEC-0057", "DEC-0065", "DEC-0066"],
+  "research": ["R-0064"],
+  "operator_next": "After Z1–Y2+T1 deploy: reload Grafana provisioning; then V1 verify-work on financegnome.omniflow.cc"
+}

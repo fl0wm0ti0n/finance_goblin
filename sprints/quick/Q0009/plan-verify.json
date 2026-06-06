@@ -1,0 +1,110 @@
+{
+  "sprint": "Q0009",
+  "bug_id": "BUG-0003",
+  "verified_at": "2026-06-05T18:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0003",
+  "tasks_source": "sprints/quick/Q0009/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0003",
+  "decision_alignment": {
+    "new_dec_required": false,
+    "extends": ["DEC-0056"],
+    "research_basis": ["R-0052", "R-0058"],
+    "contract_elements_covered": [
+      "F1: DATABASE_HOST=postgres; recreate flow-finance-ai + grafana; settings + GET APIs 200 <2s",
+      "F2: .env.example omniflow block; runbook § Omniflow mis-host table; optional compose comment",
+      "G1: ExchangeService::new registers binance/bybit/bitunix when effective_enabled()",
+      "G2: R-0058 futures header-auth gated after G1+F1 smoke (not unknown exchange)",
+      "H1: Grafana ds/query 200 via F1 datasource host fix"
+    ],
+    "frozen_boundaries_respected": [
+      "No Traefik/JWT/analytics proxy changes",
+      "No merge with BUG-0002 / Q0008",
+      "No hardcode DATABASE_HOST in compose (keep :-postgres default)",
+      "G2 deferred unless post-G1+F1 smoke shows auth failure with body",
+      "H2 UID dedupe out of scope"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "F2 ∥ G1 → deploy → F1 operator recreate → smoke F/G/H → G2 if gate",
+    "notes": "F1 blocks acceptance rows F/H runtime; G2 depends on G1+F1 deploy + smoke gate"
+  },
+  "test_coverage": {
+    "unit_tests": "G1 effective_enabled connector registration; config/exchanges module",
+    "integration_tests": "Deferred to execute/qa — representative GET APIs after F1",
+    "operator_tests": "F1 settings database_host=postgres; alerts/unread-count; grafana ds/query; bitunix/test",
+    "doc_review": "F2 omniflow block + runbook symptom table",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "F",
+      "criterion": "Representative GET /api/v1/* return 200 within normal latency; settings database_host postgres + database_mode external",
+      "tasks": ["F1", "F2"],
+      "covered": true,
+      "notes": "F1 operator fixes mis-host cascade; F2 guardrail prevents recurrence; discovery ~30s 500 pattern addressed at ops layer per DEC-0056"
+    },
+    {
+      "acceptance_id": "G",
+      "criterion": "POST /api/v1/exchanges/bitunix/test returns 200 with payload or documented auth failure — not 400 unknown exchange",
+      "tasks": ["G1", "G2"],
+      "covered": true,
+      "notes": "G1 registry parity with Q0008 E1; G2 gated R-0058 only if auth/URL failure after G1+F1 (not unknown exchange)"
+    },
+    {
+      "acceptance_id": "H",
+      "criterion": "POST /analytics/grafana/api/ds/query returns 200; Grafana Postgres datasource reaches in-network postgres",
+      "tasks": ["F1"],
+      "covered": true,
+      "notes": "H1 = F1 verify (datasource ${DATABASE_HOST}); H2 UID dedupe deferred per architecture"
+    },
+    {
+      "acceptance_id": "REGRESSION",
+      "criterion": "OIDC-enabled and bundled-firefly deploy regression checks pass (acceptance footer)",
+      "tasks": [],
+      "covered": true,
+      "notes": "Post-deploy operator smoke at verify-work; not separate dev task (ADV-1)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Acceptance regression footer has no dedicated task; operator verify-work smoke — not plan-verify blocker."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Row F/H runtime proof requires operator F1 on omniflow before verify-work; F2 docs alone do not close acceptance."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "G2 execute only if POST bitunix/test auth-fails after G1+F1 — discovery baseline was fast 400 unknown exchange; likely G1-only."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "BUG-0002/Q0008 verify-work BLOCKED on PAT — parallel track; Q0009 frozen boundary forbids merge."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "Row F lists many endpoints; task.json uses representative probes (alerts/unread-count, sync/*, etc.) — sufficient per architecture test strategy."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 3,
+    "covered_count": 3,
+    "gap_count": 0,
+    "task_count": 4,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dependency_graph_valid": true
+  },
+  "notes": "QA plan-verify 2026-06-05: sprints/quick/Q0009/tasks.md aligns with docs/product/acceptance.md BUG-0003 rows F/G/H and architecture § BUG-0003; 4/4 tasks mapped (F1,F2,G1,G2); H1=F1; no gaps or orphans. Approved for /execute."
+}

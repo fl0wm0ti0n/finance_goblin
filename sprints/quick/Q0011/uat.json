@@ -1,0 +1,77 @@
+{
+  "sprint_id": "Q0011",
+  "bug_id": "BUG-0004",
+  "phase": "verify-work",
+  "date": "2026-06-05",
+  "orchestrator_run_id": "auto-20260605-bug0004-002",
+  "verdict": "PASS",
+  "passed": 9,
+  "failed": 0,
+  "deferred": 2,
+  "acceptance_rows": {
+    "I": "PASS",
+    "J": "PASS",
+    "K": "PASS",
+    "L": "PASS"
+  },
+  "steps": [
+    {
+      "id": "V-1",
+      "description": "Backend cargo test --lib",
+      "result": "pass"
+    },
+    {
+      "id": "V-2",
+      "description": "Frontend npm test",
+      "result": "pass"
+    },
+    {
+      "id": "V-3",
+      "description": "Frontend npm run build",
+      "result": "pass"
+    },
+    {
+      "id": "V-4",
+      "description": "Omniflow stack reachable (/health, /api/v1/settings)",
+      "result": "pass"
+    },
+    {
+      "id": "I-1",
+      "description": "Row (I) Exchange sync terminal status after manual_exchanges — finished_at set, not stuck running",
+      "result": "pass",
+      "note": "fc2a6ab9 manual_exchanges success finished_at 2026-06-05T14:30:52Z; sync/status state success"
+    },
+    {
+      "id": "J-1",
+      "description": "Row (J) Subscription detection surfaces merchants or threshold UX",
+      "result": "pass",
+      "note": "11 pending patterns with payee_key/confidence 95%; J2 UI deferred 401"
+    },
+    {
+      "id": "K-1",
+      "description": "Row (K) Portfolio Grafana ds/query 200 without UNION syntax error",
+      "result": "pass",
+      "note": "K1 fixed SQL probe 200; Firefly/Crypto frames [0,0]"
+    },
+    {
+      "id": "L-1",
+      "description": "Row (L) Wealth + forecast account-level data after Full sync",
+      "result": "pass",
+      "note": "2 Firefly accounts; forecast daily 200 for account_id 116/115 with series; balances 0.00"
+    },
+    {
+      "id": "REG-1",
+      "description": "OIDC-enabled deploy regression",
+      "result": "deferred",
+      "note": "operator browser smoke recommended"
+    },
+    {
+      "id": "REG-2",
+      "description": "Bundled-firefly deploy regression",
+      "result": "deferred",
+      "note": "external profile database_host=postgres confirmed"
+    }
+  ],
+  "blocking_reason_codes": [],
+  "evidence_ref": "sprints/quick/Q0011/verify-work-findings.md"
+}

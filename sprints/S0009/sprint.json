@@ -1,0 +1,30 @@
+{
+  "id": "S0009",
+  "story_ids": ["US-0009"],
+  "status": "PLANNED",
+  "created": "2026-06-01",
+  "goal": "ML overlay via StatsForecast sidecar, migration 009, sync forecast_ml phase, API variant/compare, React Compare UI, plan risk score, portfolio outlook, Grafana Dashboard 5 extensions, tests, and operator user guide — baseline authoritative.",
+  "scope": [
+    "Migration 009 model_kind bands forecast_portfolio_weekly plan_risk_scores (R-0049, DEC-0050)",
+    "StatsForecast Python sidecar + Compose full profile + forecast_ml config (DEC-0049, R-0044)",
+    "Forecast ML overlay service sidecar client seasonal ladder (DEC-0050, DEC-0051)",
+    "Sync forecast_ml phase after baseline plan hook (DEC-0052, R-0050)",
+    "Forecast API variant compare meta plan risk portfolio endpoints (DEC-0053, DEC-0054)",
+    "React forecast Compare UI ECharts bands Monthly seasonal callout",
+    "Plan risk score service API Planning UI badges (DEC-0054, R-0048)",
+    "Portfolio outlook API Wealth Crypto tab (R-0047)",
+    "Grafana Dashboard 5 forecast_variant ML panels (DEC-0055, R-0051)",
+    "Forecast ML unit and integration tests baseline authority regression",
+    "get_forecast AI tool variant param extension",
+    "Operator user guide docs/user-guides/US-0009.md"
+  ],
+  "risks": [
+    "Sidecar optional runtime — enabled=false default graceful skip (R-0044, DEC-0049)",
+    "Mutex latency — 30s combined budget 60s sidecar timeout (R-0050, DEC-0052)",
+    "Sparse history — 12mo gate WMAPE low_confidence MSTL 24mo only (R-0045, DEC-0051)",
+    "Baseline authority — alerts plan AI default baseline only (DEC-0050)",
+    "Compare UX mandatory when ML skipped disable with reason (AC6)"
+  ],
+  "task_count": 12,
+  "decisions": ["DEC-0049", "DEC-0050", "DEC-0051", "DEC-0052", "DEC-0053", "DEC-0054", "DEC-0055"]
+}

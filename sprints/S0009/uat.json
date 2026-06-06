@@ -1,0 +1,153 @@
+{
+  "sprint": "S0009",
+  "stories": ["US-0009"],
+  "story_id": "US-0009",
+  "phase": "verify-work",
+  "verified_at": "2026-06-01T23:30:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0009",
+  "qa_evidence": "sprints/S0009/qa-findings.md",
+  "environment": {
+    "database_url_set": false,
+    "stats_forecast_sidecar_running": false,
+    "forecast_ml_enabled": false,
+    "compose_full_profile": true,
+    "us0007_exchange_data": false,
+    "grafana_running": false,
+    "full_stack_ui_e2e": false
+  },
+  "automated_checks": [
+    {
+      "id": "AUTO-1",
+      "description": "bash tests/run-tests.sh",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-2",
+      "description": "cargo test --test firefly_readonly",
+      "result": "pass"
+    },
+    {
+      "id": "AUTO-3",
+      "description": "cargo test --lib (67 tests)",
+      "result": "pass",
+      "notes": "overlay_applies_cumulative_delta, band_thresholds, skip_reason_disabled_by_default, plan risk"
+    },
+    {
+      "id": "AUTO-4",
+      "description": "cargo test --test forecast_ml_integration",
+      "result": "pass",
+      "notes": "3/3 — sidecar mock, Grafana $forecast_variant, ML skip metadata"
+    },
+    {
+      "id": "AUTO-5",
+      "description": "cargo test --test ai_frozen_modules",
+      "result": "pass",
+      "notes": "2/2 — six-tool registry unchanged"
+    },
+    {
+      "id": "AUTO-6",
+      "description": "cargo test --test ai_local_provider_isolation",
+      "result": "pass",
+      "notes": "2/2 — local never hits api.openai.com"
+    },
+    {
+      "id": "AUTO-7",
+      "description": "cargo test --test exchange_signing",
+      "result": "pass",
+      "notes": "4/4 GET-only audit and signing fixtures"
+    },
+    {
+      "id": "AUTO-8",
+      "description": "prior-story integration suites (firefly/forecast/subscriptions/plans/wealth_alerts/ai_assistant/exchanges_portfolio)",
+      "result": "skip",
+      "notes": "DATABASE_URL unset; operator prerequisite"
+    },
+    {
+      "id": "AUTO-9",
+      "description": "npm run build (frontend)",
+      "result": "pass",
+      "notes": "LongTermChart bands, ForecastPage Baseline|ML|Compare, Planning risk badge, Wealth Crypto outlook"
+    },
+    {
+      "id": "AUTO-10",
+      "description": "docker compose --profile full config --services",
+      "result": "pass",
+      "notes": "stats-forecast, ollama, firefly-iii, flow-finance-ai, grafana, redis"
+    },
+    {
+      "id": "AUTO-11",
+      "description": "curl http://localhost:8090/health",
+      "result": "skip",
+      "notes": "sidecar not running; expected without --profile full up"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "Seasonal patterns detected and applied to monthly cashflow forecasts",
+      "result": "pass_with_prerequisites",
+      "notes": "seasonal_detected/seasonal_periods in sidecar + service; ForecastPage Monthly callout; operator: full profile, ML enabled, ≥24 mo history, sync"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "ML-enhanced forecast model produces 6–24 month projections with confidence bands",
+      "result": "pass",
+      "notes": "migration 009 bands; variant=ml_enhanced API; LongTermChart p10–p90; sidecar_client_mock_success; operator smoke: ML sync + 6/12/24 mo horizons"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "Portfolio performance forecast available when US-0007 data present",
+      "result": "pass_with_prerequisites",
+      "notes": "GET /api/v1/wealth/portfolio-forecast; WealthPage Crypto 3/6/12 mo; Grafana portfolio panel; operator: exchanges + ≥8 weekly crypto EUR snapshots"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "Risk assessment score displayed for active plan scenarios",
+      "result": "pass",
+      "notes": "PlanRiskService 0–100; GET /api/v1/plans/risk-score; PlanningPage badge + tooltip; band_thresholds unit tests"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": "Grafana Dashboard 5 extended with ML forecast and risk panels",
+      "result": "pass",
+      "notes": "forecast-horizons.json $forecast_variant + 5 new panels; grafana_dashboard_has_forecast_variant test; operator smoke: variant switch with ML data"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-6",
+      "description": "User can compare baseline (US-0002) vs ML-enhanced forecast in UI",
+      "result": "pass",
+      "notes": "GET /api/v1/forecast/compare dual series + delta; ForecastPage Compare mode; ML/Compare disabled when ml_skipped_reason; baseline authority for alerts"
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_total": 6,
+    "acceptance_criteria_pass": 6,
+    "passed": 4,
+    "pass_with_prerequisites": 2,
+    "skipped": 0,
+    "failed": 0,
+    "automated_pass": 9,
+    "automated_skip": 2
+  },
+  "operator_prerequisites": [
+    "Copy .env.example to .env with DATABASE_*, FIREFLY_*, optional AUTH_DEV_BYPASS=true",
+    "Provision external TimescaleDB; apply migration 009_forecast_ml.sql at backend startup",
+    "docker compose --profile full up -d; [forecast_ml] enabled=true; restart backend; curl localhost:8090/health",
+    "Sync with ≥12 mo Firefly history (≥24 mo for MSTL seasonal callout)",
+    "Forecast Long-term Baseline|ML|Compare at 6/12/24 mo; Monthly seasonal badge",
+    "Planning risk badge 0–100 with component tooltip",
+    "Wealth Crypto 3/6/12 mo outlook with US-0007 exchange data",
+    "Grafana Dashboard 5 $forecast_variant Baseline / ML Enhanced",
+    "DATABASE_URL for forecast_ml_integration DB persistence proof"
+  ],
+  "next_phase": "release"
+}

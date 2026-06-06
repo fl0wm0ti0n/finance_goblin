@@ -1,0 +1,119 @@
+{
+  "sprint": "Q0013",
+  "bug_id": "BUG-0010",
+  "orchestrator_run_id": "auto-20260605-bug0010-001",
+  "verified_at": "2026-06-06T00:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0010",
+  "tasks_source": "sprints/quick/Q0013/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0010",
+  "decision_alignment": {
+    "new_dec_required": false,
+    "extends": ["DEC-0060", "DEC-0007", "DEC-0049", "DEC-0025", "DEC-0002"],
+    "decisions": ["DEC-0065", "DEC-0066"],
+    "research_basis": ["R-0062"],
+    "contract_elements_covered": [
+      "AA1: trust Firefly current_balance via parse_split_amount; balance_ingest structured diagnostics",
+      "AA3: balance_warnings in forecast meta when negative start + tx history; ForecastPage banner",
+      "AB1: remove COALESCE(balance,0)>=0 filter; is_overdrawn flag; signed firefly.subtotal_eur per DEC-0065",
+      "AB2: zero-total empty-state callout with Full Firefly sync guidance",
+      "AC1: record_skip_on_baseline(Disabled) when ML off; meta derive sidecar_disabled per DEC-0066",
+      "AC2: three-state ML UI — not enabled / skipped / available; remove false skip on null reason",
+      "V1: deploy + manual Full Firefly sync gate + omniflow probes rows AA/AB/AC"
+    ],
+    "frozen_boundaries_respected": [
+      "AC3 / US-0013 out of scope — no stats-forecast on external profile",
+      "No transaction-sum balance recompute from mirror",
+      "No merge with BUG-0009/0011",
+      "No SQL migration backfill — DEC-0002 upsert on next Full sync only",
+      "Do not enable forecast_ml by default on external profile"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "AA1 → AB1 → AC1 → AA3 → AB2 → AC2 single PR → deploy → manual Full Firefly sync → V1 verify-work",
+    "notes": "AA3 depends on AA1; AB2 on AB1; AC2 on AC1; V1 gated on deploy + operator Full sync backfill before omniflow smoke"
+  },
+  "test_coverage": {
+    "unit_tests": "AA1 DEC-0060 parse + balance_ingest logs; AB1 negative asset inclusion + is_overdrawn; AC1 sidecar_disabled metadata; AA3 balance_warnings meta",
+    "integration_tests": "AB1 wealth API signed total; AC1 meta derive fallback for stale baselines",
+    "operator_tests": "V1 forecast plausible or warned; wealth acct 114 visible; ML not-enabled meta + UI; wealth/history post-sync (AB3 operator)",
+    "doc_review": "uat.md smoke checklist maps AA/AB/AC + regression footer",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AA",
+      "criterion": "Forecast UI/API shows plausible signed balances for selected account; 3-month End balance not implausible -25365.78 without explicit deficit scenario; daily/monthly/long-term series populated after recompute",
+      "tasks": ["AA1", "AA3", "V1"],
+      "covered": true,
+      "notes": "AA1 fixes mirror inputs + diagnostics (root cause per R-0062); AA3 surfaces negative-start warning when balance <= 0 with tx history; operator Full sync gate (AA2) embedded in V1 operator_gate before runtime probes"
+    },
+    {
+      "acceptance_id": "AB",
+      "criterion": "Wealth UI/API shows non-empty account breakdown and total_eur for synced Firefly asset accounts",
+      "tasks": ["AB1", "AB2", "V1"],
+      "covered": true,
+      "notes": "AB1 includes negative Giro (acct 114) per DEC-0065; AB2 guides operator when total_eur zero with accounts present; AB3 snapshot re-verify is operator-only via V1 wealth + wealth/history probes"
+    },
+    {
+      "acceptance_id": "AC",
+      "criterion": "ML forecast path runs when sidecar/config available, or UI/API accurately states degraded baseline-only mode; ML skipped message only when ML truly unavailable and baseline DEC-0007 numbers correct",
+      "tasks": ["AC1", "AC2", "V1"],
+      "covered": true,
+      "notes": "AC1+AC2 close honest degraded messaging when ML disabled (DEC-0066); AC3 ML production on omniflow deferred US-0013 — acceptance partial by design until epic; baseline numbers correctness tied to AA1/AA3"
+    },
+    {
+      "acceptance_id": "REGRESSION",
+      "criterion": "OIDC-enabled deploy regression checks pass (acceptance footer)",
+      "tasks": [],
+      "covered": true,
+      "notes": "uat.md regression row post-V1; no dedicated dev task — operator verify-work smoke (ADV-1)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Acceptance regression footer (OIDC + bundled-firefly) has no dedicated dev task; operator verify-work post-V1 — not a plan-verify blocker."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Rows AA/AB runtime proof requires operator manual Full Firefly sync after deploy — V1 blocked until sync + recompute per DEC-0002 upsert path."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "Backlog AA2/AB3 operator gates are not separate dev tasks — architecture marks AB3 not-a-code-task; validated in V1 via wealth/history probes."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "AC3 (ML sidecar on external profile) deferred to US-0013 — BUG-0010 AC closes honest baseline-only posture, not full ML overlay production."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "If Firefly source legitimately shows overdraft, product shows signed truth + warnings — not invented positive balance per architecture AA1 risks."
+    },
+    {
+      "id": "ADV-6",
+      "severity": "low",
+      "note": "Parallel BUG-0007/0008/0009/0011 tracks must not merge into Q0013 scope per frozen boundaries."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 3,
+    "covered_count": 3,
+    "gap_count": 0,
+    "task_count": 7,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dependency_graph_valid": true
+  },
+  "notes": "QA plan-verify 2026-06-06: sprints/quick/Q0013/tasks.md aligns with docs/product/acceptance.md BUG-0010 rows AA/AB/AC and architecture § BUG-0010; 7/7 tasks mapped (AA1,AB1,AC1,AA3,AB2,AC2,V1); discovery sub-defects AA/AB/AC covered; no gaps or orphans. Approved for /execute."
+}

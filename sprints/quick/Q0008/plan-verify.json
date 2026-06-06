@@ -1,0 +1,106 @@
+{
+  "sprint": "Q0008",
+  "bug_id": "BUG-0002",
+  "verified_at": "2026-06-04T20:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0002",
+  "tasks_source": "sprints/quick/Q0008/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0002",
+  "decision_alignment": {
+    "new_dec_required": false,
+    "extends": ["DEC-0004", "DEC-0054"],
+    "research_basis": ["R-0057", "R-0032"],
+    "contract_elements_covered": [
+      "C2: skip PAT set_override when trim empty; pat_configured(); sync preflight firefly_personal_access_token_missing",
+      "C1: operator non-empty PAT + runbook/.env.example (names only)",
+      "D1: GET /api/v1/plans/risk-score always HTTP 200; status ok|no_score + reason",
+      "D1: PlanRiskScoreResponse union + PlanningPage no hard error on no_score",
+      "E1: effective_enabled = configured() || toml.enabled in settings_view + mirror_enabled_at_startup",
+      "E2: default.toml binance.enabled=false greenfield"
+    ],
+    "frozen_boundaries_respected": [
+      "No 404 for empty risk-score",
+      "No PAT values in logs or error responses",
+      "No GF_SERVER_SERVE_FROM_SUB_PATH",
+      "No Traefik/JWT analytics stack changes",
+      "Sync still validates API keys (E1 does not bypass)"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "C2 ∥ D1 ∥ (E1 → E2) → deploy → C1 → omniflow smoke (C/D/E + regression)",
+    "notes": "C2/D1/E1 parallel-safe; E2 same PR as E1; C1 gates acceptance row C after C2 deploy"
+  },
+  "test_coverage": {
+    "unit_tests": "C2 pat_configured + sync preflight; E1 effective_enabled; D1 risk-score 200 variants",
+    "integration_tests": "C2 sync preflight error code; E1 GET /api/v1/settings fixture",
+    "frontend_build": "D1 npm run build + PlanningPage empty-state",
+    "operator_tests": "C1 printenv name non-empty + manual sync; uat.md regression footer at verify-work",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "C",
+      "criterion": "Firefly sync completes with PAT configured; Sync Status entity counts; no blocking 404 on /api/v1/sync/*",
+      "tasks": ["C1", "C2"],
+      "covered": true,
+      "notes": "C2 code path (empty PAT guard, fail-fast, no blank Bearer 401); C1 operator PAT mount + sync success; sync route 404 ruled out at discovery (Traefik not root cause)"
+    },
+    {
+      "acceptance_id": "D",
+      "criterion": "GET /api/v1/plans/risk-score returns 200 (JSON payload or documented empty-state), not 404",
+      "tasks": ["D1"],
+      "covered": true,
+      "notes": "Tagged 200 ok|no_score per architecture; Rust tests + Planning UI types in same PR"
+    },
+    {
+      "acceptance_id": "E",
+      "criterion": "Bitunix enabled+configured when only Bitunix env set; Binance/Bybit rows match operator env",
+      "tasks": ["E1", "E2"],
+      "covered": true,
+      "notes": "E1 effective_enabled for all exchanges; E2 greenfield Binance default off; Bybit follows same E1 semantics"
+    },
+    {
+      "acceptance_id": "REGRESSION",
+      "criterion": "OIDC-enabled and bundled-firefly deploy regression checks pass (acceptance footer)",
+      "tasks": [],
+      "covered": true,
+      "notes": "Post-deploy operator smoke in uat.md; not a separate dev task — verify-work gate (ADV-1)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Acceptance regression footer (OIDC + bundled-firefly) has no dedicated task; uat.md operator table + post-deploy smoke at verify-work — not a plan-verify blocker."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Row C 'no blocking 404 on sync APIs' is satisfied by discovery baseline (sync/status 200); no new router task — architecture ruled out Traefik fix."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "C1 acceptance row C runtime proof requires operator PAT on omniflow host after C2 deploy — deferred to verify-work alongside C2 unit/integration tier."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "Optional /health/ready firefly_pat_configured in C2 is architecture-optional; task.json lists health/mod.rs — implement if low-cost, not required for plan-verify PASS."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 3,
+    "covered_count": 3,
+    "gap_count": 0,
+    "task_count": 5,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dependency_graph_valid": true
+  },
+  "notes": "QA plan-verify 2026-06-04: sprints/quick/Q0008/tasks.md aligns with docs/product/acceptance.md BUG-0002 rows C/D/E and architecture § BUG-0002; 5/5 tasks mapped (C1,C2,D1,E1,E2); no gaps or orphans. Approved for /execute."
+}

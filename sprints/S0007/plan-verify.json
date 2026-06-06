@@ -1,0 +1,62 @@
+{
+  "sprint": "S0007",
+  "story_id": "US-0007",
+  "verified_at": "2026-06-01T20:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0007",
+  "tasks_source": "sprints/S0007/tasks.md",
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Connectors for Binance, Bybit, and Bitunix import balances, positions, trades, transfers, funding, and PnL",
+      "tasks": ["T-0073", "T-0075", "T-0076", "T-0078", "T-0081", "T-0083"],
+      "covered": true,
+      "notes": "Migration 007 exchange tables + seed three exchanges (T-0073); ExchangeConnector trait, GET-only HTTP, repository upserts/watermarks (T-0075); Binance/Bybit/Bitunix implementations for balances, positions, trades, transfers, funding + ExchangeService factory (T-0076); sync exchanges phase runs full connector import then PortfolioEngine::recompute_pnl (T-0078); Settings test connection + Sync Status per-exchange rows and exchange-only trigger (T-0081); GET-only audit, mock signing, sync phase ordering, integration upsert tests (T-0083)"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "Portfolio Engine calculates realized gains (closed positions), unrealized gains (open positions), and total return",
+      "tasks": ["T-0077", "T-0079", "T-0080", "T-0083", "T-0084"],
+      "covered": true,
+      "notes": "PortfolioEngine hybrid PnL, baselines, avg-cost fallback, funding in realized, reconciliation (T-0077); /api/v1/wealth and /portfolio/pnl expose realized/unrealized/total_return_pct (T-0079); Crypto tab PnL summary row (T-0080); unit tests for hybrid paths, baseline, reconciliation (T-0083); operator guide PnL interpretation (T-0084)"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Crypto holdings included in net worth view (extends US-0005)",
+      "tasks": ["T-0073", "T-0074", "T-0077", "T-0078", "T-0079", "T-0080", "T-0082"],
+      "covered": true,
+      "notes": "net_worth_snapshots ALTER crypto_value_eur/firefly_value_eur/total_return_pct (T-0073); FxService EUR marks for holdings (T-0074); cross-exchange EUR aggregation in PortfolioEngine (T-0077); WealthService daily snapshot + extended /wealth breakdown replacing US-0005 placeholder (T-0078); REST /wealth, /wealth/crypto, /wealth/history + get_portfolio crypto extension (T-0079); React Overview combined total_eur + Crypto tab (T-0080); Grafana Dashboard 4 total wealth stat includes crypto (T-0082)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "Portfolio allocation scenarios supported (e.g. 50% ETF / 50% crypto)",
+      "tasks": ["T-0079", "T-0080", "T-0084"],
+      "covered": true,
+      "notes": "Plan Engine allocation_target kind, current vs target gap from wealth buckets, Planning Scenarios preset (T-0079); allocation gap card on /wealth linking to /planning (T-0080); operator guide allocation workflow (T-0084)"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Grafana Dashboard 4 shows crypto slice and portfolio performance",
+      "tasks": ["T-0073", "T-0078", "T-0082", "T-0084"],
+      "covered": true,
+      "notes": "Snapshot schema columns for crypto and total_return_pct (T-0073); exchanges phase populates net_worth_snapshots payload allocation (T-0078); portfolio.json panels — crypto stat, firefly vs crypto pie, performance time series, FX incomplete (T-0082); operator guide Dashboard 4 section (T-0084)"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "API keys stored in self-hosted secrets/config, not transmitted externally",
+      "tasks": ["T-0074", "T-0075", "T-0079", "T-0081", "T-0083", "T-0084"],
+      "covered": true,
+      "notes": "TOML api_key_env/api_secret_env only; settings API exposes env names and configured badges, never values (T-0074); GET-only HTTP layer + read-only key test (T-0075); JWT wealth/exchange APIs omit secrets (T-0079); Settings read-only exchange section, no in-browser secret entry, .env.example (T-0081); static audit no secrets in response fixtures (T-0083); user guide env setup and secret rotation via restart (T-0084)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "summary": {
+    "acceptance_criteria_count": 6,
+    "covered_count": 6,
+    "gap_count": 0,
+    "task_count": 12,
+    "tasks_without_acceptance_ref": [],
+    "tasks_without_acceptance_ref_note": "All tasks T-0073–T-0084 map to at least one AC in tasks.md acceptance refs and coverage map"
+  }
+}

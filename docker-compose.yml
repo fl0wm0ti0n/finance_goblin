@@ -1,0 +1,170 @@
+# Flow Finance AI — Docker Compose profiles (US-0001 / US-0010)
+# External PostgreSQL is NEVER embedded; operator provisions TimescaleDB separately.
+# Greenfield dev (bundled Firefly): `docker compose --profile minimal --profile bundled-firefly up --build`
+# Omniflow host (external only): `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d`
+
+services:
+  flow-finance-ai:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    profiles: [minimal, standard, full, external]
+    ports:
+      - "${FLOW_PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      DATABASE_HOST: ${DATABASE_HOST:-host.docker.internal}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:-flow_finance_ai}
+      DATABASE_USER: ${DATABASE_USER:-finance}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD required}
+      FIREFLY_BASE_URL: ${FIREFLY_BASE_URL:-http://firefly-iii:8080}
+      FIREFLY_PERSONAL_ACCESS_TOKEN: ${FIREFLY_PERSONAL_ACCESS_TOKEN:-}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-3600}
+      GRAFANA_UPSTREAM: ${GRAFANA_UPSTREAM:-http://grafana:3000}
+      RUST_LOG: ${RUST_LOG:-info}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  firefly-iii:
+    image: fireflyiii/core:latest
+    profiles: [bundled-firefly, standard, full]
+    ports:
+      - "${FIREFLY_PORT:-8081}:8080"
+    env_file:
+      - .env
+    environment:
+      APP_KEY: ${FIREFLY_APP_KEY:?FIREFLY_APP_KEY required}
+      DB_CONNECTION: pgsql
+      DB_HOST: ${FIREFLY_DB_HOST:-host.docker.internal}
+      DB_PORT: ${FIREFLY_DB_PORT:-5432}
+      DB_DATABASE: ${FIREFLY_DB_DATABASE:-firefly}
+      DB_USERNAME: ${FIREFLY_DB_USER:-firefly}
+      DB_PASSWORD: ${FIREFLY_DB_PASSWORD:?FIREFLY_DB_PASSWORD required}
+      TRUSTED_PROXIES: "**"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    profiles: [minimal, standard, full, external]
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-https://financegnome.omniflow.cc/analytics/grafana/}
+      DATABASE_HOST: ${DATABASE_HOST:-host.docker.internal}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_NAME: ${DATABASE_NAME:-flow_finance_ai}
+      DATABASE_USER: ${DATABASE_USER:-finance}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD required}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    profiles: [standard, full]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    restart: unless-stopped
+
+  # US-0009: StatsForecast ML sidecar — enable with [forecast_ml] enabled = true
+  stats-forecast:
+    build: ./stats-forecast
+    profiles: [full]
+    ports:
+      - "${STATS_FORECAST_PORT:-8090}:8090"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  # US-0008: Ollama local AI — start with `docker compose --profile full up -d`
+  # Set backend [ai] provider = "ollama", model e.g. qwen2.5:14b; pull: exec ollama ollama pull qwen2.5:14b
+  ollama:
+    image: ollama/ollama:latest
+    profiles: [full]
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+  # Optional OIDC profile (Authentik) — not required for minimal acceptance
+  authentik-postgres:
+    image: postgres:16-alpine
+    profiles: [oidc]
+    environment:
+      POSTGRES_PASSWORD: ${AUTHENTIK_DB_PASSWORD:-authentik}
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+    volumes:
+      - authentik_pg:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  authentik-redis:
+    image: redis:7-alpine
+    profiles: [oidc]
+    restart: unless-stopped
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2024.2
+    profiles: [oidc]
+    command: server
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgres
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD:-authentik}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY required for oidc profile}
+    ports:
+      - "${AUTHENTIK_PORT:-9000}:9000"
+    depends_on:
+      - authentik-postgres
+      - authentik-redis
+    restart: unless-stopped
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2024.2
+    profiles: [oidc]
+    command: worker
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST: authentik-postgres
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD:-authentik}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY required for oidc profile}
+    depends_on:
+      - authentik-postgres
+      - authentik-redis
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
+  authentik_pg:

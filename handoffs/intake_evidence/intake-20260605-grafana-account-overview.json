@@ -1,0 +1,64 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260605-grafana-account-overview",
+  "intake_work_item_kind": "bug",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Grafana analytics dashboards show non-empty account values after 922+ synced transactions; operator has cross-account value overview not only per-panel emptiness.",
+      "intake_run_id": "intake-20260605-grafana-account-overview",
+      "turn_index": 0,
+      "ref": "ie:intake-20260605-grafana-account-overview:0:0268f9a86e47c5c0"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "grafana provisioning dashboards 1-5 account_id variables SQL panels; analytics proxy /analytics/grafana; wealth net_worth_snapshots datasource queries; US-0011 embedded routes.",
+      "intake_run_id": "intake-20260605-grafana-account-overview",
+      "turn_index": 1,
+      "ref": "ie:intake-20260605-grafana-account-overview:1:fc9e7f86380ec006"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Post-BUG-0004 K UNION fix and L balance parse; may be regression or remaining variable/SQL gaps; US-0010 external profile; separate from forecast React UI BUG-0010; do not read secrets.",
+      "intake_run_id": "intake-20260605-grafana-account-overview",
+      "turn_index": 2,
+      "ref": "ie:intake-20260605-grafana-account-overview:2:59dff2d5d21b4c57"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "POST /analytics/grafana/api/ds/query 200 for cashflow portfolio subscriptions dashboards with account variables; representative panels show non-zero balances; wealth/account overview visible in analytics or linked React wealth; six /analytics routes operator smoke.",
+      "intake_run_id": "intake-20260605-grafana-account-overview",
+      "turn_index": 3,
+      "ref": "ie:intake-20260605-grafana-account-overview:3:b6aef07706acde70"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator confirms Grafana panels populated for synced accounts; account-level value overview available; BUG-0009 acceptance Y+Z checked; OIDC regression pass.",
+      "intake_run_id": "intake-20260605-grafana-account-overview",
+      "turn_index": 4,
+      "ref": "ie:intake-20260605-grafana-account-overview:4:a0a726a6a1d0cf29"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug",
+    "rationale": "Operator issue 2: Grafana still empty despite 922+ synced transactions and no account value overview; sub-defects Y (panel emptiness) and Z (cross-account overview gap) share Grafana provisioning + datasource binding surface.",
+    "alternatives_considered": [
+      "Merge into BUG-0004 K/L — rejected (BUG-0004 DONE; operator re-smoke shows persistent Grafana emptiness)",
+      "Merge into BUG-0010 — rejected (React forecast/wealth product UI is distinct from Grafana embed analytics)"
+    ]
+  }
+}

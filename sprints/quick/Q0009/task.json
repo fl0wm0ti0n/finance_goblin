@@ -1,0 +1,88 @@
+{
+  "id": "Q0009",
+  "title": "BUG-0003 omniflow API 500 cascade, Bitunix registry, Grafana SQL",
+  "status": "execute-complete",
+  "bug_id": "BUG-0003",
+  "architecture_ref": "architecture-20260605-bug0003",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["F", "G", "H"],
+  "task_count": 4,
+  "estimate_total_hours": 5.5,
+  "tasks": [
+    {
+      "id": "F1",
+      "title": "Operator DATABASE_HOST=postgres + recreate app/grafana",
+      "status": "docs-done",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0003 (F)(H) — settings postgres; GET APIs 200; Grafana ds/query 200",
+      "files": ["operator .env (host, not committed)"],
+      "tests": [
+        "GET /api/v1/settings database_host=postgres",
+        "GET /api/v1/alerts/unread-count 200 <2s",
+        "POST /analytics/grafana/api/ds/query 200"
+      ]
+    },
+    {
+      "id": "F2",
+      "title": "External-profile DATABASE_HOST guard (.env.example + runbook)",
+      "status": "done",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0003 (F) guardrail — omniflow must not use host.docker.internal",
+      "files": [
+        ".env.example",
+        "docs/engineering/runbook.md",
+        "docker-compose.external.yml"
+      ],
+      "tests": ["Doc review: omniflow block + runbook symptom table"]
+    },
+    {
+      "id": "G1",
+      "title": "ExchangeService::new registers connectors via effective_enabled()",
+      "status": "done",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0003 (G) — bitunix test not 400 unknown exchange",
+      "files": [
+        "backend/src/exchanges/service.rs",
+        "backend/src/config/mod.rs"
+      ],
+      "tests": [
+        "Unit: configured + TOML enabled=false → connector in new()",
+        "cargo test --lib exchanges/config"
+      ]
+    },
+    {
+      "id": "G2",
+      "title": "Bitunix futures header-auth spike (R-0058, gated)",
+      "status": "skipped",
+      "estimate_hours": 1.5,
+      "depends_on": ["G1", "F1"],
+      "gate": "Execute only if POST bitunix/test still auth-fails after G1+F1 (not unknown exchange)",
+      "skip_reason": "No post-deploy smoke; registry gap addressed by G1 — spike deferred to verify-work gate",
+      "acceptance_hook": "BUG-0003 (G) — 200 test payload or documented auth failure",
+      "files": ["backend/src/exchanges/bitunix.rs"],
+      "tests": [
+        "Operator smoke: POST /api/v1/exchanges/bitunix/test body documents auth/URL"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "F2 + G1 code PR (parallel with F1 prep)",
+    "F1 operator recreate (required before F/G/H acceptance)",
+    "G2 only if smoke gate triggers",
+    "Omniflow smoke F/G/H + regression footer"
+  ],
+  "execute_order": ["F2", "G1", "F1", "G2"],
+  "frozen_boundaries": [
+    "No Traefik/JWT/analytics proxy changes",
+    "No merge with BUG-0002 / Q0008",
+    "No hardcode DATABASE_HOST in compose (keep :-postgres default)",
+    "G2 deferred unless post-G1+F1 smoke shows auth failure with body",
+    "H2 UID dedupe out of scope unless operator requests"
+  ],
+  "decisions": ["DEC-0056"],
+  "research": ["R-0052", "R-0058"],
+  "operator_next": "Deploy F2+G1 image, then F1 on financegnome: DATABASE_HOST=postgres, recreate flow-finance-ai + grafana, then run acceptance rows F/G/H; G2 only if bitunix test auth-fails after smoke"
+}

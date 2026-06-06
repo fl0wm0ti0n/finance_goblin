@@ -1,0 +1,63 @@
+{
+  "sprint": "S0009",
+  "story_id": "US-0009",
+  "verified_at": "2026-06-01T20:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0009",
+  "tasks_source": "sprints/S0009/tasks.md",
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Seasonal patterns detected and applied to monthly cashflow forecasts",
+      "tasks": ["T-0098", "T-0099", "T-0100", "T-0107", "T-0108"],
+      "covered": true,
+      "notes": "Sidecar seasonal model ladder AutoETS/MSTL (T-0098); ML overlay metadata seasonal_detected (T-0099); sync forecast_ml persists metadata (T-0100); Monthly tab seasonal callout (T-0107); operator guide (T-0108)"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "ML-enhanced forecast model produces 6–24 month projections with confidence bands",
+      "tasks": ["T-0097", "T-0098", "T-0099", "T-0100", "T-0101", "T-0102", "T-0106", "T-0107", "T-0108"],
+      "covered": true,
+      "notes": "Migration 009 band columns (T-0097); sidecar level=90 intervals (T-0098); overlay service (T-0099); sync phase (T-0100); variant API + bands (T-0101); ECharts Compare UI (T-0102); tests (T-0106); get_forecast variant (T-0107); user guide (T-0108)"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Portfolio performance forecast available when US-0007 data present",
+      "tasks": ["T-0097", "T-0099", "T-0104", "T-0105", "T-0108"],
+      "covered": true,
+      "notes": "forecast_portfolio_weekly hypertable (T-0097); ML service portfolio weekly call (T-0099); Wealth Crypto API + UI (T-0104); Grafana portfolio panels (T-0105); operator guide (T-0108)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "Risk assessment score displayed for active plan scenarios",
+      "tasks": ["T-0097", "T-0100", "T-0103", "T-0105", "T-0106", "T-0108"],
+      "covered": true,
+      "notes": "plan_risk_scores table (T-0097); PlanRiskService + Planning badges (T-0103); recompute after ML (T-0100); Grafana risk stat (T-0105); formula tests (T-0106); user guide (T-0108)"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Grafana Dashboard 5 extended with ML forecast and risk panels",
+      "tasks": ["T-0097", "T-0105", "T-0108"],
+      "covered": true,
+      "notes": "Schema supports variant queries (T-0097); $forecast_variant + band/seasonal/portfolio/risk panels (T-0105); operator guide (T-0108)"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "User can compare baseline (US-0002) vs ML-enhanced forecast in UI",
+      "tasks": ["T-0101", "T-0102", "T-0106", "T-0108"],
+      "covered": true,
+      "notes": "GET /forecast/compare API (T-0101); Baseline|ML|Compare segmented control + delta stat (T-0102); compare integration + skip-disable tests (T-0106); operator guide (T-0108)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "summary": {
+    "acceptance_criteria_count": 6,
+    "covered_count": 6,
+    "gap_count": 0,
+    "task_count": 12,
+    "tasks_without_acceptance_ref": [],
+    "tasks_without_acceptance_ref_note": "All tasks T-0097–T-0108 map to at least one AC in tasks.md acceptance refs and coverage map"
+  },
+  "notes": "Sprint at SPRINT_MAX_TASKS=12 threshold; no split required per discovery coupling (Compare + risk + ML share computation IDs). QA plan-verify 2026-06-01: tasks.md coverage map and plan-verify.json align; 12/12 tasks mapped; 6/6 AC covered; no gaps or orphans."
+}

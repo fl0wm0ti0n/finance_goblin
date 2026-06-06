@@ -1,0 +1,99 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2 }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, balance AS value FROM forecast_balance_daily WHERE account_id = '$account_id' AND computation_id = (SELECT id FROM forecast_computations WHERE status = 'success' ORDER BY computed_at DESC LIMIT 1) AND $__timeFilter(ts) ORDER BY ts",
+          "refId": "A"
+        },
+        {
+          "format": "time_series",
+          "rawSql": "SELECT ts AS time, $scarcity_threshold::numeric AS value FROM forecast_balance_daily WHERE account_id = '$account_id' AND computation_id = (SELECT id FROM forecast_computations WHERE status = 'success' ORDER BY computed_at DESC LIMIT 1) AND $__timeFilter(ts) ORDER BY ts LIMIT 1",
+          "refId": "B"
+        }
+      ],
+      "title": "Balance forecast with scarcity threshold",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "id": 2,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT ts::date AS date, balance FROM forecast_balance_daily WHERE account_id = '$account_id' AND computation_id = (SELECT id FROM forecast_computations WHERE status = 'success' ORDER BY computed_at DESC LIMIT 1) ORDER BY ts DESC LIMIT 30",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent daily forecast balances",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "id": 3,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT ts::date AS month, income, fixed_costs, variable_costs, free_cashflow FROM forecast_cashflow_monthly WHERE account_id = '$account_id' AND computation_id = (SELECT id FROM forecast_computations WHERE status = 'success' ORDER BY computed_at DESC LIMIT 1) ORDER BY ts LIMIT 12",
+          "refId": "A"
+        }
+      ],
+      "title": "Monthly cashflow decomposition",
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["analytics", "cashflow", "forecast"],
+  "templating": {
+    "list": [
+      {
+        "name": "account_id",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+        "query": "SELECT a.firefly_id AS __value, a.name AS __text FROM accounts a WHERE a.type = 'asset' ORDER BY ABS(COALESCE(a.balance, 0)) DESC, a.name ASC",
+        "refresh": 1,
+        "sort": 1
+      },
+      {
+        "name": "scarcity_threshold",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+        "query": "SELECT scarcity_threshold_eur AS __value, 'Scarcity threshold (€)' AS __text FROM alert_config WHERE id = 1",
+        "refresh": 1,
+        "sort": 1
+      }
+    ]
+  },
+  "time": { "from": "now-30d", "to": "now+6M" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Cashflow",
+  "uid": "cashflow",
+  "version": 1,
+  "folder": "Analytics"
+}

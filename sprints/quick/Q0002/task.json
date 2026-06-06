@@ -1,0 +1,16 @@
+{
+  "id": "Q0002",
+  "title": "Diagnose browser 404 and misleading bootstrap fatal error",
+  "status": "done",
+  "acceptance": [
+    "Document that contentscript.js warnings are browser-extension noise, not app bugs",
+    "Bootstrap fatal error no longer mislabeled as missing env var",
+    "Favicon served to avoid /favicon.ico 404 once app is healthy",
+    "Operator knows root cause of index 404 is DB auth / app crash loop"
+  ],
+  "root_cause": "DATABASE_USER/PASSWORD in .env do not match host Postgres (user flow rejected); Traefik returns 404 while container restarts",
+  "code_changes": [
+    "backend/src/db/bootstrap.rs — propagate BootstrapError without ConfigError::MissingEnv",
+    "frontend/public/favicon.svg + index.html link"
+  ]
+}

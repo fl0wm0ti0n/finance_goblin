@@ -1,0 +1,128 @@
+{
+  "sprint": "S0012",
+  "story_id": "US-0012",
+  "verified_at": "2026-06-03T06:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0012",
+  "tasks_source": "sprints/S0012/tasks.md",
+  "decision_alignment": {
+    "decision_id": "DEC-0058",
+    "aligned": true,
+    "research_basis": ["R-0055", "R-0053"],
+    "contract_elements_covered": [
+      "ensure_database before connect_with_retry (T-0130, T-0132)",
+      "backend/src/db/bootstrap.rs module (T-0130)",
+      "DATABASE_BOOTSTRAP_URL + maintenance_database_url() (T-0131)",
+      "CREATE DATABASE … OWNER app_user idempotent (T-0130)",
+      "TimescaleDB extension via maintenance creds on app DB (T-0130)",
+      "DATABASE_NAME allowlist at AppConfig::load() (T-0131, T-0136)",
+      "DEC-0003 startup_retry_* for maintenance connect (T-0130)",
+      "bootstrap_reason stable log codes (T-0130, T-0136)",
+      ".env.example omniflow bootstrap block (T-0133)",
+      "runbook Omniflow auto-provision delta (T-0134)",
+      "database_bootstrap_integration.rs gated on DATABASE_BOOTSTRAP_TEST_URL (T-0135)",
+      "tests/run-tests.sh wire (T-0135)",
+      "log redaction unit tests (T-0136)"
+    ],
+    "frozen_boundaries_respected": [
+      "No Compose init service",
+      "No embedded Postgres",
+      "No auto-create DATABASE_USER",
+      "Host TimescaleDB package install remains operator-owned",
+      "migration 001 unchanged",
+      "No bootstrap URL password logging"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "T-0131 → T-0130 → T-0132 → T-0133 ∥ T-0134 → T-0136 → T-0135",
+    "notes": "Config foundation before bootstrap module; lib wiring after module; docs parallel after config/module; unit tests before gated integration"
+  },
+  "test_coverage": {
+    "unit_tests": "T-0136 — name allowlist, maintenance URL builder, reason-code mapping, log redaction",
+    "integration_tests": "T-0135 — create-if-missing, idempotent skip, optional privilege-fail variant; gated on DATABASE_BOOTSTRAP_TEST_URL",
+    "run_tests_sh": "T-0135 — invoke bootstrap integration when test env set",
+    "uat_mapping": "sprints/S0012/uat.md UAT-1..UAT-6 aligned to AC-1..AC-6",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "On cold start against external Postgres, if DATABASE_NAME is missing, backend creates the database idempotently before migrations",
+      "tasks": ["T-0130", "T-0132", "T-0135"],
+      "covered": true,
+      "notes": "ensure_database sequence (T-0130); startup ordering before connect_with_retry (T-0132); integration create-if-missing (T-0135)"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "Existing flow_finance_ai database is never dropped or recreated by bootstrap",
+      "tasks": ["T-0130", "T-0135"],
+      "covered": true,
+      "notes": "pg_database existence check skip path (T-0130); idempotent second-run integration assertion (T-0135)"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Bootstrap attempts CREATE EXTENSION IF NOT EXISTS timescaledb; otherwise fails with actionable log pointing to runbook host install",
+      "tasks": ["T-0130", "T-0134", "T-0135"],
+      "covered": true,
+      "notes": "Extension step + database_bootstrap_failed_timescaledb (T-0130); runbook remediation text (T-0134); extension present scenario in integration (T-0135)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "When app role lacks CREATEDB, optional DATABASE_BOOTSTRAP_URL enables bootstrap; missing privilege fails closed with clear error",
+      "tasks": ["T-0130", "T-0131", "T-0135"],
+      "covered": true,
+      "notes": "Bootstrap URL resolution (T-0131); privilege fail reason code (T-0130); optional integration variant without bootstrap URL (T-0135)"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": ".env.example and runbook document bootstrap env vars and omniflow shared-Postgres behavior",
+      "tasks": ["T-0133", "T-0134"],
+      "covered": true,
+      "notes": "DATABASE_BOOTSTRAP_URL block and when required vs optional (T-0133); runbook auto-provision matrix and bootstrap_reason triage (T-0134)"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "Automated test or CI fixture proves create-if-missing path without requiring operator manual SQL",
+      "tasks": ["T-0135", "T-0136"],
+      "covered": true,
+      "notes": "Gated integration test with ephemeral DB (T-0135); unit tests for config/reason/redaction without network (T-0136); run-tests.sh and optional CI jobs documented"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "AC-3 TimescaleDB-absent and AC-4 omniflow CREATEDB matrix runtime proof depends on operator host or DATABASE_BOOTSTRAP_TEST_URL fixture at QA/UAT; uat.md operator smoke table covers post-execute — not a plan-verify blocker."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "T-0132 tasks.md acceptance refs list AC-1 only; wiring enables full bootstrap path for AC-2–AC-4 — coverage map and T-0130 are authoritative."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "Default CI may skip T-0135 integration when DATABASE_BOOTSTRAP_TEST_URL unset; AC-6 satisfied at plan level by gated integration + always-on unit tier per architecture test strategy."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "T-0134 optional DEC-0056 footnote is doc-only enhancement; DEC-0058 amend is already in runbook delta scope."
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_count": 6,
+    "covered_count": 6,
+    "gap_count": 0,
+    "task_count": 7,
+    "tasks_without_acceptance_ref": [],
+    "tasks_without_acceptance_ref_note": "All tasks T-0130–T-0136 map to at least one AC in tasks.md acceptance refs and coverage map",
+    "dec_0058_aligned": true,
+    "dependency_graph_valid": true
+  },
+  "notes": "QA plan-verify 2026-06-03: sprints/S0012/tasks.md acceptance coverage map aligns with docs/product/acceptance.md US-0012; 7/7 tasks mapped; 6/6 AC covered; DEC-0058 contract fully tasked; no gaps or orphans. Approved for /execute."
+}

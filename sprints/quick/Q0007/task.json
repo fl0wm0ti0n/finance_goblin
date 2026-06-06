@@ -1,0 +1,40 @@
+{
+  "id": "Q0007",
+  "title": "BUG-0001 omniflow production regressions — DevBypassAuthProvider + GF_SERVER_ROOT_URL",
+  "status": "done",
+  "bug_id": "BUG-0001",
+  "architecture_ref": "architecture-20260604-bug0001",
+  "tasks": [
+    {
+      "id": "A1",
+      "title": "DevBypassAuthProvider stub on AuthContext when !isOidcConfigured",
+      "status": "done",
+      "files": [
+        "frontend/src/auth/DevBypassAuthProvider.tsx",
+        "frontend/src/main.tsx",
+        "frontend/src/components/chat/ChatPanel.test.tsx",
+        "frontend/src/test/setup.ts",
+        "frontend/vite.config.ts",
+        "frontend/package.json"
+      ]
+    },
+    {
+      "id": "B1",
+      "title": "GF_SERVER_ROOT_URL in docker-compose.yml and .env.example",
+      "status": "done",
+      "files": ["docker-compose.yml", ".env.example"]
+    },
+    {
+      "id": "B2",
+      "title": "Proxy HTML rewrite fallback",
+      "status": "skipped",
+      "reason": "B1 sufficient per code review — GF_SERVER_ROOT_URL addresses root-absolute /public/ URLs without proxy rewrite"
+    }
+  ],
+  "acceptance": [
+    "Vitest: ChatPanel under DevBypassAuthProvider renders without useAuth warn",
+    "npm run build passes",
+    "GF_SERVER_ROOT_URL present in compose + .env.example with omniflow default"
+  ],
+  "operator_next": "Redeploy external compose (grafana + flow-finance-ai) and run BUG-0001 acceptance smoke on financegnome.omniflow.cc"
+}

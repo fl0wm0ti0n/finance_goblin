@@ -1,0 +1,232 @@
+{
+  "selected_pack": "first-intake-pack",
+  "intake_run_id": "intake-20260531-flow-finance",
+  "asked_topics": [
+    "users_problem",
+    "runtime_target_environment",
+    "language_framework_runtime",
+    "architecture_preference",
+    "ui_design_expectations",
+    "security_compliance",
+    "non_functional_priorities",
+    "scope_timeline"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "users_problem",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "Self-hosted Finanzguru alternative: Firefly III read-only analytics, forecasting, subscriptions, planning, AI, crypto \u2014 fully privacy-friendly.",
+      "intake_run_id": "intake-20260531-flow-finance",
+      "turn_index": 0,
+      "ref": "ie:intake-20260531-flow-finance:0:d2b1c01496151b71",
+      "delegation_scope": "Projectplan.md",
+      "delegation_rationale": "Authoritative product concept document covers users_problem for Flow Finance AI.",
+      "delegation_confidence": "high"
+    },
+    {
+      "topic_key": "runtime_target_environment",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "Self-hosted Docker Compose; dev env has Docker + running Firefly III; external PostgreSQL never embedded.",
+      "intake_run_id": "intake-20260531-flow-finance",
+      "turn_index": 1,
+      "ref": "ie:intake-20260531-flow-finance:1:f20336e69cd1632b",
+      "delegation_scope": "Projectplan.md",
+      "delegation_rationale": "Authoritative product concept document covers runtime_target_environment for Flow Finance AI.",
+      "delegation_confidence": "high"
+    },
+    {
+      "topic_key": "language_framework_runtime",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "Rust/Axum/Tokio/SQLx backend; React/TypeScript/Tailwind/shadcn frontend; PostgreSQL+TimescaleDB; Grafana; OpenAI start.",
+      "intake_run_id": "intake-20260531-flow-finance",
+      "turn_index": 2,
+      "ref": "ie:intake-20260531-flow-finance:2:d255d43f4c00466f",
+      "delegation_scope": "Projectplan.md",
+      "delegation_rationale": "Authoritative product concept document covers language_framework_runtime for Flow Finance AI.",
+      "delegation_confidence": "high"
+    },
+    {
+      "topic_key": "architecture_preference",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "Firefly III sole transaction source (read-only); Flow Finance AI layer for analysis/forecast/plan/AI; Redis optional; modular engines.",
+      "intake_run_id": "intake-20260531-flow-finance",
+      "turn_index": 3,
+      "ref": "ie:intake-20260531-flow-finance:3:c16bbdc571708b8c",
+      "delegation_scope": "Projectplan.md",
+      "delegation_rationale": "Authoritative product concept document covers architecture_preference for Flow Finance AI.",
+      "delegation_confidence": "high"
+    },
+    {
+      "topic_key": "ui_design_expectations",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "Modern React UI with shadcn/ui, ECharts charts, OIDC auth; Grafana for operational dashboards; confirm/reject flows for subscriptions.",
+      "intake_run_id": "intake-20260531-flow-finance",
+      "turn_index": 4,
+      "ref": "ie:intake-20260531-flow-finance:4:3dbfdfeffa1c146a",
+      "delegation_scope": "Projectplan.md",
+      "delegation_rationale": "Authoritative product concept document covers ui_design_expectations for Flow Finance AI.",
+      "delegation_confidence": "high"
+    },
+    {
+      "topic_key": "security_compliance",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "Self-hosted GDPR-friendly; privacy layer with redaction options; AI never direct DB access \u2014 tools only; no Firefly writes.",
+      "intake_run_id": "intake-20260531-flow-finance",
+      "turn_index": 5,
+      "ref": "ie:intake-20260531-flow-finance:5:794feb40bf57eef8",
+      "delegation_scope": "Projectplan.md",
+      "delegation_rationale": "Authoritative product concept document covers security_compliance for Flow Finance AI.",
+      "delegation_confidence": "high"
+    },
+    {
+      "topic_key": "non_functional_priorities",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "Self-hosting, data sovereignty, extensibility, read-only Firefly guarantee, Docker Compose deployability, dev testability with live Firefly API.",
+      "intake_run_id": "intake-20260531-flow-finance",
+      "turn_index": 6,
+      "ref": "ie:intake-20260531-flow-finance:6:2f9e2c2abb23581c",
+      "delegation_scope": "Projectplan.md",
+      "delegation_rationale": "Authoritative product concept document covers non_functional_priorities for Flow Finance AI.",
+      "delegation_confidence": "high"
+    },
+    {
+      "topic_key": "scope_timeline",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "7-phase roadmap: MVP (Firefly+forecast+Grafana) \u2192 subscriptions \u2192 planning \u2192 AI \u2192 crypto \u2192 local AI \u2192 advanced ML; 9 vertical-slice user stories.",
+      "intake_run_id": "intake-20260531-flow-finance",
+      "turn_index": 7,
+      "ref": "ie:intake-20260531-flow-finance:7:eac27eba9ce9d343",
+      "delegation_scope": "Projectplan.md",
+      "delegation_rationale": "Authoritative product concept document covers scope_timeline for Flow Finance AI.",
+      "delegation_confidence": "high"
+    }
+  ],
+  "candidate_story_ids": [
+    "US-0001",
+    "US-0002",
+    "US-0003",
+    "US-0004",
+    "US-0005",
+    "US-0006",
+    "US-0007",
+    "US-0008",
+    "US-0009"
+  ],
+  "plan_area_inventory": [
+    {
+      "plan_area_id": "platform-foundation",
+      "title": "Platform & deployment foundation"
+    },
+    {
+      "plan_area_id": "firefly-integration",
+      "title": "Firefly III read-only connector"
+    },
+    {
+      "plan_area_id": "forecasting",
+      "title": "Cashflow forecasting engine"
+    },
+    {
+      "plan_area_id": "grafana-analytics",
+      "title": "Grafana dashboards & alerting hooks"
+    },
+    {
+      "plan_area_id": "subscriptions",
+      "title": "Subscription detection & price changes"
+    },
+    {
+      "plan_area_id": "planning",
+      "title": "Financial planning & scenarios"
+    },
+    {
+      "plan_area_id": "alerts-wealth",
+      "title": "Alerts, budget drift & wealth analysis"
+    },
+    {
+      "plan_area_id": "ai-assistant",
+      "title": "AI assistant with tool layer"
+    },
+    {
+      "plan_area_id": "crypto-portfolio",
+      "title": "Crypto exchange portfolio"
+    },
+    {
+      "plan_area_id": "local-ai",
+      "title": "Local/self-hosted AI providers"
+    },
+    {
+      "plan_area_id": "advanced-forecasting",
+      "title": "ML & advanced forecasting"
+    }
+  ],
+  "plan_area_coverage": [
+    {
+      "plan_area_id": "platform-foundation",
+      "story_ids": [
+        "US-0001"
+      ]
+    },
+    {
+      "plan_area_id": "firefly-integration",
+      "story_ids": [
+        "US-0001"
+      ]
+    },
+    {
+      "plan_area_id": "forecasting",
+      "story_ids": [
+        "US-0002"
+      ]
+    },
+    {
+      "plan_area_id": "grafana-analytics",
+      "story_ids": [
+        "US-0002"
+      ]
+    },
+    {
+      "plan_area_id": "subscriptions",
+      "story_ids": [
+        "US-0003"
+      ]
+    },
+    {
+      "plan_area_id": "planning",
+      "story_ids": [
+        "US-0004"
+      ]
+    },
+    {
+      "plan_area_id": "alerts-wealth",
+      "story_ids": [
+        "US-0005"
+      ]
+    },
+    {
+      "plan_area_id": "ai-assistant",
+      "story_ids": [
+        "US-0006"
+      ]
+    },
+    {
+      "plan_area_id": "crypto-portfolio",
+      "story_ids": [
+        "US-0007"
+      ]
+    },
+    {
+      "plan_area_id": "local-ai",
+      "story_ids": [
+        "US-0008"
+      ]
+    },
+    {
+      "plan_area_id": "advanced-forecasting",
+      "story_ids": [
+        "US-0009"
+      ]
+    }
+  ],
+  "coverage_complete": true
+}
