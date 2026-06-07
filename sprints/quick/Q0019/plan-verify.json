@@ -1,0 +1,112 @@
+{
+  "sprint": "Q0019",
+  "bug_id": "BUG-0011",
+  "orchestrator_run_id": "auto-20260608-bug0011-001",
+  "verified_at": "2026-06-08T07:40:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0011",
+  "tasks_source": "sprints/quick/Q0019/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0011",
+  "decision_alignment": {
+    "decisions": ["DEC-0073", "DEC-0074"],
+    "research_basis": ["R-0070", "R-0015", "R-0016", "R-0017", "R-0020"],
+    "contract_elements_covered": [
+      "DEC-0073 AE1: monthly_overlay_delta_sum helper via build_overlay_deltas",
+      "DEC-0073 AE2: version_metrics + service in-memory compare paths wired to overlay-only sum",
+      "DEC-0073 AE3: zero-overlay monthly_delta_sum 0.00; Leasing ~overlay delta unit tests",
+      "DEC-0074 AF1: PlanVsActualApiResponse tagged enum; route 200 no_active_plan (not 404)",
+      "DEC-0074 AF2: PVA tab guided empty state mirroring risk-score NoScore pattern",
+      "AD1: first-run Create empty plan (POST template=custom)",
+      "AD2: inline add/edit adjustment form (POST/PATCH existing routes)",
+      "AD3: Custom Apply toast + query invalidation",
+      "AD4: compare help footnote + post-create Set active banner",
+      "T1: compare + plan-vs-actual integration tests",
+      "V1: operator OIDC /planning three-tab smoke after BACKEND_FRONTEND_DEPLOY"
+    ],
+    "frozen_boundaries_respected": [
+      "AE-before-AF mandatory — AE1 helper frozen before AF1 API shape",
+      "projected_month_end_balance unchanged (full scenario) — overlay delta only for monthly_delta_sum",
+      "No auto-activate on plan create — explicit Set active operator action",
+      "Grafana Dashboard 3 (budgets.json) unchanged — compare fix is /compare endpoint + React tab only",
+      "US-0014 holistic UX epic deferred — AD bounded to functional fixes",
+      "No AI simulate_plan changes",
+      "PVA 404→200 documented breaking change — changelog + user guide",
+      "Compare number shift for non-empty plans — release note mandatory (R-0016)"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "AE1 → AE2 → AE3 → AF1 → AF2 → AD1 → AD2 → AD3 → AD4 → T1 → deploy backend + frontend → V1 verify-work",
+    "notes": "AE1 before AF1 (AE-before-AF frozen); AF1 before AF2 and AD1 (API contract freeze); AD chain AD1→AD2→AD3→AD4; T1 after AE3+AF1; V1 gated on BACKEND_FRONTEND_DEPLOY after T1"
+  },
+  "test_coverage": {
+    "unit_fixtures": "AE3: zero adjustments → monthly_delta_sum 0.00; Leasing template ~overlay delta; AF1: no_active_plan serializes 200 tagged JSON",
+    "integration": "T1: GET /compare overlay semantics; GET /plans/active/plan-vs-actual with/without active plan",
+    "operator_tests": "V1: AD empty create + add-line; AE compare zero/neutral deltas; AF PVA guided card; REG OIDC /planning three-tab smoke; Grafana Dashboard 3 unchanged",
+    "doc_review": "V1 uses sprints/quick/Q0019/uat.md smoke checklist mapping AD/AE/AF + regression footer",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AD",
+      "criterion": "On /planning Scenarios, clicking Start empty and add lines creates an editable empty plan (add-line UX)—not silent no-op",
+      "tasks": ["AD1", "AD2", "AD3", "T1", "V1"],
+      "covered": true,
+      "notes": "AD1 Create empty plan + first-run empty state; AD2 inline POST/PATCH add/edit form; AD3 Custom Apply toast + invalidation; T1 integration; V1 omniflow AD smoke rows"
+    },
+    {
+      "acceptance_id": "AE",
+      "criterion": "Compare tab with empty/minimal plan shows zero or neutral deltas, not illogical aggregates (e.g. -127489.44 monthly delta) from missing baseline guards",
+      "tasks": ["AE1", "AE2", "AE3", "AD4", "T1", "V1"],
+      "covered": true,
+      "notes": "AE1–AE3 DEC-0073 overlay-only monthly_delta_sum; zero-overlay → 0.00; AD4 footnote explains projected balance may differ from delta; T1/V1 compare probes"
+    },
+    {
+      "acceptance_id": "AF",
+      "criterion": "GET /api/v1/plans/active/plan-vs-actual returns 200 with JSON when active plan exists, or 200 documented empty-state/guided UX when none—not raw 404 breaking Plan vs Actual tab",
+      "tasks": ["AF1", "AF2", "T1", "V1"],
+      "covered": true,
+      "notes": "AF1 tagged PlanVsActualApiResponse 200 no_active_plan; AF2 guided PVA tab mirroring risk-score; T1 route integration; V1 AF smoke rows"
+    },
+    {
+      "acceptance_id": "REGRESSION",
+      "criterion": "OIDC-enabled deploy regression checks pass (acceptance footer)",
+      "tasks": ["T1", "V1"],
+      "covered": true,
+      "notes": "T1 automated backend regression; V1 uat.md REG-1/REG-2 — operator post-deploy verify-work"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Acceptance AE cites projected month-end (-4042.41) as illogical aggregate; DEC-0073 frozen contract keeps projected_month_end_balance as full scenario (may remain negative). AD4 compare footnote is the UX mitigation — aligned with architecture § BUG-0011."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "OIDC + bundled-firefly regression footer has no dedicated dev task beyond T1/V1; operator verify-work post-V1 per uat.md."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "V1 gated on BACKEND_FRONTEND_DEPLOY — omniflow runtime probes deferred until deploy (standard quick-sprint pattern)."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 3,
+    "covered_count": 3,
+    "gap_count": 0,
+    "task_count": 11,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0073_aligned": true,
+    "dec_0074_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true
+  },
+  "notes": "QA plan-verify 2026-06-08: sprints/quick/Q0019/tasks.md aligns with docs/product/acceptance.md BUG-0011 rows AD/AE/AF and architecture § BUG-0011 / DEC-0073 / DEC-0074; 11/11 tasks mapped (AE1–AE3, AF1–AF2, AD1–AD4, T1, V1); AE-before-AF frozen; 0 gaps; 0 orphans. Approved for /execute."
+}

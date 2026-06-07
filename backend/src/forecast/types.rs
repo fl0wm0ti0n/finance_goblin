@@ -43,6 +43,20 @@ pub struct PortfolioWeeklyPoint {
     pub value_p90: Option<f64>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct BucketSourceMass {
+    pub config: f64,
+    pub ai: f64,
+    pub default: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct MonthlyBucketSources {
+    pub income: String,
+    pub fixed_costs: String,
+    pub variable_costs: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct MonthlyCashflow {
     pub month: NaiveDate,
@@ -50,6 +64,8 @@ pub struct MonthlyCashflow {
     pub fixed_costs: f64,
     pub variable_costs: f64,
     pub free_cashflow: f64,
+    pub bucket_sources: Option<MonthlyBucketSources>,
+    pub ai_mapped: bool,
 }
 
 #[derive(Debug, Clone)]

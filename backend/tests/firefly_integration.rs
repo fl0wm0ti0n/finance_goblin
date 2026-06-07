@@ -46,6 +46,7 @@ fn test_config(base_url: &str) -> AppConfig {
             retention_count: 5,
             recurring_amount_tolerance_pct: 5.0,
             category_buckets: std::collections::HashMap::new(),
+            ai_bucket_min_confidence: 0.75,
         },
         subscriptions: flow_finance_ai::config::SubscriptionsConfig::default(),
         plans: flow_finance_ai::config::PlansConfig::default(),

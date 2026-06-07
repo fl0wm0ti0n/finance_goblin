@@ -83,6 +83,15 @@ pub struct ConfirmedRecurring {
     pub fingerprint: String,
 }
 
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct ConfirmedPayeeInterval {
+    pub id: Uuid,
+    pub fingerprint: String,
+    pub payee_key: String,
+    pub interval_days: i32,
+    pub confirmed_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct DetectionResult {
     pub confirmed_recurring: Vec<ConfirmedRecurring>,
@@ -155,4 +164,20 @@ pub struct AlertRow {
     pub body: Option<String>,
     pub read_at: Option<chrono::DateTime<chrono::Utc>>,
     pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UnreadAlertCountResponse {
+    pub unread_total: i64,
+    pub unread_new_detection: i64,
+    pub unread_price_change: i64,
+    pub pending_patterns: i64,
+    pub reconciled: bool,
+    pub reconciliation_note: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingUpsertOutcome {
+    pub id: Uuid,
+    pub emit_detection_alert: bool,
 }

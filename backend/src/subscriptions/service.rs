@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::config::SubscriptionsConfig;
 use crate::db::DbPool;
 
-use super::detection::DetectionPipeline;
+use super::detection::{build_active_payee_intervals, DetectionPipeline};
 use super::repository::SubscriptionRepository;
 use super::types::DetectionResult;
 
@@ -38,10 +38,22 @@ impl SubscriptionService {
         let rejections = self.repo.load_rejection_fingerprints().await?;
         let forecast_excluded = self.repo.load_forecast_excluded_rejections().await?;
         let confirmed_fps = self.repo.load_confirmed_fingerprints().await?;
+        let confirmed_payee_intervals = self.repo.load_confirmed_payee_intervals().await?;
+        let rejected_payee_intervals = self.repo.load_rejected_payee_intervals().await?;
 
         let pipeline = DetectionPipeline::new(&self.repo);
-        let _candidates = pipeline
-            .run_candidates(sync_run_id, &rejections, &confirmed_fps)
+        let candidate_result = pipeline
+            .run_candidates(
+                sync_run_id,
+                &rejections,
+                &confirmed_fps,
+                &confirmed_payee_intervals,
+                &rejected_payee_intervals,
+            )
+            .await?;
+
+        pipeline
+            .mark_stale_inactive(&build_active_payee_intervals(&candidate_result.groups))
             .await?;
 
         pipeline.process_confirmed(sync_run_id).await?;
@@ -96,6 +108,12 @@ impl SubscriptionService {
                 })
             })
             .collect())
+    }
+
+    pub async fn unread_alert_counts(
+        &self,
+    ) -> Result<super::types::UnreadAlertCountResponse, SubscriptionError> {
+        Ok(self.repo.unread_alert_counts().await?)
     }
 
     pub async fn fallback_detection_result(&self) -> DetectionResult {

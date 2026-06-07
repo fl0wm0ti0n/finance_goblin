@@ -89,11 +89,12 @@
       "fieldConfig": { "defaults": { "unit": "currencyEUR" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
       "id": 5,
+      "description": "Month-to-date planned sums elapsed plan days only (capped at CURRENT_DATE). When the active plan horizon starts after month start, planned MTD reflects elapsed days only — not the full plan horizon.",
       "options": { "showHeader": true },
       "targets": [
         {
           "format": "table",
-          "rawSql": "WITH planned AS (SELECT COALESCE(SUM(pdc.planned_net), 0)::numeric AS total FROM plan_daily_cashflow pdc JOIN plan_versions v ON v.id = pdc.version_id JOIN plans p ON p.id = v.plan_id WHERE p.is_active = true AND v.is_latest = true AND pdc.computation_id = (SELECT pc.id FROM plan_computations pc WHERE pc.version_id = v.id AND pc.status = 'success' ORDER BY pc.computed_at DESC LIMIT 1) AND pdc.ts >= date_trunc('month', CURRENT_DATE)), actual AS (SELECT COALESCE(SUM(t.amount), 0)::numeric AS total FROM transactions t JOIN accounts a ON a.firefly_id = t.account_id WHERE a.type = 'asset' AND COALESCE(t.payload->'attributes'->>'type', '') != 'transfer' AND t.date >= date_trunc('month', CURRENT_DATE)::date) SELECT 'Planned MTD' AS metric, (SELECT total FROM planned) AS amount UNION ALL SELECT 'Actual MTD', (SELECT total FROM actual) UNION ALL SELECT 'Deviation MTD', (SELECT total FROM actual) - (SELECT total FROM planned)",
+          "rawSql": "WITH planned AS (SELECT COALESCE(SUM(pdc.planned_net), 0)::numeric AS total FROM plan_daily_cashflow pdc JOIN plan_versions v ON v.id = pdc.version_id JOIN plans p ON p.id = v.plan_id WHERE p.is_active = true AND v.is_latest = true AND pdc.computation_id = (SELECT pc.id FROM plan_computations pc WHERE pc.version_id = v.id AND pc.status = 'success' ORDER BY pc.computed_at DESC LIMIT 1) AND pdc.ts >= date_trunc('month', CURRENT_DATE) AND pdc.ts::date <= CURRENT_DATE), actual AS (SELECT COALESCE(SUM(t.amount), 0)::numeric AS total FROM transactions t JOIN accounts a ON a.firefly_id = t.account_id WHERE a.type = 'asset' AND COALESCE(t.payload->'attributes'->>'type', '') != 'transfer' AND t.date >= date_trunc('month', CURRENT_DATE)::date) SELECT 'Planned MTD' AS metric, (SELECT total FROM planned) AS amount UNION ALL SELECT 'Actual MTD', (SELECT total FROM actual) UNION ALL SELECT 'Deviation MTD', (SELECT total FROM actual) - (SELECT total FROM planned)",
           "refId": "A"
         }
       ],

@@ -1,0 +1,30 @@
+{
+  "id": "S0015",
+  "story_ids": ["US-0014"],
+  "status": "PLANNED",
+  "created": "2026-06-08",
+  "orchestrator_run_id": "auto-20260608-us0014-001",
+  "goal": "Deliver DEC-0077 planning mutation feedback: page-local planningFeedback helper, mandatory onError on 7 mutations, success confirmations, plan-vs-actual invalidation, set-active banner Dashboard 3 copy, verify shipped Compare/PVA UX, finalize user guide US-0014.",
+  "scope": [
+    "planningFeedback helper (success/error card variants, single active slot)",
+    "onError on all 7 PlanningPage mutations (AC-7)",
+    "Success toasts: createPlan, applyTemplate (all), addAdjustment, activate (AC-2, AC-5)",
+    "plan-vs-actual invalidation on adjustment CRUD + activate + createPlan",
+    "Set-active banner: Plan vs Actual + Grafana Dashboard 3 (budgets) copy (AC-6)",
+    "AC-1 onboarding regression verify (no Q0019 rewrite)",
+    "AC-3/AC-4 Compare footnote + PVA guided card verify",
+    "docs/user-guides/US-0014.md validate against shipped UI",
+    "UAT OIDC /planning three-tab smoke template (BACKEND_FRONTEND_DEPLOY gate)"
+  ],
+  "risks": [
+    "Toast flood — single feedback slot mitigates rapid retry",
+    "Q0019 duplicate work — AC-1/AC-3/AC-4 verify-only",
+    "DEC-0073/0074 frozen — no Compare formula or PVA API changes",
+    "AC-8 operator gate — BACKEND_FRONTEND_DEPLOY prerequisite for omniflow smoke"
+  ],
+  "task_count": 8,
+  "decisions": ["DEC-0077"],
+  "research": ["R-0072", "R-0073"],
+  "slices": ["US-0014-S1", "US-0014-S2", "US-0014-S3"],
+  "split_decision": "no_split — 8 tasks < SPRINT_MAX_TASKS 12; S2-weighted sequencing"
+}

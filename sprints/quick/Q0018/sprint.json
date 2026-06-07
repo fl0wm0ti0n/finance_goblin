@@ -1,0 +1,65 @@
+{
+  "id": "Q0018",
+  "type": "quick",
+  "bug_ids": ["BUG-0008"],
+  "status": "PLANNED",
+  "created": "2026-06-08",
+  "goal": "Close BUG-0008: DEC-0071 W bundle (fingerprint dedup, upsert_alert, unread-count API, orphan lifecycle, banner/toast) + DEC-0072 X Phase 1 (payee normalization, transfer counterparty priority, 730-day window); operator verify W/X on financegnome.omniflow.cc after deploy.",
+  "scope": [
+    "W1: Fingerprint migration + backfill dedupe",
+    "W2: upsert_alert repository ON CONFLICT",
+    "W3: Detection emit gate (new pending or tier increase only)",
+    "W4: GET /api/v1/subscriptions/alerts/unread-count",
+    "W5: Orphan lifecycle mark-read on confirm/reject/inactive",
+    "W6: Frontend banner + toast from unread-count API",
+    "W7: Backend dedup + lifecycle tests",
+    "X1: Payee normalization (SEPA strip, suffix collapse)",
+    "X2: Transfer-type counterparty priority guard",
+    "X3: detection_window_days 365 → 730",
+    "X4: Forecast + subscription integration tests",
+    "V1: verify-work omniflow smoke rows W/X"
+  ],
+  "risks": [
+    "X before W re-amplifies alert spam — mitigated by frozen W1–W3 before X1 order",
+    "Over-merge from counterparty priority — transfer-type guard only",
+    "Forecast regression from payee_key changes — X4 integration tests (DEC-0013)",
+    "Partial unique + NULL backfill — W1 backfill before NOT NULL",
+    "BUG-0007 coordinate — additive unread-count route only"
+  ],
+  "task_count": 12,
+  "estimate_total_hours": 24,
+  "decisions": ["DEC-0071", "DEC-0072"],
+  "research": ["R-0068", "R-0069", "R-0009", "R-0010", "R-0011", "R-0012", "R-0013", "R-0065"],
+  "acceptance_rows": ["W", "X"],
+  "execute_order": ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "X1", "X2", "X3", "X4", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Deploy W1–X4+W7 backend + W6 frontend before V1 omniflow smoke"
+    }
+  ],
+  "acceptance_mapping": {
+    "W": {
+      "tasks": ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "V1"],
+      "verify": "Reconciled unread_new_detection vs pending_patterns; banner uses unread-count API; no 33-vs-11 class mismatch"
+    },
+    "X": {
+      "tasks": ["X1", "X2", "X3", "X4", "V1"],
+      "verify": "Patterns > 12 baseline; unread_new_detection <= pending_patterns after recall improvements"
+    }
+  },
+  "deploy_order": [
+    "(W1 → W2 → W3) migration + repository + detection gate",
+    "(W4 → W5) API + lifecycle",
+    "W6 frontend",
+    "(X1 → X2 → X3) recurrence core",
+    "(W7 → X4) tests",
+    "Deploy backend + frontend on omniflow",
+    "V1 verify-work smoke"
+  ],
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260608-q0018-bug0008",
+  "architecture_ref": "architecture-20260608-bug0008"
+}

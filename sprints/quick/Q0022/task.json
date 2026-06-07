@@ -1,0 +1,261 @@
+{
+  "id": "Q0022",
+  "title": "BUG-0014 post-rebuild omniflow cluster (ML banner, holdings/FX, planning)",
+  "status": "PLANNED",
+  "bug_id": "BUG-0014",
+  "architecture_ref": "architecture-20260609-bug0014",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["AO", "AP", "AQ", "AR", "AS", "AT"],
+  "acceptance_mapping": {
+    "AO": {
+      "tasks": ["AO1", "V1"],
+      "primary_verify": "forecast/meta ML available or dual-scenario Grafana banner — not misleading US-0013 disabled copy when ML enabled"
+    },
+    "AP": {
+      "tasks": ["AP2", "V1"],
+      "primary_verify": "crypto.subtotal_eur > 0 when wallet priced; defensive subtotal only if AP1 gate passes"
+    },
+    "AQ": {
+      "tasks": ["AQ1", "AQ2", "V1"],
+      "primary_verify": "holdings_all native+EUR; unified fx_incomplete from PnL unpriced_assets"
+    },
+    "AR": {
+      "tasks": ["AR1", "V1"],
+      "primary_verify": "cashflow acct 114 non-zero balances post sync; AR1 only API≠Grafana"
+    },
+    "AS": {
+      "tasks": ["AS1", "AS2", "V1"],
+      "primary_verify": "plan delete UI + 409 active guard; target_type enum aligned with DB"
+    },
+    "AT": {
+      "tasks": ["V1"],
+      "primary_verify": "three-service compose smoke — stats-forecast container when ML enabled"
+    }
+  },
+  "task_count": 8,
+  "mandatory_task_count": 5,
+  "conditional_task_ids": ["AP2", "AR1"],
+  "optional_task_ids": ["AS2"],
+  "estimate_total_hours": 14,
+  "tasks": [
+    {
+      "id": "AO1",
+      "title": "Grafana forecast-horizons panel 13 dual-scenario ML copy",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0014 (AO) — dual-scenario ML banner",
+      "files": ["grafana/provisioning/dashboards/analytics/forecast-horizons.json"],
+      "decisions": ["DEC-0066", "DEC-0076"],
+      "research": ["R-0079"],
+      "tests": [
+        "Panel id 13 markdown distinguishes ML-not-configured vs sidecar-unreachable",
+        "US-0013 runbook link present for not-configured path",
+        "DEC-0076 three-service compose named for unreachable path"
+      ]
+    },
+    {
+      "id": "AQ1",
+      "title": "Wealth holdings_all + unpriced_assets + fx_incomplete",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 3,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0014 (AQ) — DEC-0081 backend contract",
+      "files": [
+        "backend/src/wealth/service.rs",
+        "backend/src/wealth/types.rs"
+      ],
+      "decisions": ["DEC-0081", "DEC-0064", "DEC-0080"],
+      "research": ["R-0079"],
+      "tests": [
+        "holdings_all cap 50; priced first by value_eur desc",
+        "fx_incomplete = pnl.fx_incomplete || !unpriced_assets.is_empty()",
+        "holdings_top remains priced top-5 subset",
+        "cargo test wealth paths PASS"
+      ]
+    },
+    {
+      "id": "AQ2",
+      "title": "WealthPage native qty + EUR display + unified FX banner",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["AQ1"],
+      "acceptance_hook": "BUG-0014 (AQ) — DEC-0081 frontend",
+      "files": [
+        "frontend/src/pages/WealthPage.tsx",
+        "frontend/src/lib/api.ts"
+      ],
+      "decisions": ["DEC-0081"],
+      "research": ["R-0079"],
+      "tests": [
+        "Crypto table renders holdings_all with native_unit and value_eur columns",
+        "FX incomplete banner uses same flag and unpriced_assets as API",
+        "Linear rows show unrealized EUR without inflating subtotal display"
+      ]
+    },
+    {
+      "id": "AS1",
+      "title": "PlanningPage delete plan + active-plan 409 guard",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0014 (AS) — DEC-0082",
+      "files": [
+        "backend/src/api/plans.rs",
+        "backend/src/plan/service.rs",
+        "frontend/src/pages/PlanningPage.tsx"
+      ],
+      "decisions": ["DEC-0082", "DEC-0077"],
+      "research": ["R-0079"],
+      "tests": [
+        "DELETE active plan returns 409 active_plan_delete_forbidden",
+        "DELETE non-active plan succeeds with CASCADE",
+        "React confirm modal; active plan delete disabled with tooltip",
+        "DEC-0077 error surface on 409"
+      ]
+    },
+    {
+      "id": "AS2",
+      "title": "Planning adjustment target_type select + help copy",
+      "status": "open",
+      "priority": "P1",
+      "optional": true,
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0014 (AS) — DEC-0083",
+      "files": [
+        "frontend/src/pages/PlanningPage.tsx",
+        "frontend/src/lib/api.ts"
+      ],
+      "decisions": ["DEC-0083"],
+      "research": ["R-0079"],
+      "tests": [
+        "Invalid account option removed from select",
+        "category, custom_label, allocation_target exposed with help copy",
+        "API types align with backend enum"
+      ]
+    },
+    {
+      "id": "AP2",
+      "title": "Defensive crypto subtotal + holdings count annotation",
+      "status": "open",
+      "priority": "P0",
+      "conditional": true,
+      "estimate_hours": 1.5,
+      "depends_on": ["AQ1"],
+      "operator_gate": "AP1_SQL_PROBE — futures row priced AND API subtotal_eur=0",
+      "acceptance_hook": "BUG-0014 (AP) — DEC-0080 extension",
+      "files": ["backend/src/wealth/service.rs"],
+      "decisions": ["DEC-0080", "DEC-0064"],
+      "research": ["R-0079"],
+      "tests": [
+        "Defensive subtotal uses portfolio snapshot crypto_value_eur only when sum(market_value_eur)==0 AND pnl.crypto_value_eur>0",
+        "Log when defensive fallback used",
+        "Exchange card annotates N holdings (M priced) when counts diverge",
+        "Linear notional NOT merged into subtotal"
+      ]
+    },
+    {
+      "id": "AR1",
+      "title": "Cashflow Grafana variable/computation fix",
+      "status": "open",
+      "priority": "P2",
+      "conditional": true,
+      "estimate_hours": 1.5,
+      "depends_on": [],
+      "trigger": "V1 AR verify: GET /api/v1/forecast/daily?account_id=114 non-zero AND cashflow panel SQL zero",
+      "acceptance_hook": "BUG-0014 (AR) — Grafana/API mismatch only",
+      "files": ["grafana/provisioning/dashboards/analytics/cashflow.json"],
+      "decisions": [],
+      "research": ["R-0079"],
+      "tests": [
+        "Panel id 1 balance forecast returns rows matching API computation",
+        "account_id variable defaults to 114",
+        "Time range now-30d to now+6M aligned with verify gate"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work omniflow smoke AO–AT",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["AO1", "AQ1", "AQ2", "AS1"],
+      "operator_gate": "BACKEND_FRONTEND_DEPLOY + THREE_SERVICE_COMPOSE + FULL_FIREFLY_SYNC + GRAFANA_PROVISIONING_RELOAD + AP1_SQL_PROBE",
+      "acceptance_hook": "BUG-0014 (AO)–(AT) — financegnome.omniflow.cc probes",
+      "files": [
+        "sprints/quick/Q0022/uat.md",
+        "docs/engineering/runbook.md"
+      ],
+      "tests": [
+        "forecast/meta ml_status when sidecar healthy",
+        "GET /api/v1/wealth holdings_all + subtotal probes",
+        "DELETE plan UI + 409 active guard",
+        "GET /api/v1/forecast/daily account_id=114 non-zero",
+        "/analytics/cashflow balance panels acct 114",
+        "docker ps includes stats-forecast on external profile",
+        "Six /analytics/{slug} routes regression"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "AO1 + AQ1 + AQ2 + AS1 (+ AS2) single release",
+    "AP2 if AP1 gate passes",
+    "Operator gates: deploy, three-service compose, Full sync, Grafana reload",
+    "AR1 if V1 AR verify gate fails",
+    "V1 verify-work smoke"
+  ],
+  "execute_order": ["AO1", "AQ1", "AQ2", "AS1", "AS2", "AP2", "AR1", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1", "AP2"],
+      "action": "Deploy Q0020+ bundle on omniflow before wealth and AP1 SQL probes",
+      "rationale": "DEC-0080 wallet pricing prerequisite for AP subtotal diagnosis"
+    },
+    {
+      "id": "THREE_SERVICE_COMPOSE",
+      "before_tasks": ["V1"],
+      "action": "Start stats-forecast alongside flow-finance-ai + grafana per DEC-0076",
+      "rationale": "AO/AT ML sidecar availability"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "action": "Full Firefly sync + forecast recompute acct 114",
+      "rationale": "Forecast and wealth data freshness for AR/AQ/AP probes"
+    },
+    {
+      "id": "GRAFANA_PROVISIONING_RELOAD",
+      "before_tasks": ["V1"],
+      "action": "Reload Grafana provisioning after AO1 (and AR1 if executed)",
+      "rationale": "forecast-horizons and cashflow JSON changes require reload"
+    },
+    {
+      "id": "AP1_SQL_PROBE",
+      "before_tasks": ["AP2"],
+      "action": "SELECT product_type, asset, quantity, market_value_eur FROM exchange_holdings WHERE exchange_id='bitunix'",
+      "rationale": "AP2 only when futures row priced but API subtotal_eur=0"
+    }
+  ],
+  "frozen_boundaries": [
+    "Execute AO1 + AQ + AS1 mandatory; AP2 conditional on AP1; AR1 conditional on V1 AR gate",
+    "AO/AT runtime ops-only — not sprint code tasks",
+    "AP1 operator SQL probe — gate not sprint task",
+    "No ExchangePriceBook tier-2 population this sprint",
+    "No Grafana dynamic Postgres variable for ML banner (option B deferred)",
+    "No target_type enum expansion beyond DEC-0083 UI alignment",
+    "Linear notional must not enter crypto.subtotal_eur — DEC-0064 preserved",
+    "AS2 P1 optional — skip if capacity tight without blocking P0 closure"
+  ],
+  "decisions": ["DEC-0081", "DEC-0082", "DEC-0083", "DEC-0080", "DEC-0064", "DEC-0066", "DEC-0076", "DEC-0077"],
+  "research": ["R-0079"],
+  "operator_next": "After bundle deploy: three-service compose + Full sync + recompute acct 114; AP1 SQL before AP2; then V1 verify-work on financegnome.omniflow.cc",
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260610-q0022-bug0014",
+  "orchestrator_run_id": "auto-20260607-bug0014-001"
+}

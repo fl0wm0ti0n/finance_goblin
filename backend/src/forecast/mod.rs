@@ -1,3 +1,4 @@
+pub mod bucket_inference;
 pub mod categories;
 pub mod project;
 pub mod recurring;

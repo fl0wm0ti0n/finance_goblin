@@ -1,0 +1,115 @@
+{
+  "sprint": "Q0021",
+  "stories": ["US-0017"],
+  "story_id": "US-0017",
+  "phase": "verify-work",
+  "plan_verified_at": "2026-06-09T19:00:00Z",
+  "qa_verified_at": "2026-06-06T21:05:00Z",
+  "verified_at": "2026-06-06T21:30:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_verify_work": false,
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0017",
+  "qa_evidence": "sprints/quick/Q0021/qa-findings.md",
+  "decisions": ["DEC-0070"],
+  "research": ["R-0078", "R-0066", "R-0067"],
+  "orchestrator_run_id": "auto-20260609-us0017-001",
+  "environment": {
+    "omniflow_host_available": false,
+    "runtime_mode": "doc-only",
+    "runtime_reason_code": "DOC_ONLY_SCOPE"
+  },
+  "automated_checks": [
+    {
+      "id": "VW-AUTO-1",
+      "description": "python3 scripts/validate_doc_profile.py --repo . --no-template-parity",
+      "result": "pass",
+      "notes": "Verify-work 2026-06-06 — [DOC_PROFILE_VALIDATE_OK] exit 0"
+    },
+    {
+      "id": "VW-AUTO-2",
+      "description": "DEC-0070 H3 placement + split layout (no ## Troubleshooting root H2; H2 budget ≤ 8)",
+      "result": "pass",
+      "notes": "Six root H2s; ### Omniflow smoke under Examples; ### Troubleshooting under Limitations"
+    },
+    {
+      "id": "VW-AUTO-3",
+      "description": "Per-segment Product status maintenance hooks (dev README + runbook § README maintenance)",
+      "result": "pass",
+      "notes": "docs/developer/README.md Quality gates; runbook release-segment + per-id hooks"
+    },
+    {
+      "id": "VW-AUTO-4",
+      "description": "python3 scripts/enforce-triad-hot-surface.py --check",
+      "result": "pass",
+      "notes": "Per qa-findings — exit 0"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "Root README Examples include omniflow external-profile smoke commands (sync trigger, forecast recompute pointer, six /analytics/{slug} routes, exchange sync sanity) — not localhost-only",
+      "result": "pass",
+      "tasks": ["E1", "UG1"],
+      "evidence": "README.md ### Omniflow smoke (external profile); OMNI=https://financegnome.omniflow.cc; placeholder Traefik auth; gate sequence; six-route table; docs/user-guides/US-0017.md mirrors smoke block"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "Limitations/Troubleshooting documents empty-Grafana vs ML-unavailable distinction, BACKEND_FRONTEND_DEPLOY cadence, and sync+recompute prerequisite for non-zero analytics",
+      "result": "pass",
+      "tasks": ["E2", "UG1"],
+      "evidence": "README.md ### Troubleshooting — 6-row symptom table; ML-unavailable vs empty-panel distinction; user guide lines 62–75 duplicate table"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "Product status lists US-0015 and post-US-0016 closures (verify-only at execute; US-0017 bullet deferred to release)",
+      "result": "pass",
+      "tasks": ["E3"],
+      "evidence": "### Product status includes US-0015, US-0016, BUG-0013, US-0013–0014 closures; US-0017 append correctly deferred to /release per E3"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "docs/developer/README.md and runbook § documentation profile require Product status README update in release and refresh-context checklists for each closed US/BUG in the segment",
+      "result": "pass",
+      "tasks": ["E4", "E5"],
+      "evidence": "docs/developer/README.md lines 24–29 per-segment hooks; runbook § README maintenance lines 134–176 release segment definition + per-id hooks"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": "python scripts/validate_doc_profile.py --repo . exits 0; split layout preserved (no DEV_* H2 in root; H2 budget ≤ 8 per DEC-0059)",
+      "result": "pass",
+      "tasks": ["E6"],
+      "evidence": "Verify-work run: [DOC_PROFILE_VALIDATE_OK] exit 0 with --no-template-parity; six root H2s; Troubleshooting is H3 under Limitations"
+    }
+  ],
+  "row_verdicts": {
+    "AC-1": "pass",
+    "AC-2": "pass",
+    "AC-3": "pass",
+    "AC-4": "pass",
+    "AC-5": "pass"
+  },
+  "blockers": [],
+  "summary": {
+    "acceptance_criteria_total": 5,
+    "acceptance_criteria_pass": 5,
+    "passed": 5,
+    "pass_with_prerequisites": 0,
+    "failed": 0,
+    "pending": 0,
+    "automated_pass": 4
+  },
+  "operator_prerequisites": [
+    "Optional post-release: operator may run omniflow smoke curls from README.md ### Omniflow smoke (external profile) on https://financegnome.omniflow.cc — not required for doc-only US-0017 closure"
+  ],
+  "next_phase": "release",
+  "plan_verify_ref": "sprints/quick/Q0021/plan-verify.json",
+  "qa_ref": "sprints/quick/Q0021/qa-findings.md",
+  "verify_work_ref": "sprints/quick/Q0021/verify-work-findings.md"
+}

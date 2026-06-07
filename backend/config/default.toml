@@ -34,6 +34,7 @@ rolling_window_days = 90
 sparse_history_days = 90
 retention_count = 5
 recurring_amount_tolerance_pct = 5.0
+ai_bucket_min_confidence = 0.75
 
 # US-0009 ML overlay — requires `docker compose --profile full` + stats-forecast sidecar
 [forecast_ml]
@@ -68,7 +69,7 @@ utilities = "fixed"
 "hobby & freizeit - streaming" = "fixed"
 
 [subscriptions]
-detection_window_days = 365
+detection_window_days = 730
 full_rescan_interval_days = 7
 price_change_min_eur = 1.0
 price_change_min_pct = 5.0

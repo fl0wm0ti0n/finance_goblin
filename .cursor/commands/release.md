@@ -241,6 +241,17 @@ Guardrails:
      target-scoped repair and append entry to `docs/engineering/legacy-drift-audit.md`.
    - Behavior is deterministic and documented in runbook; do not mutate
      unrelated stories.
+3f. README feature coverage gate (US-0091 / DEC-0074):
+   - Read merged scratchpad `README_FEATURE_COVERAGE_ENFORCE` (default `0`).
+   - When `0`: skip with `skipped` evidence in `sprints/Sxxxx/release-findings.md`
+     § doc gates (grandfathering / migration pass).
+   - When `1`: run
+     `python scripts/validate_readme_feature_coverage.py --repo . --enforce`.
+   - On failure: emit `README_FEATURE_COVERAGE_BLOCKED` plus sub-codes on stderr;
+     remediation lists each missing id and target `root_h2` / `dev_h2` from
+     `docs/engineering/context/readme-section-affinity.json`.
+   - Active + `template/.cursor/commands/release.md` byte-identical step **3f**
+     block (full-file parity per US-0017).
 4. Verify UAT completeness (DEC-0009): confirm all sprint UAT artifacts (`uat.json`,
    `uat.md`) are in populated/verified state per DEC-0009. All steps must have
    recorded results. If any UAT is placeholder or incomplete, block release and

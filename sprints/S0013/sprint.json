@@ -1,0 +1,27 @@
+{
+  "id": "S0013",
+  "story_ids": ["US-0016"],
+  "status": "PLANNED",
+  "created": "2026-06-08",
+  "orchestrator_run_id": "auto-20260606-us0016-001",
+  "goal": "Deliver DEC-0070 root README living documentation: split-layout README.md, Product status subsection, related-doc cross-links, --no-template-parity validator gate, runbook maintenance hooks, developer shard pointer.",
+  "scope": [
+    "README.md split layout with 5 user H2s + Contributing pointer",
+    "Purpose + Product status seed (8 bullets max, backlog link)",
+    "Quickstart, Examples, Limitations Flow Finance AI content from .env.example and runbook",
+    "Related documentation cross-links and compose entry commands",
+    "validate_doc_profile --no-template-parity in tests/run-tests.sh / TEST_COMMAND",
+    "Runbook § README maintenance (US-0016) with release + refresh-context hooks",
+    "docs/developer/README.md workflow pointer to README maintenance"
+  ],
+  "risks": [
+    "Stale Product status — release fail-closed validator + refresh-context verify",
+    "--no-template-parity left on after template ships — runbook flip gate",
+    "Backlog dump in README — 8-bullet cap + backlog link",
+    "Operator validator command confusion — document both commands in runbook"
+  ],
+  "task_count": 7,
+  "decisions": ["DEC-0070"],
+  "research": ["R-0066", "R-0067"],
+  "deferred": ["T1 template flip gate — AC-6 vacuous until template/ tree exists"]
+}

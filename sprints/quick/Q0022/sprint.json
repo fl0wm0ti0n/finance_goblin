@@ -1,0 +1,105 @@
+{
+  "id": "Q0022",
+  "type": "quick",
+  "bug_ids": ["BUG-0014"],
+  "status": "PLANNED",
+  "created": "2026-06-10",
+  "goal": "Close BUG-0014 post-rebuild omniflow cluster: DEC-0081 AQ holdings/FX, DEC-0082 AS delete guard, DEC-0083 AS target_type UI, AO1 Grafana dual-scenario ML banner, conditional AP2 wealth subtotal (DEC-0080 extension), operator verify AO–AT on financegnome.omniflow.cc.",
+  "scope": [
+    "AO1: forecast-horizons.json panel 13 dual-scenario ML banner (DEC-0066/DEC-0076 extension)",
+    "AQ1: wealth holdings_all + wire unpriced_assets / fx_incomplete (DEC-0081)",
+    "AQ2: WealthPage native qty + EUR columns + unified FX banner",
+    "AS1: PlanningPage delete plan + active-plan 409 guard (DEC-0082)",
+    "AS2: target_type select + help copy — remove invalid account (DEC-0083)",
+    "AP2: defensive crypto subtotal + holdings count annotation (conditional on AP1 gate)",
+    "AR1: cashflow.json variable fix (conditional — API≠Grafana only)",
+    "V1: verify-work omniflow smoke rows AO–AT"
+  ],
+  "risks": [
+    "AP2 without AP1 SQL probe masks deploy gap — AP1 mandatory operator gate before AP2",
+    "AQ tier-2 alts still unpriced — DEC-0081 banner + list; defer ExchangePriceBook",
+    "Delete active plan confusion — DEC-0082 409 + disabled UI + modal copy",
+    "AR false positive code sprint — AR1 only when API non-zero and Grafana zero",
+    "Sidecar cold start — DEC-0076 runbook re-sync after healthcheck",
+    "Defensive subtotal snapshot fallback may mask stale holdings — log when used"
+  ],
+  "task_count": 8,
+  "mandatory_task_count": 5,
+  "conditional_task_ids": ["AP2", "AR1"],
+  "optional_task_ids": ["AS2"],
+  "estimate_total_hours": 14,
+  "decisions": ["DEC-0081", "DEC-0082", "DEC-0083", "DEC-0080", "DEC-0064", "DEC-0066", "DEC-0076", "DEC-0077"],
+  "research": ["R-0079"],
+  "acceptance_rows": ["AO", "AP", "AQ", "AR", "AS", "AT"],
+  "execute_order": ["AO1", "AQ1", "AQ2", "AS1", "AS2", "AP2", "AR1", "V1"],
+  "gated_tasks": ["V1", "AP2", "AR1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1", "AP2"],
+      "description": "Q0020 image (DEC-0080) on rebuilt host before wealth probes and AP1 SQL"
+    },
+    {
+      "id": "THREE_SERVICE_COMPOSE",
+      "before_tasks": ["V1"],
+      "description": "flow-finance-ai + grafana + stats-forecast per DEC-0076 when FORECAST_ML_ENABLED=true"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "description": "Full Firefly sync (not exchanges-only) + forecast recompute acct 114"
+    },
+    {
+      "id": "GRAFANA_PROVISIONING_RELOAD",
+      "before_tasks": ["V1"],
+      "description": "Reload Grafana provisioning after AO1 (and AR1 if executed)"
+    },
+    {
+      "id": "AP1_SQL_PROBE",
+      "before_tasks": ["AP2"],
+      "description": "SQL on exchange_holdings: futures row priced but API subtotal_eur=0 — else ops only, no AP2"
+    }
+  ],
+  "acceptance_mapping": {
+    "AO": {
+      "tasks": ["AO1", "V1"],
+      "verify": "ML enabled + healthy sidecar → ml_computation_id set; or accurate sidecar-unreachable copy — not permanent US-0013 not-enabled when env opts in"
+    },
+    "AP": {
+      "tasks": ["AP2", "V1"],
+      "verify": "crypto.subtotal_eur > 0 when Bitunix wallet priced and holdings_count > 0; holdings_top/holdings_all reflect priced exposure per DEC-0080"
+    },
+    "AQ": {
+      "tasks": ["AQ1", "AQ2", "V1"],
+      "verify": "holdings_all shows native qty + EUR where priced; fx_incomplete unified with unpriced_assets list; banner only when truly unpriced"
+    },
+    "AR": {
+      "tasks": ["AR1", "V1"],
+      "verify": "Cashflow balance forecast + daily balances non-zero acct 114 after Full sync + recompute; AR1 only if API≠Grafana"
+    },
+    "AS": {
+      "tasks": ["AS1", "AS2", "V1"],
+      "verify": "Delete non-active plan from UI; 409 on active delete; target_type valid enum + help copy (no account)"
+    },
+    "AT": {
+      "tasks": ["V1"],
+      "verify": "Three-service external compose smoke — stats-forecast running when ML enabled; ops/runbook gate only"
+    }
+  },
+  "waived_ops_only": {
+    "AO_runtime": "Start stats-forecast + Full sync — operator gate, not sprint execute task",
+    "AT": "Runbook/compose smoke — verify in V1 only",
+    "AP1": "Operator SQL probe on exchange_holdings — prerequisite for AP2, not sprint task"
+  },
+  "deploy_order": [
+    "AO1 + AQ1 + AQ2 + AS1 (+ AS2 if capacity) single release",
+    "Conditional AP2 after AP1 gate passes",
+    "Operator: BACKEND_FRONTEND_DEPLOY + THREE_SERVICE_COMPOSE + FULL_FIREFLY_SYNC + GRAFANA_PROVISIONING_RELOAD",
+    "Conditional AR1 if V1 AR verify gate fails",
+    "V1 verify-work omniflow smoke AO–AT"
+  ],
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260610-q0022-bug0014",
+  "architecture_ref": "architecture-20260609-bug0014",
+  "orchestrator_run_id": "auto-20260607-bug0014-001"
+}

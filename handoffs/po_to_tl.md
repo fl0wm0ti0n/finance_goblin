@@ -1,3 +1,156 @@
+## architecture-20260607-bug0014 — BUG-0014 post-rebuild omniflow architecture (hot pointer)
+
+**From:** Tech Lead  
+**To:** Sprint-plan  
+**Date:** 2026-06-09  
+**Bug:** BUG-0014  
+**Orchestrator run:** `auto-20260607-bug0014-001`  
+**Next phase:** `/sprint-plan`
+
+### Summary
+
+Ops gates **AO/AT/AR** + execute **AO1, AQ1, AQ2, AS1, V1** + conditional **AP2**. **DEC-0081** (AQ), **DEC-0082** (AS delete), **DEC-0083** (AS target_type). AO1 extends DEC-0066/DEC-0076; AP2 gated on AP1 wallet SQL probe.
+
+### Decisions
+
+| ID | Sub | Contract |
+|----|-----|----------|
+| **DEC-0081** | AQ | `holdings_all` + unified `fx_incomplete` |
+| **DEC-0082** | AS1 | 409 on active plan delete |
+| **DEC-0083** | AS2 | Remove invalid `account`; DB enum + help |
+
+### Execute scope (P0)
+
+| Task | Surface | Gate |
+|------|---------|------|
+| **AO1** | `forecast-horizons.json` panel 13 | — |
+| **AQ1** | `wealth/service.rs`, `types.rs` | — |
+| **AQ2** | `WealthPage.tsx`, `api.ts` | after AQ1 |
+| **AS1** | `plans.rs`, `PlanningPage.tsx` | — |
+| **AP2** | `wealth/service.rs` | AP1 priced + subtotal 0 |
+| **V1** | verify-work AO–AT | operator gates |
+
+**Ops-only:** AO/AT runtime, AP1 SQL probe. **P1:** AS2. **P2:** AR1 if API≠Grafana.
+
+### Operator gates (before V1)
+
+1. **BACKEND_FRONTEND_DEPLOY** (Q0020 / DEC-0080)
+2. **stats-forecast** + Full sync + recompute acct **114**
+3. **AP1** SQL on `exchange_holdings`
+
+**Evidence:** [R-0079 §6](docs/engineering/research.md#r-0079--bug-0014-post-rebuild-omniflow-ml-sidecar-crypto-display-grafana-planning), `docs/engineering/architecture.md` § BUG-0014, `handoffs/archive/po-to-tl-pack-20260607-a.md` (discovery)
+
+`triad_hot_surface`: architecture hot; --rollover units=3,1 + --check PASS (2026-06-09T23:45:00Z)
+
+**Recommended sprint:** `/quick` **Q0022**
+
+---
+
+## architecture-20260608-bug0013 — BUG-0013 omniflow analytics regression architecture (hot pointer)
+
+**From:** Tech Lead  
+**To:** PO / Sprint-plan  
+**Date:** 2026-06-08  
+**Bug:** BUG-0013  
+**Orchestrator run:** (none — TL architecture subagent)  
+**Next phase:** `/sprint-plan`
+
+### Summary
+
+Post-discovery/research cluster formalized as **two code fixes** + verify-work — not a US-0015 regression. **DEC-0079** (budgets MTD upper bound) and **DEC-0080** (Bitunix wallet parse + linear unrealized EUR) accepted; **DEC-0064** subtotal rules preserved; **AM** execute waived per **R-0077**.
+
+### Decisions
+
+| ID | Sub-defect | Contract |
+|----|------------|----------|
+| **DEC-0079** | AL | Panel id **5**: `AND pdc.ts::date <= CURRENT_DATE` on planned MTD CTE (**AL1**) |
+| **DEC-0080** | AN/AK | Wallet `data[]` parse; USDT futures priced in subtotal; linear `unrealizedPNL`→EUR; linear excluded from `fx_incomplete` (**AN1**) |
+
+### Execute scope (P0)
+
+| Task | Surface |
+|------|---------|
+| **AL1** | `grafana/provisioning/dashboards/analytics/budgets.json` |
+| **AN1** | `backend/src/exchanges/bitunix.rs`, `backend/src/portfolio/pnl.rs` |
+| **V1** | verify-work omniflow smoke after deploy + Full sync |
+
+### Optional (P2 if capacity)
+
+- **AJ1** — subscriptions price-changes empty-state copy
+- **AK2** — portfolio performance % min-snapshot footnote
+
+### Waived / ops-only
+
+| Sub | Action |
+|-----|--------|
+| **AI** | Operator re-smoke acct 114 — no code |
+| **AJ** | Expected empty — optional AJ1 only |
+| **AM** | Waived unless browser HAR non-200 (R-0077) |
+
+### Operator gates (before V1)
+
+1. **BACKEND_FRONTEND_DEPLOY**
+2. **Full Firefly sync** (not exchanges-only)
+3. **Forecast recompute**
+
+### Artifacts updated
+
+- `docs/engineering/architecture.md` § **BUG-0013**
+- `docs/engineering/decisions.md` — **DEC-0079**, **DEC-0080**
+- `docs/engineering/state.md` — architecture checkpoint
+- `docs/product/backlog.md#BUG-0013`
+- `decisions/DEC-0079.md`, `decisions/DEC-0080.md`
+
+`triad_hot_surface`: BUG-0013 architecture prepended; --rollover + --check PASS (2026-06-08; units=5,1)
+
+**Recommended sprint:** `/quick` **Q0020** (AL1 + AN1 + V1; ≤12 tasks)
+
+---
+
+## discovery-20260608-bug0013 — BUG-0013 omniflow analytics regression discovery (hot pointer)
+
+**From:** PO  
+**To:** Tech Lead  
+**Date:** 2026-06-08  
+**Bug:** BUG-0013  
+**Orchestrator run:** (none — PO discovery subagent)  
+**Next phase:** `/research`
+
+### Summary
+
+Operator-reported post-US-0015 analytics cluster on **`financegnome.omniflow.cc`** decomposes into **two confirmed code defects**, **three refuted/not-reproduced items**, and **one expected-empty panel** — not a single US-0015 regression.
+
+### Sub-defect verdicts
+
+| ID | Verdict | Root cause | Fix task |
+|----|---------|------------|----------|
+| **AI** | **REFUTED (ops/stale)** | Baseline forecast non-zero for default acct **114** after Full sync + recompute (`18:16:58Z`). Zeros on acct **116** or ML-only panels. | **V1** operator re-smoke only |
+| **AJ** | **REFUTED (expected empty)** | 0 price-change events in 90d; 54 billing rows | Optional **AJ1** empty-state copy |
+| **AK** | **CONFIRMED** | Linear futures holdings unpriced (`market_value_eur` NULL) | **AN1** + **AK2** |
+| **AL** | **CONFIRMED** | MTD SQL sums 730 future plan days (no upper date bound) | **AL1** |
+| **AM** | **NOT REPRODUCED** | curl: ds/query + annotations **200** | **AM1** in research (WS/embed) |
+| **AN** | **CONFIRMED** | Same as AK — sync OK, EUR valuation missing | **AN1** |
+
+### Operator gates (mandatory before sprint)
+
+1. **BACKEND_FRONTEND_DEPLOY** — confirm US-0015 image live.
+2. **Full Firefly sync** — not exchanges-only.
+3. **Forecast recompute** — baseline panels populated on live probe; operator confirms `$account_id=114`.
+
+### Research pointers (extend R-0076 in `/research`)
+
+- Linear futures EUR valuation (`INJUSDT` symbol vs base asset; notional from exchange).
+- Grafana **Failed to fetch** — browser WS/annotation on embed shell (**AM1**).
+- Budgets MTD copy when plan horizon is future-only.
+
+### Artifacts updated
+
+- `docs/product/backlog.md#BUG-0013`, `docs/product/vision.md`, `handoffs/resume_brief.md`
+
+`triad_hot_surface`: BUG-0013 discovery prepended; --rollover + --check PASS (2026-06-08)
+
+---
+
 ## research-20260602-us0011 — US-0011 unified analytics embed technical research
 
 **From:** Tech Lead  

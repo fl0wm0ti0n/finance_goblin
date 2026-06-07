@@ -1,0 +1,152 @@
+{
+  "sprint": "S0016",
+  "stories": ["US-0015"],
+  "story_id": "US-0015",
+  "phase": "verify-work",
+  "plan_verified_at": "2026-06-06T18:00:00Z",
+  "qa_verified_at": "2026-06-06T16:52:00Z",
+  "verified_at": "2026-06-06T18:55:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_verify_work": false,
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0015",
+  "qa_evidence": "sprints/S0016/qa-findings.md",
+  "decisions": ["DEC-0078"],
+  "research": ["R-0074", "R-0075"],
+  "orchestrator_run_id": "auto-20260606-us0015-001",
+  "environment": {
+    "omniflow_host_available": false,
+    "backend_frontend_deploy_pending": true
+  },
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before": "UAT-8 AC-7 OIDC smoke",
+      "action": "Deploy S1–S3 backend + frontend on US-0010 external profile (financegnome.omniflow.cc)"
+    }
+  ],
+  "automated_checks": [
+    {
+      "id": "VW-AUTO-1",
+      "description": "cargo test --lib (backend)",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-06 — 169/169 PASS (bucket_inference, privacy, project provenance, six-tool registry)"
+    },
+    {
+      "id": "VW-AUTO-2",
+      "description": "npm test --run (frontend)",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-06 — 5/5 PASS (planningFeedback 3/3 + ChatPanel 2/2)"
+    },
+    {
+      "id": "VW-AUTO-3",
+      "description": "DEC-0078 cascade + provenance contract audit",
+      "result": "pass",
+      "notes": "config→rule→LLM→Variable; bucket_sources + ai_mapped API; ForecastPage badge; forecast_bucket_assignment audit"
+    },
+    {
+      "id": "VW-AUTO-4",
+      "description": "Chat/ML regression guard",
+      "result": "pass",
+      "notes": "registry_has_six_tools_matching_migration unchanged; no ML overlay code changes in sprint scope"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "Prerequisite",
+      "description": "BUG-0012 AG/AH released (Q0014) — DEC-0007 config-driven category→bucket baseline authoritative",
+      "result": "pass",
+      "tasks": [],
+      "evidence": "handoffs/releases/Q0014-release-notes.md; docs/product/acceptance.md L157; Q0014 release"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-1",
+      "description": "Config-mapped buckets (Income/Fixed/Variable) never overridden by AI; config precedence before AI fallback",
+      "result": "pass",
+      "tasks": ["T-0167", "T-0170"],
+      "evidence": "project.rs config_mapped_salary_never_uses_ai_assignment; categories.rs resolve_bucket_with_ai — cargo test PASS"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-2",
+      "description": "AI inference proposes income/fixed/variable with confidence; low-confidence (<0.75) falls back to Variable",
+      "result": "pass",
+      "tasks": ["T-0163", "T-0165", "T-0168"],
+      "evidence": "bucket_inference.rs threshold_boundary_074/075, provider_unavailable, batch_cap_splits_at_100 — cargo test PASS"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-3",
+      "description": "Bucket inference under allow_raw_transactions=false uses aggregates/allowlisted signals only — no raw row leakage",
+      "result": "pass",
+      "tasks": ["T-0164", "T-0166"],
+      "evidence": "privacy.rs prepare_bucket_features_strips_raw_payee_by_default, opt_in_raw_limited_to_50 — cargo test PASS"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-4",
+      "description": "GET /api/v1/forecast/monthly exposes per-bucket bucket_sources (config|ai|default) and ai_mapped when AI contributes",
+      "result": "pass",
+      "tasks": ["T-0169", "T-0171"],
+      "evidence": "api/forecast.rs MonthlyPointResponse bucket_sources + ai_mapped; project.rs provenance mass tracking — code audit PASS"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-5",
+      "description": "Forecast Monthly tab shows AI-mapped badge/tooltip when ai_mapped=true; config-only months show no badge",
+      "result": "pass",
+      "tasks": ["T-0172"],
+      "evidence": "ForecastPage.tsx L259–274 badge + tooltip — code audit PASS"
+    },
+    {
+      "id": "UAT-7",
+      "acceptance_id": "AC-6",
+      "description": "forecast_bucket_assignment audit rows persisted per US-0006 patterns; no raw merchant leakage",
+      "result": "pass",
+      "tasks": ["T-0173"],
+      "evidence": "service.rs tool_name forecast_bucket_assignment; privacy tests confirm stripped payee — code audit PASS"
+    },
+    {
+      "id": "UAT-8",
+      "acceptance_id": "AC-7",
+      "description": "OIDC-enabled deploy smoke: /forecast Monthly tab; chat six-tool surface unchanged; US-0013 ML overlay unchanged",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "tasks": ["T-0174"],
+      "evidence": "sprints/S0016/uat.md OIDC smoke checklist; six-tool registry test unchanged; live probes deferred post-deploy"
+    }
+  ],
+  "row_verdicts": {
+    "Prerequisite": "pass",
+    "AC-1": "pass",
+    "AC-2": "pass",
+    "AC-3": "pass",
+    "AC-4": "pass",
+    "AC-5": "pass",
+    "AC-6": "pass",
+    "AC-7": "pass_with_prerequisites"
+  },
+  "blockers": [],
+  "summary": {
+    "acceptance_criteria_total": 7,
+    "acceptance_criteria_pass": 7,
+    "prerequisite_checked": 1,
+    "passed": 7,
+    "pass_with_prerequisites": 1,
+    "failed": 0,
+    "pending": 0,
+    "automated_pass": 4
+  },
+  "operator_prerequisites": [
+    "BACKEND_FRONTEND_DEPLOY — deploy S1–S3 backend + frontend on US-0010 external profile (financegnome.omniflow.cc)",
+    "Full Firefly sync + forecast recompute before Monthly tab smoke",
+    "Execute OIDC smoke checklist in sprints/S0016/uat.md (steps 1–8)"
+  ],
+  "next_phase": "release",
+  "plan_verify_ref": "sprints/S0016/plan-verify.json",
+  "qa_ref": "sprints/S0016/qa-findings.md",
+  "verify_work_ref": "sprints/S0016/verify-work-findings.md"
+}

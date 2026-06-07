@@ -69,4 +69,7 @@ npm run build
 echo "==> Compose config regression (US-0010)"
 bash "$ROOT/scripts/compose-config-check.sh"
 
+echo "==> Documentation profile validation (US-0016 / DEC-0070)"
+python3 scripts/validate_doc_profile.py --repo . --no-template-parity
+
 echo "==> All tests passed"

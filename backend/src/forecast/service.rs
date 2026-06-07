@@ -1,14 +1,21 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use serde_json::json;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use super::project::{project_account, HouseholdIncomeContext};
+use super::bucket_inference::BucketInferenceService;
+use super::project::{
+    ambiguous_bucket_features, prepare_recurring_patterns, project_account, HouseholdIncomeContext,
+};
 use super::recurring::detect_inflow_patterns;
 use super::repository::{balance_warning_entry, build_metadata, ForecastRepository};
-use crate::config::ForecastConfig;
+use crate::ai::audit::{AuditInsert, AuditRepository};
+use crate::ai::privacy::PrivacyLayer;
+use crate::ai::provider::AiProvider;
+use crate::config::{ForecastConfig, PrivacyConfig};
 use crate::db::DbPool;
 use crate::plan::PlanService;
 use crate::subscriptions::DetectionResult;
@@ -17,6 +24,9 @@ use crate::subscriptions::DetectionResult;
 pub struct ForecastService {
     repo: Arc<ForecastRepository>,
     plan_service: Arc<RwLock<Option<PlanService>>>,
+    ai_provider: Arc<RwLock<Option<Arc<dyn AiProvider>>>>,
+    privacy_config: Arc<RwLock<Option<PrivacyConfig>>>,
+    audit_repo: Arc<AuditRepository>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -27,15 +37,28 @@ pub enum ForecastError {
 
 impl ForecastService {
     pub fn new(db: DbPool, config: ForecastConfig) -> Self {
-        let repo = ForecastRepository::new(db.pool().clone(), config);
+        let pool = db.pool().clone();
+        let repo = ForecastRepository::new(pool.clone(), config);
         Self {
             repo: Arc::new(repo),
             plan_service: Arc::new(RwLock::new(None)),
+            ai_provider: Arc::new(RwLock::new(None)),
+            privacy_config: Arc::new(RwLock::new(None)),
+            audit_repo: Arc::new(AuditRepository::new(pool)),
         }
     }
 
     pub async fn attach_plan_service(&self, plans: PlanService) {
         *self.plan_service.write().await = Some(plans);
+    }
+
+    pub async fn attach_bucket_inference(
+        &self,
+        provider: Arc<dyn AiProvider>,
+        privacy: PrivacyConfig,
+    ) {
+        *self.ai_provider.write().await = Some(provider);
+        *self.privacy_config.write().await = Some(privacy);
     }
 
     pub fn repository(&self) -> &ForecastRepository {
@@ -128,6 +151,11 @@ impl ForecastService {
                 balance_warnings.push(warning);
             }
 
+            let recurring =
+                prepare_recurring_patterns(&txs, &config, subscription_context);
+            let ambiguous = ambiguous_bucket_features(&recurring, &category_names, &config);
+            let bucket_assignments = self.infer_bucket_assignments(&ambiguous, &config).await;
+
             let projection = project_account(
                 starting_balance,
                 &txs,
@@ -135,6 +163,7 @@ impl ForecastService {
                 &config,
                 subscription_context,
                 household_income.as_ref(),
+                &bucket_assignments,
             );
 
             account_flags.insert(account_id.clone(), projection.low_confidence);
@@ -155,6 +184,77 @@ impl ForecastService {
         }
 
         Ok(build_metadata(&account_flags, &balance_warnings))
+    }
+
+    async fn infer_bucket_assignments(
+        &self,
+        ambiguous: &[crate::ai::privacy::RawBucketFeatureInput],
+        config: &ForecastConfig,
+    ) -> HashMap<String, super::bucket_inference::BucketAssignment> {
+        if ambiguous.is_empty() {
+            return HashMap::new();
+        }
+
+        let provider = self.ai_provider.read().await.clone();
+        let privacy_cfg = self.privacy_config.read().await.clone();
+        let Some(privacy_cfg) = privacy_cfg else {
+            return HashMap::new();
+        };
+
+        let privacy = PrivacyLayer::new(privacy_cfg);
+        let mut service = BucketInferenceService::new(
+            provider,
+            privacy,
+            config.ai_bucket_min_confidence,
+            &config.category_buckets,
+        );
+        let assignments = service.infer_batch(ambiguous.to_vec()).await;
+        self.persist_bucket_audit(&mut service).await;
+        assignments
+    }
+
+    async fn persist_bucket_audit(&self, service: &mut BucketInferenceService) {
+        let events = service.take_audit_events();
+        let provider_name = self
+            .ai_provider
+            .read()
+            .await
+            .as_ref()
+            .map(|p| p.name().to_string());
+        let model = self
+            .ai_provider
+            .read()
+            .await
+            .as_ref()
+            .map(|p| p.model().to_string());
+
+        for event in events {
+            let args_summary = json!({
+                "feature_id": event.feature_id,
+                "bucket": event.bucket,
+                "confidence": event.confidence,
+                "source": event.source,
+                "rationale_code": event.rationale_code,
+            });
+            if let Err(e) = self
+                .audit_repo
+                .insert(AuditInsert {
+                    session_id: Uuid::nil(),
+                    user_subject: "forecast_recompute".into(),
+                    tool_name: "forecast_bucket_assignment".into(),
+                    args_summary,
+                    result_status: event.result_status,
+                    result_rows: Some(1),
+                    duration_ms: 0,
+                    error_message: None,
+                    model: model.clone(),
+                    provider: provider_name.clone(),
+                })
+                .await
+            {
+                warn!(?e, "forecast bucket audit insert failed");
+            }
+        }
     }
 
     pub async fn aggregate_daily_balances(

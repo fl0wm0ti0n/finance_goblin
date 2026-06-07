@@ -2,8 +2,17 @@
 
 ## Current context pack
 
-- **Latest released:** US-0012 / S0012 (`0.12.0-us0012`, 2026-06-03) — database bootstrap on first start (`ensure_database`, optional `DATABASE_BOOTSTRAP_URL`, DEC-0058)
-- **Latest bug fix:** BUG-0007 / Q0017 (2026-06-07) — AI merchant/category discovery (DEC-0069 A′+E+F, S privacy label exemption); verify-work + release PASS
+- **Latest released story:** US-0017 / Q0021 (`0.17.0-us0017`, 2026-06-09) — README living-doc expansion (DEC-0070 extension: omniflow smoke H3, Troubleshooting H3, per-segment maintenance); doc-only; verify-work + release PASS
+- **Latest bug fix:** BUG-0015 / Q0023 (`bug0015-q0023`, 2026-06-07) — subscription confirm persistence after rebuild (DEC-0084 card payee_key, DEC-0085 payee+interval inheritance, DEC-0086 ±3d tolerance); verify-work + release PASS
+- **Prior bug fix:** BUG-0014 / Q0022 (`bug0014-q0022`, 2026-06-07) — omniflow post-rebuild cluster (DEC-0081 AQ holdings+FX, DEC-0082 AS1 plan delete guard, DEC-0083 AS2 target_type UI); verify-work + release PASS
+- **Prior bug fix:** BUG-0013 / Q0020 (`bug0013-q0020`, 2026-06-09) — budgets MTD cap (DEC-0079 AL1) + Bitunix futures EUR valuation (DEC-0080 AN1); verify-work + release PASS
+- **Prior release:** US-0015 / S0016 (`0.16.0-us0015`, 2026-06-06) — AI forecast bucket cascade (config→rule→LLM→Variable, bucket_sources API, AI-mapped badge, DEC-0078); verify-work + release PASS
+- **Prior release:** US-0014 / S0015 (`0.15.0-us0014`, 2026-06-08) — planning mutation feedback contract (page-local helper, 7× onError, PVA invalidation, DEC-0077); verify-work + release PASS
+- **Prior release:** US-0013 / S0014 (`0.14.0-us0013`, 2026-06-08) — external ML compose contract (`stats-forecast` on external profile, env opt-in, dual CI guard, DEC-0076); verify-work + release PASS
+- **Prior release:** US-0016 / S0013 (`0.13.0-us0016`, 2026-06-08) — root README living documentation (`--no-template-parity`, Product status hooks, DEC-0070)
+- **Prior release:** US-0012 / S0012 (`0.12.0-us0012`, 2026-06-03) — database bootstrap on first start (`ensure_database`, optional `DATABASE_BOOTSTRAP_URL`, DEC-0058)
+- **Prior bug fix:** BUG-0011 / Q0019 (2026-06-08) — planning mode AD/AE/AF (DEC-0073 overlay-only compare, DEC-0074 PVA 200 no_active_plan); verify-work + release PASS
+- **Prior bug fix:** BUG-0008 / Q0018 (2026-06-08) — subscription alert dedup + detection recall (DEC-0071 W bundle, DEC-0072 X Phase 1); verify-work + release PASS
 - **Prior bug fix:** BUG-0009 / Q0016 (2026-06-06) — Grafana provisioning-only analytics fix (DEC-0068 ABS balance default, portfolio LATERAL breakdown, ML banner); verify-work + release PASS
 - **Prior bug fix:** BUG-0012 / Q0014+Q0015 (2026-06-06) — monthly Income/Fixed bucket attribution (DEC-0067 component-level monthly_map); verify-work + release PASS
 - **Prior bug fix:** BUG-0010 / Q0013 (2026-06-05) — forecast/wealth/ML posture (DEC-0065 negative wealth, DEC-0066 ML disabled metadata); verify-work + release PASS
@@ -13,12 +22,15 @@
 - **Prior bug fix:** BUG-0003 / Q0009 (2026-06-05) — `DATABASE_HOST=postgres` ops recovery (F1), env guard docs (F2), `effective_enabled` connector registry (G1); verify-work + release PASS; G2 futures auth spike skipped (gated)
 - **Prior bug fix:** BUG-0002 / Q0008 (2026-06-05) — Firefly PAT guard, risk-score 200 empty-state, exchange settings; verify-work + release PASS
 - **Prior bug fix:** BUG-0001 / Q0007 (2026-06-04) — `DevBypassAuthProvider` + `GF_SERVER_ROOT_URL`; DEC-0057 follow-through
-- **Open bug queue:** BUG-0008, BUG-0011
-- **Open epics:** US-0013 (ML hardening), US-0014 (planning UX), US-0015 (AI bucket mapping)
+- **Open bug queue:** (empty — defect drain complete)
+- **Open epics:** (empty — backlog drain complete for current scope)
 - **Active bug:** none
-- **Recommended next:** `/auto bug-target=BUG-0008` phase=discovery (intake complete; W/X sub-defects)
-- **Decision gate:** none open
-- **Backlog drain:** `AUTO_BACKLOG_DRAIN=1` — **complete** (12/12 released; defect queue active)
+- **Active quick task:** none
+- **Active story:** none
+- **Open stories:** (empty — backlog drain complete for current scope)
+- **Research:** [R-0081](research.md#r-0081--bug-0015-confirmed-subscription-reconfirm-after-rebuild) + [R-0082](research.md#r-0082--card-billing-descriptor-normalization-for-subscription-identity) fulfilled by BUG-0015/Q0023/DEC-0084/0085/0086; [R-0079](research.md#r-0079--bug-0014-post-rebuild-omniflow-ml-sidecar-crypto-display-grafana-planning) fulfilled by BUG-0014/Q0022/DEC-0081/0082/0083
+- **Recommended next:** idle — operator follow-up or PO intake
+- **Backlog drain:** complete — all stories DONE; defect queue drained
 
 ## Compact decision index (bounded summaries)
 
@@ -93,6 +105,299 @@
 | DEC-0067 | Accepted | Monthly bucket attribution | Component-level monthly_map; rolling→Variable; recurring→category_id→map_category (R-0063, BUG-0012) |
 | DEC-0068 | Accepted | Grafana analytics provisioning | ABS(balance) variable default; portfolio subquery+LATERAL breakdown; portfolio-only overview; ML banner+noValue (R-0064, BUG-0009) |
 | DEC-0069 | Accepted | AI merchant/category discovery | category_search on get_transactions; mirror_date_bounds; subscriptions schema+guard; orchestrator prompt+audit result_rows (R-0065, BUG-0007) |
+| DEC-0070 | Accepted | Root README living documentation | `--no-template-parity` until full `template/`; `### Product status` under Purpose; release + refresh-context hooks; US-0017 H3 Examples/Troubleshooting + per-segment maintenance (R-0066, R-0067, R-0078, US-0016, US-0017) |
+| DEC-0071 | Accepted | Subscription alert dedup & unread count | Fingerprint partial unique + upsert_alert; GET unread-count API; orphan lifecycle; US-0005-only bell (R-0068, BUG-0008 W) |
+| DEC-0072 | Accepted | Subscription detection Phase 1 recall | Payee normalization + transfer counterparty priority + 730-day window; Phase 2 category grouping gated; AI deferred (R-0069, BUG-0008 X) |
+| DEC-0073 | Accepted | Compare overlay-only monthly delta | `monthly_delta_sum` via `build_overlay_deltas`; projected balance unchanged; zero-overlay → 0.00 (R-0070, BUG-0011 AE) |
+| DEC-0074 | Accepted | Plan-vs-actual 200 no_active_plan | Tagged 200 JSON mirror risk-score; guided PVA UX; no auto-activate (R-0070, BUG-0011 AF) |
+| DEC-0076 | Accepted | External ML compose contract | Overlay `stats-forecast` on external profile; traefik network; env opt-in; dual CI guard (R-0071, US-0013) |
+| DEC-0077 | Accepted | Planning mutation feedback | Page-local success/error helper; mandatory onError on 7 mutations; PVA invalidation (R-0073, US-0014) |
+| DEC-0078 | Accepted | AI forecast bucket cascade | Config→rule→LLM→Variable; 0.75 threshold; R-0075 privacy; bucket_sources API; US-0008 provider (R-0074, US-0015) |
+| DEC-0079 | Accepted | Budgets MTD upper date bound | `pdc.ts::date <= CURRENT_DATE` on MTD planned CTE; panel id 5 only (R-0076 §7, BUG-0013 AL) |
+| DEC-0080 | Accepted | Bitunix futures EUR valuation | Wallet array parse + USDT equity price; linear unrealizedPNL→EUR; DEC-0064 subtotal rules (R-0076 §6, BUG-0013 AN/AK) |
+| DEC-0081 | Accepted | Wealth all-holdings + unified FX | `holdings_all` cap 50; wire PnL `unpriced_assets`; single `fx_incomplete` gate (R-0079 §6, BUG-0014 AQ) |
+| DEC-0082 | Accepted | Block active plan delete | HTTP 409 on DELETE when `is_active`; deactivate-first UX (R-0079 §6, BUG-0014 AS1) |
+| DEC-0083 | Accepted | Planning target_type UI alignment | Remove invalid `account`; expose DB enum values + help copy (R-0079 §6, BUG-0014 AS2) |
+| DEC-0084 | Accepted | Card billing payee_key normalization | Comma/asterisk/domain collapse in `payee_key()` per R-0082; extends DEC-0072 (BUG-0015 AU1) |
+| DEC-0085 | Accepted | Payee+interval confirm inheritance | Skip+merge on `(payee_key, interval_days)`; rejection by payee+interval; stale map (BUG-0015 AU2–AU4) |
+| DEC-0086 | Accepted | Interval tolerance + fingerprint rotation | ±3d `interval_matches`; in-place fingerprint update on confirmed merge (BUG-0015 AU2–AU4) |
+
+### BUG-0015 architecture (2026-06-07) — released Q0023 2026-06-07
+
+Per [R-0081](research.md#r-0081--bug-0015-confirmed-subscription-reconfirm-after-rebuild) + [R-0082](research.md#r-0082--card-billing-descriptor-normalization-for-subscription-identity): **DEC-0084**, **DEC-0085**, **DEC-0086** accepted and shipped (`bug0015-q0023`). V1 operator rebuild smoke pass-with-prerequisites.
+
+### BUG-0014 architecture (2026-06-09) — released Q0022 2026-06-07
+
+Per [R-0079 §6](research.md#r-0079--bug-0014-post-rebuild-omniflow-ml-sidecar-crypto-display-grafana-planning): **DEC-0081**, **DEC-0082**, **DEC-0083** accepted and shipped (`bug0014-q0022`). AO1 extends **DEC-0066** / **DEC-0076** (dual-scenario static banner — no new DEC). AP2/AR1 conditional — deferred pending operator gates (AP1_SQL_PROBE, Full sync).
+
+## DEC-0086 — Interval tolerance and fingerprint rotation on merge (BUG-0015)
+
+**Status:** Accepted  
+**Date:** 2026-06-07  
+**Work item:** BUG-0015  
+**Research:** [R-0081 §C](research.md#r-0081--bug-0015-confirmed-subscription-reconfirm-after-rebuild)  
+**Extends:** DEC-0085  
+**Architecture:** `docs/engineering/architecture.md` § **BUG-0015**  
+**Full record:** [decisions/DEC-0086.md](../../decisions/DEC-0086.md)
+
+### Summary
+
+1. `interval_matches`: ±3 day absolute tolerance on `interval_days` for confirm/reject/stale lookups.
+2. On confirmed merge: UPDATE same row `id`; rotate `fingerprint` to newly computed hash; preserve `confirmed_at`.
+3. Multi-sub per merchant: composite `(payee_key, interval_days)` — not payee-only.
+
+## DEC-0085 — Payee+interval confirm inheritance (BUG-0015 Layer 2)
+
+**Status:** Accepted  
+**Date:** 2026-06-07  
+**Work item:** BUG-0015  
+**Research:** [R-0081 §C](research.md#r-0081--bug-0015-confirmed-subscription-reconfirm-after-rebuild)  
+**Extends:** DEC-0015, DEC-0071, DEC-0072  
+**Architecture:** `docs/engineering/architecture.md` § **BUG-0015**  
+**Full record:** [decisions/DEC-0085.md](../../decisions/DEC-0085.md)
+
+### Summary
+
+1. Load confirmed/rejected maps keyed by `(payee_key, interval_days)` with DEC-0086 tolerance.
+2. Detection: skip+merge into existing confirmed row — no pending INSERT, no `new_detection` alert.
+3. `mark_stale_inactive` by payee+interval active set; index `(payee_key, status)`.
+
+## DEC-0084 — Card billing descriptor normalization (BUG-0015 Layer 1)
+
+**Status:** Accepted  
+**Date:** 2026-06-07  
+**Work item:** BUG-0015  
+**Research:** [R-0082](research.md#r-0082--card-billing-descriptor-normalization-for-subscription-identity)  
+**Extends:** DEC-0072, DEC-0013  
+**Architecture:** `docs/engineering/architecture.md` § **BUG-0015**  
+**Full record:** [decisions/DEC-0084.md](../../decisions/DEC-0084.md)
+
+### Summary
+
+1. Extend `payee_key()`: asterisk split, comma left-segment, Apple/ITunes root alias, domain tail strip.
+2. Shared `recurrence` module — conservative rules; Layer 2 catches residual drift.
+3. Reject normalization-only as sole fix.
+
+## DEC-0080 — Bitunix futures wallet parse and linear unrealized EUR (BUG-0013 AN/AK)
+
+**Status:** Accepted  
+**Date:** 2026-06-08  
+**Work item:** BUG-0013  
+**Research:** [R-0076 §6](research.md#r-0076--omniflow-analytics-regression-hypotheses-post-us-0015)  
+**Extends:** DEC-0064, DEC-0038, DEC-0039  
+**Architecture:** `docs/engineering/architecture.md` § **BUG-0013**  
+**Full record:** [decisions/DEC-0080.md](../../decisions/DEC-0080.md)
+
+### Summary
+
+1. Fix Bitunix `data[]` wallet parse; USDT/USDC futures row with `market_value_usd`.
+2. `recompute_pnl`: price futures wallet via fiat stable path; linear rows skip subtotal but convert payload `unrealizedPNL` → `unrealized_pnl_eur` (USDT→EUR).
+3. Linear symbols **excluded** from `unpriced_assets` / `fx_incomplete` when exchange unrealized present (DEC-0064).
+4. Tier 2 deferred: `ExchangePriceBook`, exposure display, multi-coin margin.
+5. AM waived per R-0077 unless HAR shows non-200.
+
+## DEC-0079 — Budgets MTD summary upper date bound (BUG-0013 AL)
+
+**Status:** Accepted  
+**Date:** 2026-06-08  
+**Work item:** BUG-0013  
+**Research:** [R-0076 §7](research.md#r-0076--omniflow-analytics-regression-hypotheses-post-us-0015)  
+**Architecture:** `docs/engineering/architecture.md` § **BUG-0013**  
+**Full record:** [decisions/DEC-0079.md](../../decisions/DEC-0079.md)
+
+### Summary
+
+1. MTD panel id **5**: add `AND pdc.ts::date <= CURRENT_DATE` to planned CTE.
+2. Actual CTE unchanged; deviation = actual − capped planned.
+3. Optional footnote when plan horizon starts mid-month.
+
+## DEC-0078 — AI-assisted forecast bucket mapping cascade (US-0015)
+
+**Status:** Accepted  
+**Date:** 2026-06-06  
+**Work item:** US-0015  
+**Research:** [R-0074](research.md#r-0074--us-0015-ai-forecast-bucket-mapping-rulellm-cascade-privacy), [R-0075](research.md#r-0075--us-0015-forecast-bucket-privacy-feature-allowlist)  
+**Architecture:** `docs/engineering/architecture.md` § **US-0015**  
+**Full record:** [decisions/DEC-0078.md](../../decisions/DEC-0078.md)
+
+### Summary
+
+1. **Cascade:** DEC-0007 config map first (**AC-1**); rule heuristics; LLM batch on ambiguous recurring rows; Variable fallback (**AC-2**).
+2. **Threshold:** `ai_bucket_min_confidence = 0.75` default TOML.
+3. **Privacy:** `PrivacyLayer::prepare_bucket_features()` per **R-0075**; `allow_raw_transactions=false` default (**AC-3**).
+4. **Invalidation:** Inline per recompute (DEC-0010); config-hash bust; no cross-run DB cache MVP.
+5. **API:** `bucket_sources` + `ai_mapped` on `MonthlyPointResponse` (**AC-4/AC-5**).
+6. **Provider:** US-0008 `build_provider()`; rule-only when absent.
+7. **Audit:** `forecast_bucket_assignment` in `ai_tool_audit` (**AC-6**).
+8. **Deferred:** merchant aliases TOML; rolling-residual aggregate AI split (stage-2).
+
+## DEC-0077 — Planning mutation feedback and error surface contract (US-0014)
+
+**Status:** Accepted  
+**Date:** 2026-06-08  
+**Work item:** US-0014  
+**Research:** [R-0073](research.md#r-0073--us-0014-planning-mutation-error-toast-patterns)  
+**Architecture:** `docs/engineering/architecture.md` § **US-0014**
+
+### Context
+
+Post-Q0019 discovery: AC-7 gap (no mutation error surfaces); AC-2/AC-5/AC-6 partial feedback. Frontend-only polish; DEC-0073/0074 frozen.
+
+### Decision
+
+1. **Helper:** Page-local `showPlanningFeedback` — success green / error red card; 4s auto-dismiss success; error persists until Dismiss.
+2. **Coverage:** Mandatory `onError` on all seven planning mutations (create, activate, apply-template, create-version, add/update/delete adjustment).
+3. **Success:** Toasts on create plan, template apply, add adjustment, activate; optional on edit/delete.
+4. **Invalidation:** Immediate `plan-vs-actual` invalidation on adjustment CRUD + activate + createPlan.
+5. **Banner:** Extend set-active copy for Grafana Dashboard 3 (`budgets`).
+
+Full record: `decisions/DEC-0077.md`
+
+## DEC-0076 — External profile ML sidecar compose contract (US-0013)
+
+**Status:** Accepted  
+**Date:** 2026-06-08  
+**Work item:** US-0013  
+**Research:** [R-0071](research.md#r-0071--us-0013-production-ml-enablement-on-omniflow-external-profile)  
+**Architecture:** `docs/engineering/architecture.md` § **US-0013**
+
+### Context
+
+US-0009 ML stack is feature-complete; omniflow external profile never starts `stats-forecast`. BUG-0010 deferred AC3 to US-0013.
+
+### Decision
+
+1. **Compose:** Overlay additive `profiles: [external]` on existing `stats-forecast`; `networks: [traefik]`; host port `${STATS_FORECAST_PORT:-8091}:8090`.
+2. **Env:** Passthrough `FORECAST_ML_ENABLED` / `STATS_FORECAST_URL` on `flow-finance-ai` in external merge; DEC-0049 default-off preserved.
+3. **Failure:** Unchanged DEC-0052/0066 — skip metadata, sync continues.
+4. **CI:** External service set includes `stats-forecast`; traefik network assert; retain `forecast_ml_integration`.
+
+Full record: `decisions/DEC-0076.md`
+
+## DEC-0074 — Plan-vs-actual 200 `no_active_plan` (BUG-0011 AF)
+
+**Status:** Accepted  
+**Date:** 2026-06-08  
+**Work item:** BUG-0011 (sub-defect **AF**)  
+**Research:** [R-0070](research.md#r-0070--bug-0011-planning-mode-compare-delta-empty-state-api-first-run-ux)  
+**Architecture:** `docs/engineering/architecture.md` § **BUG-0011**
+
+### Context
+
+`plan-vs-actual` returns 404 when no active plan; frontend tab blank. Risk-score already uses 200 `no_score`.
+
+### Decision
+
+1. **API:** HTTP 200 `{ "status": "no_active_plan", "reason": "no_active_plan" }` — not 404.
+2. **Frontend:** Guided empty state on PVA tab; `retry: false`.
+3. **Policy:** Reject auto-activate on create; explicit Set active retained.
+
+Full record: `decisions/DEC-0074.md`
+
+## DEC-0073 — Compare overlay-only monthly delta (BUG-0011 AE)
+
+**Status:** Accepted  
+**Date:** 2026-06-08  
+**Work item:** BUG-0011 (sub-defect **AE**)  
+**Research:** [R-0070](research.md#r-0070--bug-0011-planning-mode-compare-delta-empty-state-api-first-run-ux), [R-0015](research.md#r-0015--plan-engine-delta-overlay-on-forecast-baseline), [R-0016](research.md#r-0016--plan-scenario-versioning-immutable-snapshots-vs-editable-drafts)  
+**Architecture:** `docs/engineering/architecture.md` § **BUG-0011**
+
+### Context
+
+Compare sums full `planned_net` (baseline + overlay) — empty plans show illogical negative monthly delta.
+
+### Decision
+
+1. **Metric:** `monthly_delta_sum` = overlay-only sum via `build_overlay_deltas`; empty adjustments → **0.00**.
+2. **Balance:** `projected_month_end_balance` unchanged (full scenario).
+3. **Scope:** `/compare` + React Compare tab only; Grafana Dashboard 3 unchanged.
+
+**ID note:** US-0090 caveman compression forward-refs renumbered to **DEC-0075**.
+
+Full record: `decisions/DEC-0073.md`
+
+## DEC-0071 — Subscription alert dedup, unread-count contract, orphan lifecycle (BUG-0008 W)
+
+**Status:** Accepted  
+**Date:** 2026-06-08  
+**Work item:** BUG-0008 (sub-defect **W**)  
+**Research:** [R-0068](research.md#r-0068--bug-0008-subscription-alert-dedup-unread-count-contract-orphan-lifecycle)  
+**Architecture:** `docs/engineering/architecture.md` § **BUG-0008**
+
+### Context
+
+83 unread `new_detection` alerts vs 6 pending patterns — bare INSERT every sync without fingerprint dedup. Banner uses raw list length.
+
+### Decision
+
+1. **Dedup:** Lifecycle fingerprint + partial unique index + `upsert_alert`; emit only on new pending or tier increase.
+2. **API:** `GET /api/v1/subscriptions/alerts/unread-count` with reconciled semantics.
+3. **UI:** Banner/toast consume unread-count — not list length; header bell US-0005-only unchanged.
+4. **Lifecycle:** Mark-read orphans on confirm/reject/inactive; one-time backfill.
+
+**Prerequisite for:** DEC-0072 (W-before-X mandatory).
+
+Full record: `decisions/DEC-0071.md`
+
+## DEC-0072 — Subscription detection Phase 1 recall (BUG-0008 X)
+
+**Status:** Accepted  
+**Date:** 2026-06-08  
+**Work item:** BUG-0008 (sub-defect **X**)  
+**Research:** [R-0069](research.md#r-0069--bug-0008-detection-recall-levers-ai-path-boundary)  
+**Architecture:** `docs/engineering/architecture.md` § **BUG-0008**
+
+### Context
+
+12 patterns from 922+ txs — payee-only grouping fragments SEPA memos; 365-day window too narrow for annual subs.
+
+### Decision
+
+**Phase 1 (execute):** payee normalization + transfer-type counterparty priority + `detection_window_days` 730.  
+**Phase 2 (gated):** category-aware grouping (≥70% same category); min_emit tuning blocked until W closed.  
+**AI:** deferred — document only; not in sync mutex.
+
+**Sequencing:** DEC-0071 W bundle must land before or with Phase 1 X.
+
+Full record: `decisions/DEC-0072.md`
+
+## DEC-0070 — Root README living documentation contract (US-0016)
+
+**Status:** Accepted  
+**Date:** 2026-06-08  
+**Story:** US-0016  
+**Research:** [R-0067](research.md#r-0067--us-0016-root-readme-research-template-parity-product-status-maintenance-hooks), [R-0066](research.md#r-0066--root-readme-split-layout-and-living-doc-maintenance)  
+**Architecture:** `docs/engineering/architecture.md` § **US-0016**
+
+### Context
+
+Missing root `README.md` blocks `validate_doc_profile`. US-0016 needs a split-layout entry document with living **Product status** curated at phase boundaries. Research [R-0067](research.md#r-0067--us-0016-root-readme-research-template-parity-product-status-maintenance-hooks) resolved template parity, status placement, and maintenance hook wording.
+
+### Decision
+
+1. **Template parity:** `validate_doc_profile.py --no-template-parity` while `template/` absent; drop flag only when full `template/README.md` + `template/docs/developer/README.md` land together.
+2. **Product status:** `### Product status` under `## Purpose`; max **8** reverse-chronological bullets `{id} — outcome`; link backlog for history.
+3. **Maintenance:** Release (post-reconciliation) append bullets + validator; refresh-context verify/update + validator when README touched; runbook § **README maintenance (US-0016)**.
+
+**Rejected:** partial template stub; dedicated `## Product status` H2; per-commit auto-update.
+
+### US-0017 layout extension (accepted 2026-06-09 — architecture)
+
+Doc-only expansion under **DEC-0070** split layout — no new root H2; **no DEC-0081** (single-decision extension is simpler and sufficient):
+
+| Surface | Contract |
+|---------|----------|
+| `## Examples` | Add `### Omniflow smoke (external profile)` — omniflow `curl` block per R-0078 §2; link runbook §23 |
+| `## Limitations` | Add `### Troubleshooting` — Q0020 gate sequence + symptom table per R-0078 §3 |
+| Maintenance | Release + refresh-context hooks: **each** closed US/BUG in the **release segment** (`Sxxxx`, `Qxxxx`, or paired intake batch) gets a Product status bullet (R-0078 §5) |
+| Product status | AC-3 verify-only at execute — post-Q0020 refresh already current |
+| Validator | `validate_doc_profile.py --repo . --no-template-parity` must exit **0** after execute |
+
+**Rejected at research/architecture:** dedicated `## Troubleshooting` H2 for `(both, balanced)` profile; separate DEC-0081 record.
+
+**Architecture ref:** `docs/engineering/architecture.md` § **US-0017**
+
+Full record: `decisions/DEC-0070.md`
 
 ## DEC-0069 — AI merchant/category discovery tool contracts (BUG-0007)
 
@@ -275,3 +580,8 @@ Freeze provisioning-only contracts for BUG-0009 execute — no backend changes u
 - `decisions/DEC-0067.md` — Component-level monthly forecast bucket attribution (BUG-0012)
 - `decisions/DEC-0068.md` — Grafana analytics provisioning contract (BUG-0009)
 - `decisions/DEC-0069.md` — AI merchant/category discovery tool contracts (BUG-0007)
+- `decisions/DEC-0079.md` — Budgets MTD upper date bound (BUG-0013 AL)
+- `decisions/DEC-0080.md` — Bitunix futures wallet parse and linear unrealized EUR (BUG-0013 AN/AK)
+- `decisions/DEC-0081.md` — Wealth all-holdings display and unified FX incomplete (BUG-0014 AQ)
+- `decisions/DEC-0082.md` — Block delete of active plan (BUG-0014 AS1)
+- `decisions/DEC-0083.md` — Planning adjustment target_type UI alignment (BUG-0014 AS2)

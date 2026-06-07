@@ -1,0 +1,154 @@
+{
+  "sprint": "S0016",
+  "story_id": "US-0015",
+  "orchestrator_run_id": "auto-20260606-us0015-001",
+  "verified_at": "2026-06-06T18:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0015",
+  "tasks_source": "sprints/S0016/tasks.md",
+  "tasks_source_note": "sprints/S0016/tasks.md materialized at sprint-plan 2026-06-06; task.json not used for standard sprints",
+  "architecture_ref": "docs/engineering/architecture.md#US-0015",
+  "decision_alignment": {
+    "decision_id": "DEC-0078",
+    "aligned": true,
+    "research_basis": ["R-0074", "R-0075"],
+    "contract_elements_covered": [
+      "BucketInferenceService config→rule→LLM→Variable cascade (T-0163)",
+      "PrivacyLayer::prepare_bucket_features + BucketFeatureRow R-0075 allowlist (T-0164)",
+      "Structured LLM I/O + ai_bucket_min_confidence=0.75 TOML (T-0165)",
+      "S1 unit tests: privacy allowlist, threshold boundary, provider_unavailable, batch cap (T-0166)",
+      "resolve_bucket_with_ai config precedence guard — AC-1 (T-0167)",
+      "Recurring dues AI on config-map miss only; rolling residual Variable MVP (T-0168)",
+      "Provenance tracking per monthly accumulation; ai_mapped authoritative (T-0169)",
+      "S2 integration tests: config-mapped categories never overridden (T-0170)",
+      "MonthlyPointResponse bucket_sources + ai_mapped API fields (T-0171)",
+      "ForecastPage AI-mapped badge seasonal callout pattern (T-0172)",
+      "ai_tool_audit forecast_bucket_assignment persistence — no raw merchant (T-0173)",
+      "docs/user-guides/US-0015.md publish + UAT OIDC Monthly smoke template BACKEND_FRONTEND_DEPLOY gate (T-0174)"
+    ],
+    "frozen_boundaries_respected": [
+      "DEC-0007 config map precedence — AI never overrides config-mapped Income/Fixed (T-0167, T-0170)",
+      "DEC-0032 privacy defaults — allow_raw_transactions=false allowlist only (T-0164, T-0166)",
+      "DEC-0069 chat six-tool registry isolation — no seventh tool; AC-7 regression documented (T-0174)",
+      "US-0008 build_provider() reuse — no forecast_ai_* env split (T-0163, T-0165)",
+      "Rolling residual stays Variable in MVP — user guide documents limitation (T-0168, T-0174)",
+      "US-0013 ML overlay unchanged — AC-7 regression scope in UAT template (T-0174)",
+      "Batch cap 100 rows per LLM call; provider absent skips LLM without panic (T-0163)",
+      "BUG-0012 prerequisite checked at intake — Q0014 released; DEC-0007 baseline authoritative"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "T-0163 → T-0164 → T-0165 → T-0166; T-0167 → T-0168 → T-0169 → T-0170; T-0171 → T-0172 → T-0173 → T-0174; BACKEND_FRONTEND_DEPLOY before verify-work omniflow /forecast Monthly OIDC smoke",
+    "notes": "S1 inference required before S2 projection merge; S2 provenance required before S3 API/UI/audit; 12 tasks = SPRINT_MAX_TASKS — no split"
+  },
+  "test_coverage": {
+    "s1_unit_tests": "T-0166 — privacy allowlist, 0.74/0.75 threshold, provider_unavailable, batch cap 101→2 batches",
+    "s2_integration_tests": "T-0170 — config-mapped salary/rent never AI-overridden; ai_mapped true when AI mass present alongside config",
+    "api_contract": "T-0171 — GET /api/v1/forecast/monthly returns bucket_sources + ai_mapped",
+    "ui_badge": "T-0172 — AI-mapped badge when ai_mapped=true; no badge on config-only months",
+    "audit_trail": "T-0173 — forecast_bucket_assignment rows on AI assignment and fallback paths",
+    "operator_docs": "T-0174 — docs/user-guides/US-0015.md operator-facing content",
+    "uat_smoke": "T-0174 — OIDC /forecast Monthly smoke template; BACKEND_FRONTEND_DEPLOY gate",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "Prerequisite",
+      "criterion": "Parent defect BUG-0012 AC rows AG/AH released (Q0014) — DEC-0007 config-driven category→bucket projection baseline authoritative",
+      "tasks": [],
+      "covered": true,
+      "prerequisite": true,
+      "notes": "Checked at intake 2026-06-06; BUG-0012 DONE Q0014 — no sprint task required"
+    },
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Forecast projection applies DEC-0007 config map via mirror category_id and recurring pattern labels before any AI fallback; config-mapped rows never overridden by AI",
+      "tasks": ["T-0167", "T-0168", "T-0170"],
+      "covered": true,
+      "notes": "T-0167 resolve_bucket_with_ai guard; T-0168 config hits bypass AI on recurring dues; T-0170 integration tests assert config never overridden"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "For uncategorized or ambiguous mirror rows, AI layer proposes income/fixed/variable bucket with confidence metadata; low-confidence proposals fall back to Variable (not silent zero absorption)",
+      "tasks": ["T-0163", "T-0165", "T-0166", "T-0168"],
+      "covered": true,
+      "notes": "T-0163 rule→LLM cascade; T-0165 threshold gate 0.75; T-0166 boundary tests; T-0168 wires cascade into recurring dues accumulation"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Bucket inference operates under allow_raw_transactions=false default (DEC-0032) — aggregates and allowlisted category/merchant signals only; no raw transaction row leakage to model",
+      "tasks": ["T-0164", "T-0166"],
+      "covered": true,
+      "notes": "T-0164 prepare_bucket_features allowlist; T-0166 unit tests assert no raw payee/description under default TOML"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "GET /api/v1/forecast/monthly exposes per-bucket bucket_source (config | ai | default) or equivalent when AI path contributes to Income/Fixed/Variable totals",
+      "tasks": ["T-0169", "T-0171"],
+      "covered": true,
+      "notes": "T-0169 provenance aggregation per month; T-0171 MonthlyPointResponse bucket_sources + ai_mapped serialization"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Monthly tab stat cards show AI-mapped indicator (badge or tooltip) when any bucket total includes AI-assigned rows; config-only months show no AI badge",
+      "tasks": ["T-0172"],
+      "covered": true,
+      "notes": "T-0172 ForecastPage badge mirrors seasonal callout; ai_mapped boolean authoritative"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "AI bucket assignments logged per US-0006 audit patterns (operator-reviewable; no Firefly write-back)",
+      "tasks": ["T-0173"],
+      "covered": true,
+      "notes": "T-0173 forecast_bucket_assignment rows in ai_tool_audit; fallback paths audited; no raw merchant/description"
+    },
+    {
+      "acceptance_id": "AC-7",
+      "criterion": "/forecast Monthly tab OIDC-enabled deploy smoke pass-with-prerequisites BACKEND_FRONTEND_DEPLOY; BUG-0007 chat tool surface unchanged; US-0013 ML overlay unchanged",
+      "tasks": ["T-0174"],
+      "covered": true,
+      "notes": "T-0174 UAT OIDC Monthly smoke template + regression scope documented; operator gate BACKEND_FRONTEND_DEPLOY before live smoke"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "BACKEND_FRONTEND_DEPLOY operator gate required before omniflow OIDC smoke (AC-7) — documented in UAT template T-0174"
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "AC-7 chat/ML regression is UAT template scope — no dedicated automated regression task (consistent with S0015 AC-8 pattern)"
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "Threshold calibration for German merchants — monitor low_confidence audit rate; TOML override documented per DEC-0078"
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "Rolling residual aggregate AI split deferred stage-2 — MVP Variable only; user guide T-0174 must document scope"
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_count": 8,
+    "covered_count": 8,
+    "blocking_covered_count": 7,
+    "prerequisite_count": 1,
+    "gap_count": 0,
+    "task_count": 12,
+    "task_ids": ["T-0163", "T-0164", "T-0165", "T-0166", "T-0167", "T-0168", "T-0169", "T-0170", "T-0171", "T-0172", "T-0173", "T-0174"],
+    "tasks_without_acceptance_ref": [],
+    "dec_0078_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true,
+    "execute_ready_caveat": null
+  },
+  "notes": "QA plan-verify 2026-06-06: sprints/S0016/tasks.md (T-0163..T-0174) aligns with docs/product/acceptance.md § US-0015 (8 rows) and architecture § US-0015 / DEC-0078; 12/12 tasks mapped; 8/8 acceptance rows covered (7 open + 1 prerequisite checked); 0 gaps. Approved for /execute."
+}

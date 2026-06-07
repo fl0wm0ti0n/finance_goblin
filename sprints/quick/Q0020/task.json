@@ -1,0 +1,163 @@
+{
+  "id": "Q0020",
+  "title": "BUG-0013 omniflow analytics regression (budgets MTD, crypto pricing)",
+  "status": "PLANNED",
+  "bug_id": "BUG-0013",
+  "architecture_ref": "architecture-20260608-bug0013",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["AI", "AJ", "AK", "AL", "AM", "AN"],
+  "acceptance_mapping": {
+    "AI": {
+      "tasks": ["V1"],
+      "primary_verify": "Re-smoke cashflow scarcity + forecast-horizons baseline acct 114 — discovery refuted code regression"
+    },
+    "AJ": {
+      "tasks": ["AJ1", "V1"],
+      "primary_verify": "Price changes (90d) documented empty-state when 0 events; optional AJ1 copy"
+    },
+    "AK": {
+      "tasks": ["AN1", "AK2", "V1"],
+      "primary_verify": "crypto.subtotal_eur > 0; FX warning documented; performance % footnote when <2 snapshots"
+    },
+    "AL": {
+      "tasks": ["AL1", "V1"],
+      "primary_verify": "Budgets MTD planned/actual/deviation plausible — capped MTD not 730-day sum"
+    },
+    "AM": {
+      "tasks": ["V1"],
+      "primary_verify": "ds/query + annotations 200 — waived per R-0077 unless HAR non-200"
+    },
+    "AN": {
+      "tasks": ["AN1", "V1"],
+      "primary_verify": "Wealth/portfolio crypto totals after sync — not permanently €0"
+    }
+  },
+  "task_count": 5,
+  "mandatory_task_count": 3,
+  "optional_task_ids": ["AJ1", "AK2"],
+  "estimate_total_hours": 8,
+  "tasks": [
+    {
+      "id": "AL1",
+      "title": "MTD planned <= CURRENT_DATE + optional footnote",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0013 (AL) — MTD planned capped at today",
+      "files": ["grafana/provisioning/dashboards/analytics/budgets.json"],
+      "decisions": ["DEC-0079"],
+      "tests": [
+        "SQL review: planned CTE includes pdc.ts::date <= CURRENT_DATE",
+        "Deviation row uses capped planned total"
+      ]
+    },
+    {
+      "id": "AN1",
+      "title": "Wallet parse + linear unrealized EUR + tests",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 4,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0013 (AN)(AK) — Bitunix futures wallet + linear unrealized EUR",
+      "files": [
+        "backend/src/exchanges/bitunix.rs",
+        "backend/src/portfolio/pnl.rs"
+      ],
+      "decisions": ["DEC-0080", "DEC-0064"],
+      "tests": [
+        "Mock array wallet response → futures wallet row",
+        "Linear unrealized USDT→EUR without notional double-count",
+        "cargo test bitunix/pnl paths PASS"
+      ]
+    },
+    {
+      "id": "AJ1",
+      "title": "Price-changes empty-state copy",
+      "status": "open",
+      "priority": "P2",
+      "optional": true,
+      "estimate_hours": 0.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0013 (AJ) — documented empty when 0 events",
+      "files": ["grafana/provisioning/dashboards/analytics/subscriptions.json"],
+      "decisions": [],
+      "tests": ["Provisioning review: empty-state copy present"]
+    },
+    {
+      "id": "AK2",
+      "title": "Performance % min-snapshot footnote",
+      "status": "open",
+      "priority": "P2",
+      "optional": true,
+      "estimate_hours": 0.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0013 (AK) — honest empty when <2 snapshots",
+      "files": ["grafana/provisioning/dashboards/analytics/portfolio.json"],
+      "decisions": [],
+      "tests": ["Provisioning review: footnote or noValue on performance panel"]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work omniflow smoke",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["AL1", "AN1"],
+      "operator_gate": "BACKEND_FRONTEND_DEPLOY + GRAFANA_PROVISIONING_RELOAD + Full Firefly sync + forecast recompute",
+      "acceptance_hook": "BUG-0013 (AI)–(AN) — financegnome.omniflow.cc probes",
+      "files": [
+        "sprints/quick/Q0020/uat.md",
+        "docs/engineering/runbook.md"
+      ],
+      "tests": [
+        "Budgets MTD plausible values",
+        "GET /api/v1/wealth crypto.subtotal_eur > 0",
+        "Portfolio crypto stat non-zero",
+        "Cashflow/forecast baseline acct 114 non-empty",
+        "ds/query 200 regression",
+        "Six /analytics/{slug} routes smoke"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "AL1 + AN1 single release",
+    "BACKEND_FRONTEND_DEPLOY + GRAFANA_PROVISIONING_RELOAD",
+    "Full Firefly sync + forecast recompute",
+    "Optional AJ1 + AK2",
+    "V1 verify-work smoke"
+  ],
+  "execute_order": ["AL1", "AN1", "AJ1", "AK2", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "Deploy AL1 Grafana JSON + AN1 backend on omniflow before V1 runtime probes",
+      "rationale": "Code fixes require image rebuild and container rollout"
+    },
+    {
+      "id": "GRAFANA_PROVISIONING_RELOAD",
+      "before_tasks": ["V1"],
+      "action": "Reload Grafana provisioning after AL1 deploy",
+      "rationale": "budgets.json SQL changes require provisioning reload"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "action": "Run Full Firefly sync (not exchanges-only) + forecast recompute",
+      "rationale": "Wealth snapshot and forecast baseline freshness for AI/AK/AN probes"
+    }
+  ],
+  "frozen_boundaries": [
+    "Execute AL1 + AN1 only for confirmed defects — AI/AJ/AM waived or ops-only",
+    "AM1 deferred per R-0077 unless operator HAR shows non-200",
+    "Linear notional must not enter market_value_eur — DEC-0064 double-count guard",
+    "US-0013 ML overlay out of scope",
+    "MetaMask extension console noise out of scope",
+    "DEC-0064 exposure_eur display tier 2 deferred",
+    "AJ1 and AK2 optional P2 — skip if capacity tight without blocking P0 closure"
+  ],
+  "decisions": ["DEC-0079", "DEC-0080", "DEC-0064", "DEC-0038", "DEC-0039"],
+  "research": ["R-0076", "R-0077"],
+  "operator_next": "After AL1+AN1 deploy: Full sync + recompute; reload Grafana; then V1 verify-work on financegnome.omniflow.cc"
+}

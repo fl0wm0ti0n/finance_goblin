@@ -71,6 +71,48 @@ Operators must follow the runbook recipe
 `stop_reason` vocabulary: `completed`, `decision_gate`, `missing_input`,
 `pause_request`, `loop_max`, `error`, `blocked`.
 
+## Full-autonomy mode + outer driver (US-0092 / DEC-0078)
+
+**`AUTO_FLOW_MODE=full_autonomy`** (exact literal, default-off) enables the shipped
+stdlib outer driver **`scripts/auto_outer_driver.py`**. The driver **loops hook
+invocations** — spawn-only preserved (**BUG-0006**); it never performs phase-role work.
+
+Operator recipe: set scratchpad keys → run
+`python scripts/auto_outer_driver.py --repo .` once → interpret exit table in
+**`docs/engineering/runbook.md`** § **Full-autonomy outer driver (US-0092)**.
+
+**Drain-advance-without-pause**: with **`full_autonomy`** + **`AUTO_BACKLOG_DRAIN=1`**
+(or bug-queue policy), segment completion schedules the next OPEN story/bug
+**immediately** without operator re-`/auto`; **`resume_brief`** +
+**`state.md`** refresh per **DEC-0069** at every boundary.
+
+### Full-autonomy stop matrix (US-0092)
+
+**Invariant**: **`full_autonomy`** relaxes recoverable transient stops and operator
+re-invocation, not governance gates. **`RELEASE_PUBLISH_MODE=auto`** remains
+explicit opt-in for publish (unchanged default-off).
+
+| Condition | US-0088 (all modes) | `full_autonomy` delta |
+|-----------|---------------------|------------------------|
+| Next phase, no hard stop | Continue inner `/auto` | Outer driver **re-invokes** when Cursor ends turn early |
+| `decision_gate` | Hard stop | **No change — hard** |
+| Unrecoverable `error` | Hard stop | **No change — hard** |
+| Critical `missing_input` | Hard stop | **No change — hard** |
+| Transient `missing_input` (recoverable) | Hard stop | **Relaxable** — bounded block-retry (`AUTO_BLOCK_RETRY_MAX`) |
+| `pause_request` / `AUTO_PAUSE_REQUEST` | Hard stop | **No change — hard** |
+| `loop_max` / `AUTO_LOOP_MAX_CYCLES` | Hard stop | **No change — hard** |
+| `blocked` — transient/sync | Hard stop | **Relaxable** when ledger classifies recoverable |
+| `blocked` — isolation / strict-proof / ownership | Hard stop | **No change — hard** |
+| UAT/QA fail | Hard stop (operator) | **Relaxable** when `AUTO_IMPLEMENTATION_LOOP=1` |
+| Segment complete + `AUTO_BACKLOG_DRAIN=1` | Advance (may need manual re-`/auto`) | **Drain-without-pause** — immediate next item |
+| `BACKLOG_MAX_STORIES_REACHED` | Hard stop | **No change — hard** |
+| `AUTO_SCHEDULER_CONFLICT` | Hard stop | **No change — hard** |
+| Security deny (`.env`, intake evidence mutation) | Hard deny | **No change — hard** |
+
+Block-retry ledger: append-only **`handoffs/auto_block_retry/<orchestrator_run_id>.jsonl`**
+(names-only; cap exhaustion → exit **6** `BLOCK_RETRY_CAP_EXHAUSTED`). See architecture
+**`# US-0092`** and **`docs/engineering/auto-orchestration-reference.md`**.
+
 ## Full specification (US-0080 / DEC-0062)
 
 Long prose, expanded mode semantics, and **Steps 1–13** detail live in

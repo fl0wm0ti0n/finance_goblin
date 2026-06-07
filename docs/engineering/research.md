@@ -363,6 +363,10 @@ a decision or recommendation.
 **Confidence:** high  
 **Status:** current
 
+### BUG-0008 addendum (2026-06-08)
+
+Discovery confirmed under-detection root cause: payee-only grouping (`by_payee` / `extract_payee_source`) fragments SEPA bank-memo strings; `RecurrenceGroup.category_ids` collected but unused for grouping key. Live probe: **12** patterns from **922+** txs (6 pending). Recall levers and phased bundle in **[R-0069 §2](docs/engineering/research.md#r-0069--bug-0008-detection-recall-levers-ai-path-boundary)**; alert dedup must land before threshold tuning per R-0068 §6. Honor [R-0065 § BUG-0008 coordinate](docs/engineering/research.md#bug-0008-coordination-do-not-merge-scope).
+
 ---
 
 ## R-0010 — Dauerauftrag (standing order) vs subscription classification
@@ -399,6 +403,10 @@ a decision or recommendation.
 **Confidence:** high  
 **Status:** current
 
+### BUG-0008 addendum (2026-06-08)
+
+Standing-order classification is not the primary recall blocker (live: 3 rejected including Strom standing_order). Recall gains come from payee normalization + optional category-aware grouping (R-0069 §2.2–2.3). Classification thresholds unchanged until architecture DEC; coordinate table still applies.
+
 ---
 
 ## R-0011 — Subscription price-change detection & alert thresholds
@@ -434,7 +442,11 @@ a decision or recommendation.
   - *US-0005 Alert Engine for MVP* — rejected (scope); subscription alerts are page-scoped per backlog
 - **Risks:** promotional/discounted cycles cause false increase alerts when promo ends; annual billing with single observation cannot detect change until second year; currency rounding on foreign subscriptions
 
-**Linked:** US-0003, R-0009, R-0012  
+### BUG-0008 addendum (2026-06-08)
+
+Code audit: `process_confirmed` also calls bare `insert_alert` every sync pass — **same dedup gap as `new_detection`** (price_change alerts accumulate). Apply shared fingerprint dedup per **[R-0068 §1](docs/engineering/research.md#r-0068--bug-0008-subscription-alert-dedup-unread-count-contract-orphan-lifecycle)**. MVP page-scoped banner contract unchanged; header bell remains US-0005-only (R-0068 §3).
+
+**Linked:** US-0003, R-0009, R-0012, BUG-0008, R-0068  
 **Confidence:** high  
 **Status:** current
 
@@ -532,7 +544,11 @@ a decision or recommendation.
   - *Store state in Firefly tags* — rejected (read-only Firefly guarantee per DEC-0004)
 - **Risks:** fingerprint collisions if normalization too aggressive; CASCADE delete on pattern removes price history — acceptable for MVP; rejection list grows unbounded (negligible at household scale)
 
-**Linked:** US-0003, R-0009, R-0010, R-0011, DEC-0004  
+### BUG-0008 addendum (2026-06-08)
+
+Schema gap: `subscription_alerts` has **no fingerprint column or partial unique index** — root cause of W (83 unread `new_detection` vs 6 pending). Recommended migration adds `fingerprint TEXT NOT NULL` + `CREATE UNIQUE INDEX subscription_alerts_unread_fingerprint ON subscription_alerts (fingerprint) WHERE read_at IS NULL` per R-0068 §1.2 (mirrors R-0023 unified-alert pattern). Orphan cleanup on confirm/reject via lifecycle hooks (R-0068 §4).
+
+**Linked:** US-0003, R-0009, R-0010, R-0011, DEC-0004, BUG-0008, R-0068  
 **Confidence:** high  
 **Status:** current
 
@@ -586,7 +602,11 @@ a decision or recommendation.
   - *Fire-and-forget spawn* — rejected (race with next sync per DEC-0010)
 - **Risks:** mutex duration grows by detection pass (~O(transactions) grouping); large histories may need incremental detection window (last 12 months default, full rescan weekly); phase UI must communicate longer "running" state
 
-**Linked:** US-0003, DEC-0010, DEC-0007, R-0009, R-0012  
+### BUG-0008 addendum (2026-06-08)
+
+Pipeline step 5 (`emit subscription_alerts`) must become **idempotent upsert** before step 4 threshold tuning (R-0069). Add `GET /api/v1/subscriptions/alerts/unread-count` to API surface (R-0068 §2). AI enrichment **not** in sync mutex — deferred async path only if architecture approves (R-0069 §3). W fix (dedup) is **prerequisite** for X recall work — fixing X first re-amplifies W (discovery risk #1).
+
+**Linked:** US-0003, DEC-0010, DEC-0007, R-0009, R-0012, BUG-0008, R-0068, R-0069  
 **Confidence:** high  
 **Status:** current
 
@@ -3677,5 +3697,1516 @@ No change from discovery: **no RAG path in codebase**. Tool-orchestrator enhance
 **Linked:** BUG-0007, BUG-0006, BUG-0004, BUG-0008, US-0006, US-0015, DEC-0032, DEC-0035, R-0060, R-0031, R-0041  
 **Confidence:** high  
 **Status:** fulfilled — BUG-0007 closed via DEC-0069 / Q0017 (2026-06-07); retain for traceability; BUG-0008 coordinate table still valid
+
+---
+
+## R-0066 — Root README split layout and living-doc maintenance
+
+**Date:** 2026-06-07  
+**Topic:** US-0016 — missing root `README.md`; dual-audience entry; keep current as US/BUG close  
+**Query:** DEC-0059 split layout, `validate_doc_profile` contract, maintenance at release/refresh-context vs per-commit automation  
+**Sources:**
+- Code: `scripts/doc_profile_lib.py`, `scripts/validate_doc_profile.py`, `docs/developer/README.md`
+- Normative: **DEC-0059**, runbook § documentation profile validation (**US-0077**)
+- Practice: [GitHub README best practices](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes) — keep root concise; link deeper docs; update on meaningful releases
+
+### Findings
+
+| Topic | Recommendation |
+|-------|----------------|
+| **Split layout** | Root README = user channel + `## Contributing` pointer only; `docs/developer/README.md` holds `DEV_*` H2 sections — already implemented in `doc_profile_lib.py` |
+| **Content depth** | Purpose/Quickstart: product + compose profiles from `.env.example` comments; Examples: sync + analytics routes; Related docs: user-guides, runbook, architecture index |
+| **Living updates** | Manual curated **Product status** bullet list at **release** + **refresh-context** when backlog item closes — avoids noisy per-commit churn; `validate_doc_profile` at release gate |
+| **Template parity** | Create `template/README.md` when installer template tree ships; until then `--no-template-parity` or add minimal template stub in same sprint |
+| **Anti-patterns** | Duplicating full dev workflow in root; embedding secrets; full backlog dump in README |
+
+**Linked:** US-0016, US-0077, DEC-0059, US-0032, US-0031  
+**Confidence:** high  
+**Status:** fulfilled — US-0016 released S0013 via **DEC-0070** (2026-06-08); retain for traceability
+
+---
+
+## R-0067 — US-0016 root README research (template parity, Product status, maintenance hooks)
+
+**Date:** 2026-06-08  
+**Topic:** US-0016 discovery open questions — template parity posture, Product status placement, release/refresh-context maintenance binding  
+**Query:** Stub `template/README.md` vs `--no-template-parity`; `###` vs `## Product status`; exact checklist hook wording for living-doc promise  
+**Sources:**
+- Code: `scripts/doc_profile_lib.py` (`count_profile_root_h2s`, template parity block), `scripts/validate_doc_profile.py`, `scripts/check_intake_template_parity.py` (installer-owned paths — separate gate)
+- Repo state: `template/` tree **absent** (zero files); root `README.md` **absent** (blocks validator today)
+- Normative: `docs/product/acceptance.md` § US-0016 (AC-5 maintenance cadence; AC-6 conditional on `template/` existence); runbook § documentation profile validation
+- Practice: [GitHub About READMEs](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-readmes) — root concise, link deeper docs; [opensource.guide best practices](https://github.com/github/opensource.guide/blob/main/_articles/best-practices.md) — vision/status in README or linked doc; update on meaningful releases, not every commit
+- Prior: **R-0066** (split layout baseline)
+
+### Findings
+
+#### 1. Template parity (`template/` absent)
+
+| Option | Outcome | Verdict |
+|--------|---------|---------|
+| Default `validate_doc_profile.py --repo .` | Sets `template_root=<repo>/template`; fails `[DOC_TEMPLATE_PARITY_FAIL] template/README.md missing` once root README exists | **Fail** until tree ships |
+| Stub `template/README.md` only | Parity also requires `template/docs/developer/README.md` with matching DEV H2 presence for `(both, balanced)` — partial stub still fails | **Reject** — half-stub adds drift without satisfying validator |
+| `--no-template-parity` | Sets `template_root=None`; skips parity block entirely (runbook already documents for fixture trees) | **Recommend** until full installer `template/` tree ships |
+| Full `template/` mirror | Satisfies AC-6 when tree exists; aligns with `check_intake_template_parity.py` installer-owned paths | **Defer** to installer/template delivery — out of US-0016 execute scope |
+
+**Recommendation:** CI and local release gate use `python scripts/validate_doc_profile.py --repo . --no-template-parity` while `template/` is absent. Drop the flag (use default parity) only when `template/README.md` **and** `template/docs/developer/README.md` land in the same change set. AC-6 remains satisfied vacuously until then ("when `template/` tree exists").
+
+**Risks:** (1) Flag left on after template ships → silent parity gap. Mitigate: runbook note + architecture DEC gate to flip default when template tree merges. (2) Operator runs validator without flag locally → confusing `DOC_TEMPLATE_PARITY_FAIL`. Mitigate: document both commands in runbook § README maintenance (architecture).
+
+#### 2. Product status placement
+
+Validator budget (`count_profile_root_h2s`) counts **only** required `USER_*` H2 titles for the active profile — neither `## Contributing` nor extra H2s such as `## Product status` increment the budget counter (`doc_profile_lib.py`). For `(both, balanced)` the counter tops out at 5 required user H2s against budget 8; discovery's "H2 budget consumption" concern for a dedicated `## Product status` is **not enforced by the validator**.
+
+Scannability still favors a capped subsection over a new top-level H2 (GitHub + opensource.guide: keep root README minimal; status bullets, not backlog dump).
+
+| Placement | Pros | Cons | Verdict |
+|-----------|------|------|---------|
+| `### Product status` under `## Purpose` | Operators see product + recent closures first; no extra TOC H2; satisfies AC-5 "or equivalent" | Slightly couples status to Purpose prose | **Recommend** |
+| `###` under `## Related documentation` | Near doc links | Semantically wrong (status ≠ link index) | **Reject** |
+| Dedicated `## Product status` H2 | Visible in TOC | Adds noise; no validator benefit over H3 | **Reject** |
+
+**Content contract:** reverse-chronological bullets `{US-xxxx\|BUG-xxxx} — {one-line outcome}`; cap **8** entries (drop oldest); link `docs/product/backlog.md` for full history; never duplicate acceptance tables or secrets.
+
+#### 3. Maintenance binding (release + refresh-context)
+
+Living-doc updates bind to **phase boundaries**, not per-commit automation (consistent with R-0066; rejects dokku/LLM auto-README patterns for this repo).
+
+**Release (`/release`) — add after backlog reconciliation (≈ step 10), before runbook readiness (≈ step 14):**
+
+> When any **US** or **BUG** in the target sprint transitions to **DONE** / **CLOSED**, append one bullet to root `README.md` **`### Product status`** (under `## Purpose`) in the form `{id} — {one-line outcome}`; trim to the **8** most recent entries. Before finalizing release readiness, run `python scripts/validate_doc_profile.py --repo . --no-template-parity` (drop `--no-template-parity` only after `template/` tree exists); non-zero exit → fail closed with remediation pointing to runbook § README maintenance.
+
+**Refresh-context (`/refresh-context`) — add after backlog status reconciliation:**
+
+> When release or sprint artifacts closed a **US** or **BUG** since the prior refresh, verify root `README.md` **`### Product status`** includes the closed id(s); update if missing. When README or doc-profile surfaces were touched, run `python scripts/validate_doc_profile.py --repo . --no-template-parity`.
+
+**Developer shard (`docs/developer/README.md` § Workflow or Quality gates):**
+
+> After `/release` or `/refresh-context` closes backlog items, curators/release agents update root README Product status per runbook § README maintenance; contributors run `validate_doc_profile` when editing README surfaces.
+
+**Runbook (new subsection under § documentation profile validation — architecture execute):** title **`README maintenance (US-0016)`**; embed the three hooks above; note `--no-template-parity` posture until `template/` exists.
+
+**Linked:** US-0016, US-0077, R-0066, DEC-0059 (doc profile split layout — distinct from Firefly ingest DEC-0059 record)  
+**Confidence:** high  
+**Status:** fulfilled — formalized as **DEC-0070**; US-0016 released S0013 (2026-06-08); US-0017 expansion per [R-0078](research.md#r-0078--us-0017-readme-omniflow-smoke-templates-h3-layout-validate_doc_profile-gates); retain for traceability
+
+---
+
+## R-0068 — BUG-0008 subscription alert dedup, unread count contract, orphan lifecycle
+
+**Date:** 2026-06-08  
+**Topic:** BUG-0008 sub-defect **W** — alert accumulation vs list mismatch; unread-count API; header bell scope; orphan alerts on pattern lifecycle  
+**Query:** Alert dedup contract (`pattern_id+type` vs fingerprint lifecycle vs mark-read on confirm); reconciled unread-count API vs banner semantics; US-0005 bell inclusion; stale alert cleanup  
+**Sources:**
+- Code: `backend/src/subscriptions/detection.rs` (`insert_alert` every sync per group), `repository.rs` (bare INSERT, no ON CONFLICT), `frontend/src/pages/SubscriptionsPage.tsx` (banner = `alerts.length`), `frontend/src/components/AlertBell.tsx` (badge = unified count only)
+- Live probe (2026-06-08, omniflow public API): 83 unread `new_detection` alerts, 6 pending patterns, 12 total patterns; unified `/api/v1/alerts/unread-count` = 0
+- Prior: [R-0011](docs/engineering/research.md#r-0011--subscription-price-change-detection--alert-thresholds), [R-0012](docs/engineering/research.md#r-0012--subscription-persistence-schema-candidates-confirmed-rejections-events), [R-0023](docs/engineering/research.md#r-0023--alert-persistence-deduplication--lifecycle-acknowledge--dismiss) (unified-alert fingerprint pattern), [R-0065 § BUG-0008 coordinate](docs/engineering/research.md#bug-0008-coordination-do-not-merge-scope)
+- Web: [Error-tracking alert dedup LLD](https://www.techinterview.org/post/3233469724/lld-error-tracking/) — fingerprint + lifecycle (alert on first occurrence / regression only); [PostgreSQL unique indexes](https://www.postgresql.org/docs/current/indexes-unique.html) — partial unique for active episodes; [Elysiate ON CONFLICT upsert](https://www.elysiate.com/blog/upserts-from-csv-on-conflict-patterns-that-scale) — dedupe source batch + arbiter index
+
+### 1. Discovery open questions — resolution (W surface)
+
+| # | Question | Resolution |
+|---|----------|------------|
+| **1** | Alert dedup contract | **Lifecycle fingerprint dedup** (not per-`sync_run_id`). One unread alert episode per `(pattern_id, alert_type)` until read or pattern terminal state. Reject bare INSERT every sync; reject `(pattern_id, alert_type, sync_run_id)` (still spams across runs). |
+| **2** | Unread count API | Add **`GET /api/v1/subscriptions/alerts/unread-count`** returning structured contract (§2). Banner and toast consume this endpoint — not raw list length. |
+| **3** | Header bell scope | **Keep US-0005-only badge** per R-0011/R-0023 boundary. Subscription unread stays on `/subscriptions` banner + popover link (`AlertBell` already shows "View subscription alerts (N)" when open). Combined badge is optional stretch — reject for BUG-0008 MVP (scope + coordinate table). |
+| **6** | Orphan/stale alerts | Auto **mark-read** unread `new_detection` alerts when pattern **confirmed**, **rejected**, or **inactive**. One-time backfill dedupes historical rows (§4). |
+
+### 1.2 Recommended dedup mechanism
+
+Align with R-0023 unified-alert pattern adapted for `subscription_alerts`:
+
+**Fingerprints:**
+
+| `alert_type` | Fingerprint | Re-fire rule |
+|--------------|-------------|--------------|
+| `new_detection` | `sub_alert:new_detection:{pattern_id}` | After mark-read, only if pattern returns to `pending` with materially changed fingerprint (new pattern row) |
+| `price_change` | `sub_alert:price_change:{pattern_id}:{direction}:{round(new_amount,2)}` | New episode after prior price alert marked read AND amount changes again beyond R-0011 thresholds |
+| `interval_change` | `sub_alert:interval_change:{pattern_id}:{interval_days}` | Same lifecycle as price_change |
+
+**Schema (new migration):**
+
+```sql
+ALTER TABLE subscription_alerts ADD COLUMN fingerprint TEXT;
+-- backfill then SET NOT NULL in same migration after dedupe script
+
+CREATE UNIQUE INDEX subscription_alerts_unread_fingerprint
+  ON subscription_alerts (fingerprint)
+  WHERE read_at IS NULL;
+```
+
+**Insert contract (`insert_alert` → `upsert_alert`):**
+
+```sql
+INSERT INTO subscription_alerts (pattern_id, alert_type, title, body, sync_run_id, fingerprint)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (fingerprint) WHERE read_at IS NULL
+DO UPDATE SET body = EXCLUDED.body, sync_run_id = EXCLUDED.sync_run_id, created_at = NOW();
+```
+
+Requires PostgreSQL ≥15 partial unique index for `ON CONFLICT` arbiter — repo already targets modern Postgres/TimescaleDB.
+
+**Detection pipeline change:** call `upsert_alert` only when pattern upsert returns **new pending** OR confidence tier **increased** — skip alert when pending pattern unchanged on routine sync (matches R-0011 "alert on new detection" intent).
+
+**Alternatives rejected:**
+
+| Option | Why rejected |
+|--------|--------------|
+| Per-`sync_run_id` dedup | 83 alerts from ~14 sync runs — still 6× pending mismatch |
+| Mark-read-only (no dedup index) | Does not fix historical accumulation; race on concurrent sync |
+| Merge into unified `alerts` table | R-0023 boundary; different UX surfaces |
+
+### 2. Unread count API contract (acceptance **W**)
+
+Acceptance requires **reconciled semantics**, not raw alert rows = list rows. Different entities:
+
+- **List rows** = `subscription_patterns` filtered by tab (`pending`, `confirmed`+`standing_order`, `all`)
+- **Actionable unread** = unread `new_detection` alerts whose `pattern_id` references a **`pending`** pattern
+
+**Recommended response:**
+
+```json
+GET /api/v1/subscriptions/alerts/unread-count
+
+{
+  "unread_total": 2,
+  "unread_new_detection": 2,
+  "unread_price_change": 0,
+  "pending_patterns": 6,
+  "reconciled": true,
+  "reconciliation_note": "unread_new_detection counts pending patterns with unread new_detection alerts; price_change alerts are informational"
+}
+```
+
+**UI contract:**
+
+| Surface | Display | Source |
+|---------|---------|--------|
+| `/subscriptions` banner | `{unread_new_detection} unread alert(s)` when >0; subtitle when `unread_new_detection != pending_patterns`: "N pending patterns to review" | unread-count API |
+| Toast after sync | Fire only when `unread_new_detection` increases vs sessionStorage | unread-count API |
+| Tab badges | `pending_patterns` count on Pending tab | existing list query or unread-count |
+
+**`reconciled: true`** when `unread_new_detection <= pending_patterns` AND every unread `new_detection` alert joins to a pending pattern (SQL LEFT JOIN guard). After dedup + orphan cleanup, expect **`unread_new_detection == pending_patterns`** for steady state.
+
+**Reject:** deriving banner count from `GET .../alerts?unread=true` list length without dedup — preserves W failure mode.
+
+### 3. Header bell scope (question 3)
+
+| Option | Verdict |
+|--------|---------|
+| Include subscription unread in badge total | **Defer** — crosses R-0023/US-0005 boundary; needs DEC + combined UX spec |
+| US-0005-only badge + popover subscription link | **Keep** — already implemented; operator W symptom is subscriptions-page banner (83), not bell (0) |
+| Remove popover subscription link | **Reject** — useful cross-nav |
+
+Document in architecture: subscription alert trust metric is **`/subscriptions` banner + unread-count API**, not header bell.
+
+### 4. Orphan/stale alert lifecycle (question 6)
+
+| Event | Action |
+|-------|--------|
+| `POST .../confirm` | `UPDATE subscription_alerts SET read_at = NOW() WHERE pattern_id = $1 AND alert_type = 'new_detection' AND read_at IS NULL` |
+| `POST .../reject` | Same + pattern status `rejected` stops future `new_detection` (fingerprint in rejections) |
+| `mark_inactive` | Mark-read all unread alerts for pattern |
+| One-time migration | Group by fingerprint; keep newest unread per `(pattern_id, alert_type)`; mark-read duplicates |
+
+Orphan case today: 83 alerts for 6 pending — ~77 are duplicate sync inserts for same patterns.
+
+### 5. Risks
+
+1. **X before W** — lowering detection thresholds without dedup re-amplifies alert spam (discovery risk #1); enforce W bundle first in sprint plan.
+2. **Partial unique + NULL fingerprint backfill** — migration must backfill before NOT NULL + index.
+3. **Price-change dedup too aggressive** — if operator marks read then price changes again legitimately, new fingerprint must differ by amount bucket.
+4. **`list_patterns` REST regression** — additive JSON only per R-0065 coordinate; unread-count is new route, not filter change.
+5. **Acceptance static numbers** — operator 33 vs 11 and live 83 vs 6 are **snapshots**; acceptance tests reconciled semantics, not fixed counts.
+
+### 6. Architecture decision gates
+
+| Gate | Question for `/architecture` |
+|------|------------------------------|
+| DEC-???? | Approve fingerprint formula + partial unique migration |
+| DEC-???? | unread-count response schema + `reconciled` computation |
+| DEC-???? | Upsert-only-on-new-pending vs every-sync upsert (touch `created_at`) |
+| DEC-???? | Backfill script scope for operator DB (83 rows) |
+
+**Linked:** BUG-0008, US-0003, US-0005, R-0011, R-0012, R-0013, R-0023, R-0065, R-0069  
+**Confidence:** high  
+**Status:** fulfilled — formalized as **DEC-0071**; BUG-0008 released Q0018 (2026-06-08); retain for traceability
+
+---
+
+## R-0069 — BUG-0008 detection recall levers & AI path boundary
+
+**Date:** 2026-06-08  
+**Topic:** BUG-0008 sub-defect **X** — under-detection from 922+ transactions; recall option matrix; AI-assisted detection scope  
+**Query:** Threshold tuning, payee normalization, category-aware grouping, standing-order split, in-pipeline vs async AI enrichment  
+**Sources:**
+- Code: `backend/src/recurrence/{group,detect,normalize}.rs`, `backend/src/subscriptions/detection.rs` (`min_emit_confidence: 60` hardcoded), `backend/config/default.toml` (`detection_window_days = 365`)
+- Live probe: 12 patterns (3 confirmed, 6 pending, 3 rejected); pending payees include long SEPA descriptor strings; BUG-0007 categories (`Shopping - Amazon` id 47, 28 tx) not forming patterns
+- Prior: [R-0009](docs/engineering/research.md#r-0009--subscription-detection-engine-patterns--confidence-scoring), [R-0010](docs/engineering/research.md#r-0010--dauerauftrag-standing-order-vs-subscription-classification), [R-0065](docs/engineering/research.md#r-0065--bug-0007-ai-merchant-category-discovery-tool-contracts-vs-rag) (AI chat vs detection boundary)
+- Web: [GiGurra/subscription-detector](https://github.com/GiGurra/subscription-detector) (35% amount tolerance default vs our 5–15%); [Spade recurring guide](https://docs.spade.com/reference/recurring-transaction-guide) (merchant identity normalization)
+
+### 1. Discovery open questions — resolution (X surface)
+
+| # | Question | Resolution |
+|---|----------|------------|
+| **4** | Recall levers | **Phased bundle** (§2) — Phase 1 normalization + window; Phase 2 category-aware grouping + optional confidence tuning. Standing-order split already shipped (R-0010). |
+| **5** | AI-assisted detection | **Out of sync mutex for MVP.** Document deferred path: optional async enrichment job post-detection (not BUG-0007 orchestrator). Acceptance **X** footer satisfied by rule improvements in execute; AI noted as future gate only. |
+
+### 2. Recall option matrix
+
+| Lever | Mechanism | Recall gain | False-positive risk | Phase | Verdict |
+|-------|-----------|-------------|---------------------|-------|---------|
+| **Payee normalization** | Extend `payee_key()`: strip SEPA `SVWZ+`/reference tokens, card suffixes, collapse legal-entity suffixes (`GmbH`, `AB`); prefer `counterparty_name` when description matches `SVWZ|UEBERWEISUNG|Lastschrift` regex | **High** — reduces SEPA fragmentation | Low | **1** | **Adopt** |
+| **Description vs counterparty priority** | For bank-transfer-shaped descriptions, use `counterparty_name` **before** full memo string (invert DEC-0061 priority for transfer type) | **High** — merges Netflix/Apple under merchant name | Medium — may merge distinct memos same counterparty | **1** | **Adopt with transfer-type guard** |
+| **Detection window** | `detection_window_days` 365 → **730** (config-only) | Medium — annual subs need 2+ cycles | Low | **1** | **Adopt** |
+| **Category-aware grouping** | When ≥70% txs in payee group share one `category_id`, add secondary grouping key `cat:{category_id}` for txs with weak payee keys | **High** — Amazon/Strom via Firefly categories (BUG-0007 probe) | Medium — category mis-tags merge wrong merchants | **2** | **Adopt** |
+| **min_emit_confidence** | 60 → 55 or tiered emit at 55 with UI "low confidence" badge | Medium | **High** — backlog originally set 60% floor | **2** | **Gate** — only after W dedup + operator FP review |
+| **Amount tolerance** | Widen low-tier to ±20% (config) | Low–medium | Medium | **2** | **Defer** — try normalization first |
+| **min occurrences** | 3 → 2 for monthly+ with 4+ months span | Medium | High | **3** | **Reject MVP** — Spade ≥3 months precedent |
+| **Standing-order reclassification** | Tune R-0010 CV thresholds | Low for subscription recall | Low | **3** | **Defer** |
+
+**Recommended execute bundle (X):** Phase 1 payee normalization + transfer-type counterparty priority + 730-day window. Phase 2 category-aware grouping. Measure via acceptance probe: pending+confirmed subscription-kind patterns **> 12** without `unread_new_detection > pending_patterns`.
+
+### 2.1 Code-confirmed gaps
+
+- `RecurrenceGroup.category_ids` populated in `detect.rs` but **not used** in grouping — category signal wasted.
+- `min_emit_confidence: 60` **hardcoded** in `detection.rs` — not wired to TOML (config gap).
+- `extract_payee_source` prefers description — SEPA memos become payee keys (live pending rows).
+
+### 3. AI-assisted detection (question 5)
+
+| Path | Verdict |
+|------|---------|
+| In-pipeline sync mutex (LLM classify groups) | **Reject** — latency, privacy (DEC-0032), non-determinism in mutex |
+| BUG-0007 orchestrator feeding detection | **Reject** — coordinate table; chat tools ≠ detection service |
+| Async post-detection enrichment job | **Defer** — optional architecture spike: suggest category/payee merges for operator review queue |
+| RAG over transactions | **Defer** — R-0065 note V; no infra |
+
+**Acceptance **X** footer:** document Phase 1–2 rule improvements in architecture/release notes; state AI path deferred with optional async gate in DEC.
+
+### 4. Sequencing dependency (R-0068)
+
+**W dedup must ship before or with Phase 1 recall.** Each new pending pattern currently adds another undeduped alert per sync — recall work without W fix worsens operator trust.
+
+### 5. Risks
+
+1. **Over-merge** — counterparty priority merges distinct subscriptions same biller (e.g. multiple Apple services).
+2. **Category false joins** — shared "Shopping" category merges unrelated merchants.
+3. **Regression on forecast** — recurrence core shared with forecast (DEC-0013); normalization changes affect both — require integration tests.
+4. **Coordinate table** — `SubscriptionService::list_patterns` filter behavior unchanged; detection internals only.
+
+### 6. Architecture decision gates
+
+| Gate | Question for `/architecture` |
+|------|------------------------------|
+| DEC-???? | Phase 1 normalization rules + transfer-type detection |
+| DEC-???? | Category-aware grouping threshold (70% same category) |
+| DEC-???? | Wire `min_emit_confidence` to TOML vs keep 60 hard floor |
+| DEC-???? | AI async enrichment — in BUG-0008 scope or new US |
+
+**Linked:** BUG-0008, US-0003, BUG-0007, R-0009, R-0010, R-0013, R-0065, R-0068  
+**Confidence:** high  
+**Status:** fulfilled — formalized as **DEC-0072** Phase 1; BUG-0008 released Q0018 (2026-06-08); Phase 2 category grouping gated; retain for traceability
+
+---
+
+## R-0070 — BUG-0011 planning mode compare delta, empty-state API, first-run UX
+
+**Date:** 2026-06-08  
+**Topic:** BUG-0011 sub-defects **AD/AE/AF** — compare metric semantics, plan-vs-actual empty contract, first-run onboarding, add-adjustment wiring  
+**Query:** Resolve six discovery open questions: compare delta definition; empty-plan zero semantics; plan-vs-actual API shape when no active plan; first-run create/activate matrix; add-adjustment UX; OIDC/Grafana regression scope  
+**Sources:**
+- Code: `backend/src/plan/repository.rs` (`version_metrics` sums `planned_net`), `backend/src/plan/service.rs` (`project_adjustments_in_memory` identical bug), `backend/src/plan/project.rs` (`planned_net = baseline_net + overlay_delta`), `backend/src/plan/overlay.rs` (`build_overlay_deltas`), `backend/src/api/plans.rs` (`plan_error_status` 404 on `NoActivePlan`; `risk_score` 200 `no_score`), `frontend/src/pages/PlanningPage.tsx` (empty state Leasing-only; no add form; `pvaQuery` no error branch)
+- Prior: [R-0015](docs/engineering/research.md#r-0015--plan-engine-delta-overlay-on-forecast-baseline) (overlay model), [R-0016](docs/engineering/research.md#r-0016--plan-scenario-versioning-immutable-snapshots-vs-editable-drafts) (compare metrics: "Monthly delta sum (net recurring impact €/month)"), [R-0017](docs/engineering/research.md#r-0017--plan-vs-ist-daily-computation--aggregation-grain), [R-0020](docs/engineering/research.md#r-0020--grafana-dashboard-3-budgets-planistdeviation-provisioning) (Grafana uses stored `planned_net`, not compare endpoint)
+- User guide: `docs/user-guides/US-0004.md` (custom lines manual add; explicit Set active)
+- Web: [Model Reef — scenario override layer + comparison pack](https://modelreef.io/resources/articles/scenario-analysis/scenario-analysis-build-real-time-scenario-planning-models-without-spreadsheet-sprawl) (baseline locked; scenarios = override layer; compare shows delta vs base); [Logica — scenario comparison variance columns](https://help.logica.cloud/en/articles/5160561-comparing-scenarios-with-views) (base vs scenario delta, not scenario total labeled as delta)
+
+### 1. Discovery open questions — resolution
+
+| # | Question | Resolution |
+|---|----------|------------|
+| **1** | Compare delta contract | **Overlay-only monthly delta** — sum daily values from `build_overlay_deltas(adjustments, …)` for current calendar month through today (same sign convention as R-0015). Reject summing `plan_daily_cashflow.planned_net` (baseline + overlay). Reject per-version delta vs sibling version (compare table already lists each version side-by-side). **Projected month-end balance** stays full scenario total (`planned_balance` at horizon end-of-month) — not an overlay metric; relabel/help text optional in execute. |
+| **2** | Empty-plan zero semantics | When `adjustments.is_empty()` (Custom template or zero lines): **`monthly_delta_sum` MUST format `0.00`** regardless of baseline forecast magnitude. **`projected_month_end_balance`** = baseline month-end balance from projection (may be negative — that reflects household forecast, not a "delta"); acceptance **AE** illogical aggregate targets mislabeled delta column primarily. Optional execute footnote under compare table: "Monthly delta = scenario adjustments only; projected balance includes baseline forecast." |
+| **3** | plan-vs-actual empty API | **HTTP 200 tagged `{ status: "no_active_plan", reason: "no_active_plan" }`** — mirror `GET /api/v1/plans/risk-score` `RiskScoreApiResponse::NoScore` pattern. Reject raw **404** (breaks tab; acceptance **AF**). Reject **200 + `rows: []` alone** (ambiguous vs active plan with sparse data). Reject **auto-activate on create** (violates US-0004 explicit Set active; use guided UX instead). |
+| **4** | First-run onboarding | **Empty state (`plans.length === 0`)**: show compact template card grid (reuse `TEMPLATES` including **Custom**) plus name field and primary **Create empty plan** (`POST { name, template: "custom" }`) — satisfies **AD** "Start empty and add lines" entry path. Keep **Create from Leasing template** as secondary quick path. **Do not auto-activate** globally; after first create show inline banner: "Set active to enable Plan vs Actual and Grafana Dashboard 3." Optional pragmatic shortcut (architecture gate): auto-activate only when `plans.length === 1` after create — **defer**; prefer explicit Set active + AF 200 guided state. |
+| **5** | Add-adjustment UX | **Inline add form** above adjustments table (not modal — savings_mode modal stays exception). Required fields per R-0015: `direction`, `amount`, `frequency` (default `monthly`), `target_type` (default `household`), optional `label`, `effective_from` (default today). Wire **`POST /api/v1/plans/{id}/versions/{vid}/adjustments`** + **`PATCH …/adjustments/{aid}`** for edit; invalidate `plan-version`, `plan-compare`, `plans` queries; backend already `spawn_recompute` on add. Custom template **Apply** on existing empty plan: toast "Custom plan ready — add lines below" (no silent no-op). |
+| **6** | Regression scope | **OIDC deploy smoke** for `/planning` all three tabs mandatory (acceptance **AF** tail). **Grafana Dashboard 3 (`budgets`) unchanged** for AE — panels read `plan_daily_cashflow.planned_net` (full scenario series, correct for Plan/Ist/Abweichung per R-0020); compare fix is **`/compare` endpoint + React Compare tab only**. No panel SQL review required; note in release notes that compare table semantics align with R-0016 after BUG-0011. |
+
+### 2. Compare metric formula (acceptance **AE** — recommend **DEC-0073**)
+
+**Root cause:** `version_metrics` and `project_adjustments_in_memory` sum `planned_net` (= baseline + overlay), producing operator **-127489.44** on zero-adjustment plans.
+
+**Fix (single helper, two call sites):**
+
+```text
+monthly_delta_sum(version) =
+  SUM( overlay_delta(d) for d in [month_start .. min(today, month_end)] )
+  where overlay_delta = build_overlay_deltas(adjustments, confirmed_subs, month_start, month_end)[d]
+
+projected_month_end_balance(version) =
+  planned_balance at overlay_horizon_end(month_start) from full project_plan_series
+  (unchanged — includes baseline)
+```
+
+**Impact on non-empty plans:**
+
+| Template | Before (bug) | After (correct) |
+|----------|--------------|-----------------|
+| Custom / Current, 0 lines | ~full forecast net (e.g. -127489) | **0.00** delta |
+| Leasing (+€300/mo outflow) | baseline + leasing total | **~-300/mo** overlay delta |
+| Savings mode (removals + cut) | baseline-dominated sum | **net overlay** (removed sub amounts + cut) |
+
+**Migration note:** Compare numbers shift for all plans — intentional alignment with R-0016; document in BUG-0011 release notes (not a DB migration).
+
+**Alternatives rejected:**
+
+| Option | Why rejected |
+|--------|--------------|
+| Delta vs Current (Ist) baseline version row | Equivalent math when overlay additive; extra baseline version fetch without UX gain |
+| Rename column only (keep wrong sum) | Does not satisfy acceptance zero/neutral deltas |
+| Store overlay series separately in hypertable | Scope creep; compute overlay sum at read time from adjustments |
+
+### 3. plan-vs-actual empty-state contract (acceptance **AF** — recommend **DEC-0074**)
+
+Extend response with tagged enum (Axum `#[serde(tag = "status")]`):
+
+```json
+// Active plan exists — unchanged shape
+{
+  "status": "ok",
+  "month": "2026-06",
+  "reporting_currency": "EUR",
+  "plan_stale": false,
+  "actuals_stale": false,
+  "rows": [ … ]
+}
+
+// No active plan — HTTP 200 (not 404)
+{
+  "status": "no_active_plan",
+  "reason": "no_active_plan"
+}
+```
+
+**Frontend:** `pvaQuery` with `retry: false`; when `status === "no_active_plan"`, render guided card (link to Set active / create plan) — mirror risk-score badge handling.
+
+**Breaking change:** Clients expecting 404 must migrate; document in API changelog + user guide § Plan vs Actual.
+
+**Alternatives rejected:**
+
+| Option | Why rejected |
+|--------|--------------|
+| 404 + frontend-only fix | Acceptance **AF** requires API 200; raw 404 fails AC |
+| Auto-activate first plan | Hides explicit active-plan semantics; breaks multi-plan operators |
+| 200 + empty rows only | Indistinguishable from active plan with no computed rows |
+
+### 4. AD bundle (execute scope — no separate DEC)
+
+| Gap | Execute fix |
+|-----|-------------|
+| Empty state Leasing-only | Add **Create empty plan** + template cards when `plans.length === 0` |
+| Custom Apply silent | Success toast + scroll/focus add form |
+| No POST wiring | Inline add/edit form → existing `add_adjustment` / `update_adjustment` routes |
+| First-run path | `POST template=custom` creates plan with `PlanTemplate::Custom` defaults `[]` then shows editable table |
+
+Bound to **US-0014** for holistic polish (tooltips, wizard) — out of BUG-0011 defect scope per discovery.
+
+### 5. Risks (carry to architecture)
+
+1. **Compare number shift** — non-empty plans show smaller monthly delta (overlay-only); release note required.
+2. **DEC ID coordination** — `docs/engineering/runbook.md` forward-references **DEC-0073** for US-0090 caveman compression; formalize BUG-0011 **AE/AF** as DEC-0073/DEC-0074 first in `decisions/` or renumber US-0090 at architecture.
+3. **Negative projected balance on empty overlay** — baseline forecast may still show negative month-end; mitigate with compare help text, not zeroing balance.
+4. **Tagged PVA response** — TypeScript `PlanVsActual` union type + any API consumers must handle `no_active_plan`.
+
+### 6. Recommended architecture decisions
+
+| ID | Scope | Bundle |
+|----|-------|--------|
+| **DEC-0073** | **AE** | Overlay-only `monthly_delta_sum` via `build_overlay_deltas`; `projected_month_end_balance` unchanged; shared helper in `repository.rs` + `service.rs` |
+| **DEC-0074** | **AF** | `plan-vs-actual` 200 tagged `no_active_plan`; frontend guided empty state; optional `PlanVsActualResponse` union |
+
+**Sequencing:** AE backend metric (DEC-0073) before or with AF API (DEC-0074); AD frontend can parallel once API contracts frozen.
+
+**Linked:** BUG-0011, US-0004, US-0014 (deferred epic), R-0015, R-0016, R-0017, R-0020  
+**Confidence:** high  
+**Status:** fulfilled — released Q0019 2026-06-08; formalized as **DEC-0073** (AE) and **DEC-0074** (AF); US-0090 caveman forward-ref renumbered to **DEC-0075**; retain for traceability
+
+---
+
+## R-0071 — US-0013 production ML enablement on omniflow external profile
+
+**Date:** 2026-06-08  
+**Topic:** US-0013 re-intake — external profile ML sidecar wiring, sync gates, acceptance decomposition, sprint-plan slice boundaries  
+**Query:** Close AC3 gap from BUG-0010; enable US-0009 ML on `financegnome.omniflow.cc` without new model research  
+**Sources:**
+- Code: `docker-compose.yml` (`stats-forecast` `profiles: [full]`), `docker-compose.external.yml` (no sidecar today), `backend/config/default.toml` `[forecast_ml]`, `backend/src/sync/mod.rs`, `backend/src/forecast_ml/`, `frontend/src/pages/ForecastPage.tsx`
+- Prior: [R-0043](research.md#r-0043--self-hosted-statistical-forecasting-for-us-0009-discovery), [R-0044](research.md#r-0044--statsforecast-sidecar-compose-footprint-and-latency), [R-0062](research.md#r-0062--firefly-account-balance-mirror-vs-forecastwealth-inputs), [R-0034](research.md#r-0034--fx-conversion-for-crypto--eur-reporting-currency)
+- Architecture: `docs/engineering/architecture.md` § US-0009 (DEC-0049–DEC-0055)
+- Intake evidence: `handoffs/intake_evidence/intake-20260608-us0013.json`
+
+**Findings:**
+
+### Root cause (confirmed — infra/feature-completion, not projection bug)
+
+| Gap | Effect |
+|-----|--------|
+| `stats-forecast` on `full` profile only | External omniflow (`--profile external`) never starts sidecar |
+| `[forecast_ml] enabled=false` default (DEC-0049) | Sync skips ML phase; no `ml_enhanced` rows |
+| BUG-0010 DONE | Baseline AA/AB/AC satisfied; AC3 explicitly deferred to US-0013 |
+
+### Recommended enablement path (discovery/architecture input)
+
+1. **Compose S1:** Add `stats-forecast` to external overlay with `profiles: [external]` (or shared service on both `full`+`external`); keep `STATS_FORECAST_PORT=8091` on omniflow host.
+2. **Config S1:** Document `FORECAST_ML_ENABLED=true` + `STATS_FORECAST_URL=http://stats-forecast:8090` in `.env.example` omniflow block; operator opt-in preserves DEC-0049 default-off elsewhere.
+3. **Sync S2:** Existing DEC-0052 phase — verify sidecar health gate + `record_skip_on_baseline` on failure; no sync abort.
+4. **UI/Grafana S3:** US-0009 Compare + bands already implemented — wire verification on external profile; Grafana ML panels bind `$forecast_variant=ml_enhanced` (DEC-0055).
+5. **Ops S4:** Runbook section: Full sync prerequisite, `min_monthly_points` gate (default 12), health probe, degraded troubleshooting.
+
+### Sprint-plan decomposition (4 vertical slices)
+
+| Slice | Boundary | Independent value |
+|-------|----------|-------------------|
+| **US-0013-S1** | Compose + env + config merge | Operator can start sidecar on external profile |
+| **US-0013-S2** | Sync phase + API `variant=ml_enhanced` | Post-sync ML rows persist |
+| **US-0013-S3** | React Compare + wealth overlay + Grafana panels | Operator sees ML in product UI |
+| **US-0013-S4** | Runbook + CI mock sidecar test | Ops repeatability without prod secrets |
+
+**Alternatives rejected:**
+
+| Option | Why rejected |
+|--------|--------------|
+| Merge into BUG-0010 | BUG closed Q0013; AC3 explicitly epic-scoped |
+| New US-0017..0020 backlog IDs now | Breaks epic traceability; sprint-plan owns slice IDs |
+| Embedded Rust ML (augurs) | R-0044 rejected for US-0009; sidecar path shipped |
+
+**Risks:**
+
+- Short mirror history → SeasonalNaive fallback or skip (DEC-0051) — document in runbook
+- Sidecar memory on shared omniflow host — monitor; StatsForecast footprint bounded per R-0044
+- FX incomplete crypto (R-0034) → low-confidence banner, not block ML cashflow overlay
+
+**Linked:** US-0013, US-0009, US-0010, BUG-0010, DEC-0049, DEC-0052, DEC-0055, DEC-0066, R-0034, R-0043, R-0044, R-0062  
+**Confidence:** high  
+**Status:** current — intake synthesis 2026-06-08
+
+### Discovery open questions — research resolution (2026-06-08)
+
+**Web refs:** [Docker Compose profiles merge](https://github.com/docker/compose/pull/7930) (profile arrays additive across files); [Compose networking](https://docs.docker.com/compose/how-tos/networking/) (service-name DNS on shared networks); prior [R-0053 §2](research.md#r-0053--us-0010-omniflow-external-deploy-timescaledb-profile-guard-traefik-env-grafana-oidc-ci) (external-only service-list CI); [R-0044](research.md#r-0044--statsforecast-sidecar-vs-rust-augurs-execution-model) (sidecar footprint, numba JIT); [R-0045](research.md#r-0045--seasonal-model-selection-autoets-mstl-fallback) (≥12 mo gate); code: `docker-compose.yml`, `docker-compose.external.yml`, `scripts/compose-config-check.sh`, `backend/src/forecast_ml/service.rs`, `backend/src/forecast_ml/sidecar.rs`.
+
+| Topic | Question | Resolution (per research) |
+|-------|----------|---------------------------|
+| **Profile union** | `profiles: [full, external]` on base vs external-only overlay — avoid duplicate sidecar on `full+external` | **Overlay merge additive profiles** — keep single `stats-forecast` service in base (`profiles: [full]`); external overlay adds `profiles: [external]` + network/port overrides. Compose merges profile arrays → `[full, external]` on one service definition → **one container** when either profile active; no duplicate service name blocks. Reject separate full-only + external-only service definitions (invalid duplicate keys). `full+external` union starts one sidecar; `external` alone starts one sidecar. |
+| **Network** | Traefik-only sidecar vs dual-network backend | **Traefik-only co-attachment** on external merge — mirror `flow-finance-ai`/`grafana` pattern: overlay sets `networks: [traefik]` on `stats-forecast`; backend reaches `http://stats-forecast:8090` via embedded DNS on shared network. Dual-network (default + traefik) unnecessary when backend is traefik-only; adds default `_default` network noise. Host port `${STATS_FORECAST_PORT:-8091}:8090` optional for operator curl; internal DNS uses container port 8090. |
+| **Sidecar SLO** | Health probe timing on shared omniflow host (R-0044) | **Runtime health gate, not compose `depends_on`** — backend `health_ok()` GET `/health` before ML phase (60s HTTP timeout per `sidecar_timeout_secs`); compose healthcheck `start_period: 30s`, `interval: 30s`, `retries: 3` advisory only. First sync after cold start may record `sidecar_unavailable` skip if sidecar still warming — acceptable per DEC-0052. Numba JIT first forecast ~5s warm (R-0044); document operator smoke: `docker compose … ps` healthy + in-container `curl stats-forecast:8090/health` before expecting ML rows. |
+| **Min history** | Production mirror ≥12 monthly points post–Full sync or skip path (DEC-0051) | **No production gate override** — retain `min_monthly_points = 12` default (`default.toml`, `ForecastMlService::recompute` max across asset accounts). Omniflow with successful Full sync should satisfy gate (BUG-0010 confirmed 731 daily forecast rows). If `<12` monthly net-cashflow points → `InsufficientHistory` → `record_skip_on_baseline` with `insufficient_history`; SeasonalNaive ladder (DEC-0051) applies only when gate passes. Runbook: run Full sync before ML enablement smoke. |
+| **CI scope** | Compose `config --services` assert vs wiremock integration only | **Both layers** — extend `scripts/compose-config-check.sh`: external-only merge must list `flow-finance-ai`, `grafana`, **`stats-forecast`** (3 services); assert `stats-forecast` joins `traefik` network; retain `cargo test --test forecast_ml_integration` in `tests/run-tests.sh` for sidecar mock + skip-metadata path. Wiremock-only insufficient — leaves US-0010 AC-1 regression gap if overlay sidecar block regresses. |
+
+### Recommended architecture decisions (DEC-0076 area)
+
+| Element | Recommendation | Alternative rejected |
+|---------|----------------|----------------------|
+| Compose contract | Overlay merge on existing `stats-forecast`; additive `external` profile; traefik network + optional host port remap | Duplicate service name in overlay; `full`-only forever |
+| Env opt-in | `FORECAST_ML_ENABLED=true` + `STATS_FORECAST_URL=http://stats-forecast:8090` on `flow-finance-ai` in external merge; DEC-0049 default-off elsewhere | TOML-only enable without env documentation |
+| Failure semantics | Unchanged DEC-0052/0066 — health/history/sidecar errors → skip metadata, sync continues | Fail sync on ML error |
+| CI guard | Update compose-config-check expected service set + traefik network assert | Wiremock integration only |
+
+**Risks (carry to architecture):**
+
+1. **Cold-start race** — first sync after `compose up` may skip ML until sidecar healthcheck green; runbook must document retry via manual sync
+2. **Profile combination** — `minimal+external` or `full+external` on dev host still valid for sidecar; `minimal+external` must not resurrect `firefly-iii` (existing DEC-0056 guard unchanged)
+3. **Host memory** — StatsForecast ~80–120 MB RSS on shared omniflow host (R-0044); monitor alongside postgres/grafana
+4. **CI drift** — forgetting to update `compose-config-check.sh` when overlay lands silently regresses AC-1 pattern
+
+**Linked (extended):** R-0053, DEC-0056, DEC-0076 (formalized 2026-06-08 architecture)  
+**Confidence:** high  
+**Status:** fulfilled — released S0014 2026-06-08 (`0.14.0-us0013`); formalized as **DEC-0076**; architecture § US-0013; retain for traceability
+
+---
+
+## R-0072 — US-0014 planning UX epic gap beyond BUG-0011
+
+**Date:** 2026-06-08  
+**Topic:** US-0014 re-intake — holistic planning UX polish after BUG-0011 AD/AE/AF release  
+**Query:** What UX gaps remain after Q0019 functional fixes; sprint-plan slice boundaries; acceptance decomposition  
+**Sources:**
+- Prior: [R-0070](docs/engineering/research.md#r-0070--bug-0011-planning-mode-compare-delta-empty-state-api-first-run-ux) (fulfilled Q0019), [R-0015](docs/engineering/research.md#r-0015--plan-engine-delta-overlay-on-forecast-baseline), [R-0016](docs/engineering/research.md#r-0016--plan-scenario-versioning-immutable-snapshots-vs-editable-drafts)
+- Decisions: **DEC-0073** (overlay-only compare), **DEC-0074** (PVA 200 `no_active_plan`)
+- Release: Q0019 shipped AD inline add form, AE overlay delta, AF tagged PVA response
+- Web: [Nielsen Norman — empty states](https://www.nngroup.com/articles/empty-state-interface-design/) (actionable empty states with primary CTA); [Material Design — onboarding patterns](https://m3.material.io/foundations/interaction/gestures) (progressive disclosure for first-run flows)
+
+### 1. Gap analysis (post-BUG-0011)
+
+| UX surface | BUG-0011 scope | US-0014 epic scope |
+|------------|----------------|-------------------|
+| First-run empty state | Wired add form + empty create path (AD) | Template grid + **Create empty plan** primary CTA; all templates visible |
+| Compare tab | Correct **0.00** overlay delta (AE/DEC-0073) | Contextual help copy; projected balance footnote |
+| Plan vs Actual | 200 `no_active_plan` + basic card (AF/DEC-0074) | Polished guided card with Set active / Scenarios links |
+| Templates | Functional apply paths | Discoverability from empty state + existing-plan UI |
+| Set active | Implicit via US-0004 | Persistent banner/cue after first create |
+| Errors | API paths work | Operator-visible toasts on mutation failure |
+
+**Conclusion:** BUG-0011 closed **broken** behavior; US-0014 closes **confusing** first-visit experience. No backend metric or API contract changes expected unless discovery finds regression.
+
+### 2. Recommended sprint-plan slices
+
+| Slice | Scope | Acceptance rows |
+|-------|-------|-----------------|
+| **US-0014-S1** | First-run onboarding + templates + Set-active banner | AC-1, AC-5, AC-6 |
+| **US-0014-S2** | Add-lines polish + error surfaces | AC-2, AC-7 |
+| **US-0014-S3** | Compare help + PVA guided polish + OIDC smoke | AC-3, AC-4, AC-8 |
+
+### 3. Risks (carry to discovery)
+
+1. **Overlap with shipped AD** — discovery must audit Q0019 `PlanningPage.tsx` delta vs AC-1/AC-2 to avoid duplicate execute work
+2. **Negative projected balance** — baseline forecast may still show negative month-end on empty overlay; mitigate with help text only (DEC-0073 frozen)
+3. **USER_GUIDE_MODE=1** — `docs/user-guides/US-0014.md` required at release; coordinate with US-0032 contract
+
+### 4. Discovery open questions — research resolution (2026-06-08)
+
+Research (`research-20260608-us0014`, orchestrator `auto-20260608-us0014-001`) resolves all four discovery carry-forward items. Detailed analysis: [R-0073](docs/engineering/research.md#r-0073--us-0014-planning-mutation-error-toast-patterns). Recommended decision: **DEC-0077** (planning mutation feedback contract).
+
+| Question | Resolution |
+|----------|------------|
+| **Error UX** — page-local helper vs per-mutation inline vs global MutationCache? | **Page-local `showPlanningFeedback` helper** — reuse existing green card pattern in `PlanningPage.tsx` / `SubscriptionsPage.tsx`; success `#ecfdf5` / error `#fef2f2`; single active slot. Reject global `MutationCache` + toast library (no dep today; scope creep). |
+| **Invalidation** — invalidate `plan-vs-actual` immediately or wait for recompute badge? | **Immediate** on adjustment CRUD, activate, and createPlan success — PVA tab may be open; `plan_stale` badge is advisory not a gate. Extend existing `plan-version` / `plan-compare` invalidation. |
+| **Confirmation scope** — toast on every template create vs primary CTA only? | **Required** on createPlan (empty + template), applyTemplate (all templates — extend Q0019 Custom-only path), addAdjustment, activate. **Optional** on update/delete adjustment to avoid edit noise. |
+| **User guide** — `docs/user-guides/US-0014.md` section scope? | **Incremental over US-0004** — Purpose (first-run polish); First visit (template grid + Create empty plan); Set active + Grafana Dashboard 3 (`budgets`); Compare overlay-only delta footnote (DEC-0073); brief Troubleshooting (visible mutation errors per DEC-0077). File created at **architecture**; content validated at execute S3. |
+
+**Sprint slice adjustment (post-discovery):** S2 primary (AC-7 + AC-2 invalidation); S1 mostly verify + banner/toasts (AC-5/AC-6); S3 verify shipped AC-3/AC-4 + user guide + OIDC smoke (AC-8).
+
+**Linked:** US-0014, BUG-0011, US-0004, DEC-0073, DEC-0074, DEC-0077, R-0070, R-0073  
+**Confidence:** high  
+**Status:** fulfilled — released S0015 2026-06-08 (`0.15.0-us0014`); formalized as **DEC-0077**; architecture § US-0014; retain for traceability
+
+---
+
+## R-0073 — US-0014 planning mutation error/toast patterns
+
+**Date:** 2026-06-08  
+**Topic:** Planning mutation feedback — page-local helper vs global MutationCache; invalidation timing; confirmation scope  
+**Query:** Resolve discovery open questions for AC-7 error surfaces and AC-2/AC-5 feedback before DEC-0077  
+**Sources:**
+- Prior: [R-0072](docs/engineering/research.md#r-0072--us-0014-planning-ux-epic-gap-beyond-bug-0011), Q0019 `PlanningPage.tsx` audit
+- Codebase: `frontend/src/pages/PlanningPage.tsx` (inline green card toast); `frontend/src/pages/SubscriptionsPage.tsx` (same pattern); `frontend/src/lib/api.ts` (`Error` with response body text)
+- Web: [TanStack Query mutations guide](https://tanstack.com/query/v5/docs/framework/react/guides/mutations) (`onError` per mutation); [Atomic Object — MutationCache toasts](https://spin.atomicobject.com/toast-notifications-tanstack-query/) (global cache pattern); [GitHub #3441](https://github.com/TanStack/query/discussions/3441) (`meta` opt-out for global handlers)
+
+### 1. Error UX pattern
+
+| Option | Fit | Verdict |
+|--------|-----|---------|
+| **Page-local `showPlanningFeedback` helper** | Matches existing inline card; 7 mutations on one page; no toast library in repo | **Recommend** |
+| Global `MutationCache` + toast lib | Consistent cross-app; requires new dependency + QueryClient refactor | **Reject for US-0014** — scope creep |
+| Per-mutation inline only | Works but duplicates `apiFetch` error parsing | **Reject** — extract helper |
+
+**Conclusion:** Single page-local helper with success/error variants; one active message slot (replace on new feedback).
+
+### 2. Invalidation timing
+
+| Option | Verdict |
+|--------|---------|
+| Invalidate `plan-vs-actual` immediately on adjustment success | **Recommend** — PVA tab may be open in another session; stale rows confuse operators |
+| Wait for recompute / `plan_stale` badge clear | **Reject** — adds latency; badge is advisory not gate |
+
+### 3. Confirmation scope
+
+| Path | Toast |
+|------|-------|
+| `createPlanMutation` (empty + template) | **Required** — AC-5 visible confirmation |
+| `applyTemplateMutation` (all templates) | **Required** — extend Q0019 Custom-only path |
+| `addAdjustmentMutation` | **Required** — AC-2 success feedback |
+| `updateAdjustmentMutation` / `deleteAdjustmentMutation` | **Optional** — avoid noise on frequent edits |
+
+### 4. Error message extraction
+
+`apiFetch` throws `new Error(text || resp.statusText)` for non-2xx. Helper should:
+
+- Truncate body to 240 chars (JSON error payloads)
+- Prepend mutation-specific label when body empty
+- Never log-only — AC-7 requires operator-visible surface
+
+### 5. User guide scope (`USER_GUIDE_MODE=1`)
+
+US-0014 guide is **delta documentation** over [US-0004](../user-guides/US-0004.md) — not a full planning rewrite.
+
+| Section | Content | Acceptance tie-in |
+|---------|---------|-------------------|
+| **Purpose** | First-visit polish + visible mutation feedback shipped in US-0014 | Prerequisite row |
+| **First visit** | Template card grid, name field, **Create empty plan**, **Create from {template}** | AC-1, AC-5 |
+| **Set active** | Yellow banner after create; Plan vs Actual + **Grafana Dashboard 3** (`budgets`) require active plan | AC-6, DEC-0024 |
+| **Compare semantics** | Overlay-only monthly delta vs projected balance footnote | AC-3, DEC-0073 |
+| **Troubleshooting** | Failed planning actions show red feedback card (not console-only) | AC-7, DEC-0077 |
+| **Related documentation** | Link US-0004 for templates, versioning, API examples | DEC-0059 split |
+
+**Timing:** Create `docs/user-guides/US-0014.md` at **architecture** (match US-0013 precedent); execute S3 validates against shipped UI; release gate when `USER_GUIDE_MODE=1`.
+
+**Linked:** US-0014, DEC-0077, R-0072, BUG-0011, DEC-0073, DEC-0074, DEC-0059, US-0032  
+**Confidence:** high  
+**Status:** fulfilled — released S0015 2026-06-08 (`0.15.0-us0014`); formalized as **DEC-0077** (2026-06-08); extends R-0072 §4; architecture § US-0014; retain for traceability
+
+---
+
+## R-0074 — US-0015 AI forecast bucket mapping (rule+LLM cascade, privacy)
+
+**Date:** 2026-06-06  
+**Topic:** US-0015 — AI-assisted income/fixed/variable bucket assignment when Firefly categories missing or ambiguous  
+**Query:** Privacy-first transaction categorization patterns; rule-before-LLM cascades; fixed/variable/income bucket decomposition for forecast projection (not chat)  
+**Sources:**
+- Prior: [R-0060](docs/engineering/research.md#r-0060--bug-0007-ai-merchant-category-discovery-fix-options) (BUG-0007 tool path; six-tool registry; category_search); DEC-0007 category bucket map; DEC-0032 privacy defaults
+- Web: [NumbyAI](https://github.com/RoXsaita/NumbyAI-Public) (rule engine → LLM batch for ambiguous rows); [Spendify](https://github.com/drake69/spendify) (4-step cascade: user rules → regex → LLM → fallback + PII sanitization); [finn-tracker](https://github.com/RachithP/finn-tracker) (200+ static rules + learned merchant overrides); [Finima](https://github.com/pacphi/finima) (local Ollama categorization on-device)
+
+### 1. Problem framing
+
+Operators expect `/forecast` **Monthly** tab Income/Fixed/Variable cards to reflect real spending after **BUG-0012** config baseline (Q0014). Remaining gap: mirror rows with **missing Firefly categories**, **custom German labels** outside TOML map, or **ambiguous merchant-only signals** still collapse to Variable or silent mis-bucketing. US-0015 closes AI enrichment on the **projection path** — not chat enumeration (BUG-0007 DONE / DEC-0069).
+
+### 2. Industry pattern (privacy-first cascades)
+
+Open-source personal-finance tools converge on a **deterministic-first, LLM-second** pipeline:
+
+| Stage | Mechanism | US-0015 analog |
+|-------|-----------|----------------|
+| 1 | Config / user rules | DEC-0007 `[forecast.category_buckets]` + mirror `category_id` (**AC-1**) |
+| 2 | Regex / merchant learned rules | Optional operator TOML aliases (discovery scope) |
+| 3 | LLM batch for ambiguous rows | New inference module with confidence score (**AC-2**) |
+| 4 | Safe fallback | Variable bucket + operator-visible low-confidence flag |
+
+**Privacy:** Local-first tools (NumbyAI, Finima, finn-tracker) keep inference on-device; remote LLM tools (Spendify) **sanitize PII before payload**. Flow Finance AI already enforces aggregate-first via DEC-0032 — US-0015 must **not** widen raw row access by default.
+
+### 3. Recommended MVP path (for `/discovery` → `/architecture`)
+
+**Primary: config map → feature extraction → LLM bucket proposal → projection merge**
+
+1. **Feature extraction (privacy-safe):** category name (if present), normalized merchant token from description (hashed/redacted per DEC-0032), amount sign/magnitude bucket, recurring pattern `display_name`, subscription class — **no raw IBAN/counterparty** under default TOML.
+2. **LLM call:** Batch ambiguous rows; structured output `{ bucket: income|fixed|variable, confidence: 0..1, rationale_code }`; reuse US-0008 provider abstraction (OpenAI/Ollama).
+3. **Projection merge:** `categorize_delta` applies config first; AI only on map miss; low confidence (&lt; threshold TBD in architecture) → Variable + audit flag.
+4. **Operator visibility:** API `bucket_source` + UI **AI-mapped** badge when any AI contribution in month totals (**AC-4/AC-5**).
+5. **Audit:** Persist assignment decisions in existing AI audit table pattern (**AC-6**).
+
+**Explicitly deferred:** RAG/vector index (R-0060 §7); seventh chat tool; Firefly write-back; US-0013 ML overlay changes.
+
+### 4. Overlap with BUG-0007 / DEC-0069
+
+| Surface | BUG-0007 (chat) | US-0015 (forecast) |
+|---------|-----------------|---------------------|
+| Trigger | User natural-language question | Projection recompute on mirror sync |
+| Output | Tool JSON to orchestrator | Bucket assignment in `project.rs` loop |
+| Category resolution | `category_search` on `get_transactions` | Config map + AI inference module |
+| Shared code risk | `categories` mirror, normalization helpers | **Additive module** — do not change six-tool contracts |
+
+**Rule:** Share **category name normalization** and **merchant tokenization** utilities where possible; **do not** route forecast bucketing through chat tools.
+
+### 5. Architecture decision gates (resolved at research 2026-06-06)
+
+| Gate | Research resolution | Formalize at architecture |
+|------|---------------------|---------------------------|
+| Confidence threshold | **0.75 default** (`ai_bucket_min_confidence` TOML); below → Variable + audit | **DEC-0078** |
+| Invalidation | Inline recompute each forecast pass; config-hash bust; no cross-run DB cache MVP | **DEC-0078** |
+| Feature allowlist | [R-0075](research.md#r-0075--us-0015-forecast-bucket-privacy-feature-allowlist) | **DEC-0078** + DEC-0032 extension |
+| API provenance | Per-month `bucket_sources` map + top-level `ai_mapped` boolean | **DEC-0078** |
+| Provider default | Reuse US-0008 `build_provider()`; rule-only when provider absent | **DEC-0078** |
+| Merchant aliases TOML | **Defer post-MVP**; category_buckets sufficient for S1 | Note in architecture |
+
+### 6. Acceptance mapping
+
+| Row | Research coverage |
+|-----|-----------------|
+| Prerequisite BUG-0012 | Config baseline shipped Q0014 — AI extends only |
+| AC-1 | Stage 1 config precedence |
+| AC-2 | Stage 3 LLM + confidence |
+| AC-3 | [R-0075](research.md#r-0075--us-0015-forecast-bucket-privacy-feature-allowlist) |
+| AC-4/AC-5 | §7 API provenance |
+| AC-6 | Audit persistence |
+| AC-7 | Surface isolation + OIDC smoke |
+
+### 7. Discovery open questions — research resolution (2026-06-06)
+
+**Web refs:** [SpendSight hybrid cascade](https://github.com/Zenoguy/SpendSight_) (regex → heuristic → MiniLM → LLM batch; ~76% resolved pre-LLM); [transaction-classifier](https://github.com/Maaz-Zaidi/transaction-classifier) (rules 0.98 confidence short-circuit); [Expense Sorted rules-first](https://www.expensesorted.com/blog/advanced-bank-transaction-categorization-beyond-llms) (60–80% rule coverage; 0.9 auto-apply threshold); [Microsoft agent governance provenance model](https://microsoft.github.io/agent-governance-toolkit/compliance/data-provenance-model/) (source + transformation metadata on derived outputs); code: `backend/src/forecast/project.rs`, `backend/src/api/forecast.rs` (`MonthlyPointResponse`), `backend/src/ai/privacy.rs`, `backend/config/default.toml` `[forecast.category_buckets]`, DEC-0010 recompute trigger, DEC-0014 subscription confidence tiers.
+
+| # | Question | Resolution (per research) |
+|---|----------|---------------------------|
+| 1 | **Confidence threshold** | **Default 0.75** (`ai_bucket_min_confidence` in `[forecast]` TOML, overridable). Industry cascades use **0.80–0.90** for deterministic rules and **0.75–0.85** for LLM auto-apply ([SpendSight](https://github.com/Zenoguy/SpendSight_), [Expense Sorted](https://www.expensesorted.com/blog/advanced-bank-transaction-categorization-beyond-llms)). Align with household subscription emit floor **60%** (DEC-0014) but use **higher bar for bucket mutation** because mis-bucketing affects monthly cards. **≥ threshold** → apply AI bucket to projection; **&lt; threshold** → Variable + `low_confidence` audit row. Reject 0.90 default (too many Variable fallbacks on German merchant strings). |
+| 2 | **Invalidation strategy** | **No persistent assignment cache for MVP.** Each forecast recompute (DEC-0010 post-sync) re-runs cascade on current mirror slice. **Config bust:** hash `[forecast.category_buckets]` (+ future `merchant_aliases`) at inference start; mismatch vs last computation metadata → discard any in-memory memo. **Data bust:** inference input = non-transfer mirror rows for account since rolling window start (reuse rolling.rs lookback). Reject cross-computation Postgres cache table (stale rows after sync edits; operator distrust). Optional stage-2: memoize within single `project_account` call keyed by `payee_fingerprint + category_id + sign` only. |
+| 3 | **Privacy allowlist** | See **[R-0075](research.md#r-0075--us-0015-forecast-bucket-privacy-feature-allowlist)** — extend `PrivacyLayer` with `prepare_bucket_features()`; never send raw rows under default TOML. |
+| 4 | **API `bucket_source` shape** | Extend `MonthlyPointResponse` with **`bucket_sources: { income, fixed_costs, variable_costs }`** each `config \| ai \| default` (dominant contributor per bucket for that month) plus **`ai_mapped: bool`** when any bucket includes AI-assigned mass. Reject per-daily-point provenance (AC-4 targets monthly cards only). Mixed bucket: label = highest-precedence source present (`config` &gt; `ai` &gt; `default`); `ai_mapped` still true if AI contributed any amount. Frontend badge binds `ai_mapped` (seasonal callout pattern in `ForecastPage.tsx`). |
+| 5 | **Provider default** | **Rule-only cascade when LLM unavailable** — reuse **`build_provider()`** (DEC-0043/0044); same provider/mode as chat. No `forecast_ai_*` env split. Batch inference module calls provider only for ambiguous rows after config miss. Provider down → skip LLM stage, Variable fallback, audit `provider_unavailable`. **Ollama/local preferred** for privacy-sensitive operators when configured; OpenAI path unchanged. |
+| 6 | **Optional TOML merchant aliases** | **Out of MVP** — stage-2 between config map and LLM per §2 cascade. Existing `[forecast.category_buckets]` + German keys in `default.toml` cover BUG-0012 baseline. Post-MVP: `[forecast.merchant_aliases]` regex→bucket table; architecture documents extension point only. Reject MVP aliases (overlap Firefly categories; operator double-maintenance). |
+
+### 8. Recommended architecture decisions (DEC-0078 area)
+
+| Element | Recommendation | Alternative rejected |
+|---------|----------------|----------------------|
+| Cascade | DEC-0007 config → LLM batch (ambiguous only) → Variable | Chat tools / RAG index |
+| Threshold | 0.75 default TOML | 0.90 (over-fallback); 0.60 (under-safe) |
+| Invalidation | Inline per recompute + config hash | Persistent assignment table |
+| Privacy | R-0075 feature rows via PrivacyLayer | Widen `allow_raw_transactions` default |
+| API | `bucket_sources` + `ai_mapped` on monthly point | Per-tx API provenance |
+| Provider | US-0008 shared provider | Separate forecast provider env |
+| Aliases | Defer post-MVP | MVP regex table |
+
+**Risks (carry to architecture):**
+
+1. **Threshold calibration** — German merchant-only rows may cluster below 0.75; monitor audit `low_confidence` rate in QA
+2. **Rolling residual** — `variable_residual` daily rate stays Variable unless architecture adds aggregate AI split (discovery gap); document as known limitation or stage-2
+3. **Provider cost** — batch only ambiguous rows (typically &lt;25% per SpendSight); cap batch size 100/call
+4. **Privacy regression** — forecast path must not bypass `PrivacyLayer`; code review gate on S1
+5. **Mixed `bucket_sources`** — dominant-source label may hide partial AI; `ai_mapped` boolean is authoritative for badge
+
+**Linked (extended):** R-0075, DEC-0078 (recommended 2026-06-06)  
+**Confidence:** high  
+**Status:** fulfilled — research 2026-06-06; formalize **DEC-0078** at `/architecture`; retain for traceability
+
+---
+
+## R-0075 — US-0015 forecast bucket privacy feature allowlist
+
+**Date:** 2026-06-06  
+**Topic:** AC-3 — privacy-safe feature extraction for batch bucket inference under DEC-0032 defaults  
+**Query:** Which merchant/category/amount fields may leave the host for LLM bucket proposal when `allow_raw_transactions=false`  
+**Sources:**
+- Prior: [R-0028](research.md#r-0028--privacy-layer-middleware-allow_raw_transactions-redaction-semantics) (DEC-0032), [R-0074](research.md#r-0074--us-0015-ai-forecast-bucket-mapping-rulellm-cascade-privacy) §7
+- Code: `backend/src/ai/privacy.rs` (`hash_counterparty`, `is_sensitive_field`, subscription label preserve), `backend/src/forecast/categories.rs`
+- Web: [Spendify PII sanitization pattern](https://github.com/drake69/spendify) (sanitize before remote LLM); [Finima on-device Ollama](https://github.com/pacphi/finima) (local inference avoids egress)
+
+### 1. Placement
+
+**New method on existing `PrivacyLayer`** — not a parallel scrubber:
+
+```rust
+pub struct BucketFeatureRow {
+    pub feature_id: String,           // stable hash for audit, not reversible merchant
+    pub category_name: Option<String>,
+    pub merchant_token: String,       // hashed when redact_counterparties=true
+    pub amount_sign: i8,              // -1 | 0 | 1
+    pub magnitude_band: String,       // e.g. "0-50" | "50-200" | "200+"
+    pub recurring_label: Option<String>, // subscription display_name when present
+    pub pattern_class: Option<String>,    // standing_order | subscription | discretionary
+}
+```
+
+`prepare_bucket_features(rows: &[MirrorRow]) -> Vec<BucketFeatureRow>` invoked by forecast AI module **before** provider HTTP call. Audit logs `feature_id` + bucket proposal — not raw description.
+
+### 2. Allowlist under `allow_raw_transactions=false` (default)
+
+| Field | Sent to model | Treatment |
+|-------|---------------|-----------|
+| `category_name` | Yes (if present) | Lowercase trim; empty → omit |
+| `merchant_token` | Yes | `hash_counterparty(normalized_payee_or_description)` per DEC-0032 — stable correlate without plaintext |
+| `amount_sign` | Yes | Sign only (+ inflow / − outflow) |
+| `magnitude_band` | Yes | Log band buckets; **no exact EUR** |
+| `recurring_label` | Yes (when from detection) | Same preserve rule as `get_subscriptions` `display_name` |
+| `pattern_class` | Yes | Enum string from recurrence/subscription context |
+| `description` / `payee` / `counterparty` | **No** | Never in payload under default |
+| `iban` / account ids | **No** | Never |
+| Exact `amount` | **No** | Band only |
+
+**Batch payload shape (LLM input):**
+
+```json
+{
+  "task": "forecast_bucket_assignment",
+  "features": [
+    {
+      "feature_id": "bf_a1b2c3d4",
+      "category_name": null,
+      "merchant_token": "Counterparty-7f3a9b2c",
+      "amount_sign": -1,
+      "magnitude_band": "50-200",
+      "recurring_label": null,
+      "pattern_class": "discretionary"
+    }
+  ]
+}
+```
+
+Structured output: `{ "assignments": [{ "feature_id", "bucket", "confidence", "rationale_code" }] }`.
+
+### 3. Opt-in `allow_raw_transactions=true`
+
+- Permit **normalized description** (IBAN stripped) for up to **50** ambiguous rows per batch
+- Still apply `redact_counterparties` hashing unless operator disables
+- Document in user guide as elevated privacy risk; forecast path respects same TOML as chat
+
+### 4. Local provider path
+
+When `ai.provider=ollama` or `openai_compatible` with local base URL, **same allowlist** — consistency over "local = raw OK". Reduces accidental omniflow misconfig leaking descriptions to LAN LLM logs.
+
+### 5. Alternatives considered
+
+| Alternative | Verdict |
+|-------------|---------|
+| Send category aggregates only (no per-row features) | **Rejected** — insufficient for uncategorized merchant disambiguation (AC-2) |
+| Reuse `get_transactions` tool output | **Rejected** — chat contract; aggregates lack per-row bucket assignment |
+| New seventh chat tool | **Rejected** — DEC-0069 / AC-7 isolation |
+
+**Linked:** US-0015, DEC-0032, DEC-0069, R-0074, R-0060, DEC-0078  
+**Confidence:** high  
+**Status:** fulfilled — research 2026-06-06; implemented US-0015/S0016/DEC-0078 (`PrivacyLayer::prepare_bucket_features`); retain for traceability
+
+---
+
+## R-0076 — Omniflow analytics regression hypotheses (post-US-0015)
+
+**Date:** 2026-06-06  
+**Topic:** BUG-0013 intake — operator report of Grafana zeros, crypto €0, budgets MTD implausible sums, ds/query Failed to fetch on `financegnome.omniflow.cc` after US-0015 release  
+**Query:** Likely root-cause clusters for post-release analytics regression vs stale deploy / missing recompute  
+**Sources:**
+- Prior: [R-0056](research.md#r-0056--grafana-embed-root-url-and-same-origin-asset-proxy), BUG-0009 discovery (account variable default), BUG-0010 (balance NULL → starting_balance 0), BUG-0005 (futures ingest), US-0015 release notes S0016
+- Operator report 2026-06-06 (verbatim themes)
+- Grafana community: annotation/query `Failed to fetch` often indicates datasource proxy misconfig or CORS/auth on `ds/query` path
+
+### 1. Deploy-and-recompute gate (highest probability first)
+
+| Check | If skipped | Symptom cluster |
+|-------|------------|-----------------|
+| **BACKEND_FRONTEND_DEPLOY** post S0016 | Old backend/frontend on omniflow | Forecast 0 €, bucket mapping not active, stale panels |
+| **Full Firefly sync** | Mirror stale | Empty subscriptions price changes, zero balances |
+| **Forecast recompute** post sync | `forecast_balance_daily` flat 0 | AI cashflow + forecast-horizons emptiness |
+| **Exchange sync phase** | No crypto positions | AK/AN crypto €0 despite keys configured |
+
+Discovery **must** record terminal sync run + recompute timestamps before attributing code regression.
+
+### 2. Symptom → subsystem map
+
+| Sub-defect | Primary subsystem | Secondary |
+|------------|-------------------|-----------|
+| AI | `forecast_balance_daily`, Grafana `$account_id` default | BUG-0009 Y1 regression |
+| AJ | `subscription_price_changes` detection + subscriptions dashboard SQL | — |
+| AK/AN | `exchange` sync, `wealth` FX pricing, `net_worth_snapshots` | BUG-0005 futures path |
+| AL | budgets dashboard SQL, plan currency join | active plan `test v1` scale |
+| AM | `/analytics/grafana` reverse proxy, datasource UID, Traefik auth | BUG-0003 H pattern |
+
+### 3. Regression vs configuration
+
+- **Not reopen BUG-0009/0010** without proof prior fix reverted — operator cluster may be **deploy smoke gap** alone.
+- **ML unavailable** on seasonal panel is **expected** when US-0013 not enabled — baseline panels must still be non-zero (AI sub-defect).
+- **MetaMask `contentscript.js` warnings** — browser extension noise; exclude from defect scope.
+
+### 4. README coupling (US-0017)
+
+Living-doc expansion should document the deploy+sync+recompute prerequisite in Troubleshooting to reduce false regression reports — orthogonal to BUG-0013 code fixes.
+
+**Linked:** BUG-0013, US-0017, intake `intake-20260606-omniflow-regression-readme`  
+**Confidence:** medium (pending discovery probes on live omniflow)  
+**Status:** fulfilled — Q0020 released via DEC-0079 (AL1) + DEC-0080 (AN1); retain for traceability
+
+### 5. Discovery verdicts (2026-06-08 — `discovery-20260608-bug0013`)
+
+| Sub-defect | Verdict | Research implication |
+|------------|---------|---------------------|
+| AI | Refuted (ops/stale) | No code sprint; operator re-smoke acct **114** post-recompute |
+| AJ | Refuted (expected empty) | Optional empty-state copy only |
+| AK/AN | **Confirmed** | Linear futures EUR valuation gap — extend §6 |
+| AL | **Confirmed** | MTD SQL upper bound — §7 |
+| AM | Not reproduced (curl 200) | Browser/embed hypothesis — **[R-0077](research.md#r-0077--bug-0013-grafana-embed-failed-to-fetch-annotation-runner)** |
+| AN | **Confirmed** | Same root as AK |
+
+**Isolation vs US-0015:** Multi-factor cluster — **not** a single US-0015 regression. Execute scope: **AL1**, **AN1**, **V1**.
+
+### 6. Linear futures EUR valuation options (AK/AN — extends BUG-0005 / DEC-0064)
+
+**Context (discovery + code audit):** Omniflow holds **7** Bitunix `product_type=linear` rows (`INJUSDT`, `SOLUSDT`, …) with `market_value_eur` **NULL** → portfolio **Crypto value €0**, `holdings_top` empty. Sync succeeds; gap is **valuation phase**, not ingest. `recompute_pnl` passes **`ExchangePriceBook::default()`** (empty) — tickers never loaded per [R-0034](research.md#r-0034--fx-conversion-for-crypto--eur-reporting-currency). `holding_value_eur` calls `fx.to_eur(qty, asset)` where `asset` is full symbol (`INJUSDT`) → `FxError::Unpriced`.
+
+**DEC-0064 contract (still binding):** Futures **wallet** (`product_type=futures`) priced in wealth subtotal; **linear positions** keep `market_value_usd=None` in subtotal to avoid double-count with wallet equity. Positions contribute via **unrealized PnL** per [R-0033](research.md#r-0033--portfolio-pnl-methodology-realized-unrealized-total-return).
+
+**Bitunix payload fields** ([Get Pending Positions](https://www.bitunix.com/api-docs/futures/position/get_pending_positions.html), [Get Single Account](https://www.bitunix.com/api-docs/futures/account/get_single_account.html)):
+
+| Field | Source | Use |
+|-------|--------|-----|
+| `unrealizedPNL` | Position row | Primary derivatives unrealized (USDT-denominated) |
+| `entryValue` | Position row | Position notional / entry exposure proxy |
+| `margin` | Position row | Locked collateral per position |
+| `available` + `margin` + `frozen` | Account array | Wallet equity components |
+| `crossUnrealizedPNL` / `isolationUnrealizedPNL` | Account row | Account-level unrealized aggregate |
+
+**Code audit gap:** `parse_futures_wallet` expects `data.account` object; Bitunix returns `data: [{ marginCoin, available, … }]`. Array shape may prevent wallet row creation — explains **positions-only** holdings with **€0** crypto when collateral sits in account API not position rows.
+
+| Option | Mechanism | Fits DEC-0064 | Risks |
+|--------|-----------|---------------|-------|
+| **A — Wallet equity fix (recommended tier 1)** | Fix array parse; `product_type=futures`, `market_value_usd=equity` for USDT; `fx.usd_to_eur` in `recompute_pnl` | **Yes** — wallet in subtotal | Alt margin coins deferred; cross-margin equity semantics |
+| **B — Exchange unrealized → EUR (recommended tier 1)** | Map `unrealized_pnl` from position payload at upsert; convert USDT→EUR in `recompute_pnl`; sum into `unrealized_eur` / snapshot | **Yes** — notional excluded; PnL surfaced | Does not alone fix **crypto value** stat if wallet missing |
+| **C — Symbol→base + ticker price book (tier 2)** | Strip `USDT` suffix (`INJUSDT`→`INJ`); populate `ExchangePriceBook` from exchange tickers during recompute; spot-style `qty × mark` | **Partial** — spot pattern only | Linear **qty** is contracts not base units; wrong for futures without contract size |
+| **D — Persist `entryValue` notional (tier 2)** | Parse `entryValue` as USD exposure; store `exposure_usd`; EUR for **display column** separate from `market_value_eur` | **Needs DEC amend** — exposure vs subtotal | Double-count if wallet equity also includes margin; mark vs entry stale |
+| **E — Full notional in `market_value_eur` (rejected)** | `markPrice × qty` or `entryValue` in wealth subtotal | **No** — violates DEC-0064 | Double-count with wallet equity |
+
+**Provisional recommendation (architecture):** **A + B** as AN1 MVP — fix wallet parse + price USDT wallet; convert position `unrealizedPNL` to `unrealized_pnl_eur`. Extend **crypto_value_eur** snapshot to `sum(market_value_eur)` (wallet) **or** document panel uses wallet-only per DEC-0064. If acceptance AK requires non-zero **crypto** when positions-only, add **D** as `exposure_eur` display field (Grafana panel / API) without merging into wealth subtotal — **decision gate** for DEC-0064 narrow amendment.
+
+**Secondary gap:** Populate `ExchangePriceBook` during recompute for **spot** holdings (R-0034 intent); orthogonal but same code path.
+
+**Sources:** [R-0033](research.md#r-0033--portfolio-pnl-methodology-realized-unrealized-total-return), [R-0034](research.md#r-0034--fx-conversion-for-crypto--eur-reporting-currency), [R-0059](research.md#r-0059--exchange-multi-product-sync-scope-bitunix-futures), DEC-0064; `backend/src/exchanges/bitunix.rs`, `backend/src/portfolio/service.rs`, `backend/src/portfolio/pnl.rs`, `backend/src/fx/service.rs`
+
+### 7. Budgets MTD SQL (AL — confirmed)
+
+**Root cause:** `budgets.json` panel id **5** — `planned` CTE filters `pdc.ts >= date_trunc('month', CURRENT_DATE)` **without** `<= CURRENT_DATE`. Dashboard `time.to` includes `now+30d`; plan horizon sums **730** future days → **−€150K** MTD.
+
+**Fix (AL1):** Add `AND pdc.ts::date <= CURRENT_DATE` to planned CTE (and deviation joins if mirrored). Optional footnote when active plan starts mid-month (plan starts **2026-06-07**, today **2026-06-06** → correct capped MTD **0**).
+
+**Alternatives:** Cap via `$__timeFilter` on MTD stat — rejected (stat panels lack reliable time filter for scalar SUM). Separate MTD materialized view — rejected (over-engineered for provisioning-only fix).
+
+**Linked:** `grafana/provisioning/dashboards/analytics/budgets.json` panel 5
+
+**Updated:** BUG-0013 discovery 2026-06-08  
+**Confidence:** high (AL, AK/AN); medium (pricing option selection pending architecture)  
+**Status:** fulfilled — Q0020/DEC-0079/DEC-0080 shipped; AM waived per R-0077; retain for traceability
+
+---
+
+## R-0077 — BUG-0013 Grafana embed Failed to fetch / annotation runner (AM)
+
+**Date:** 2026-06-08  
+**Topic:** BUG-0013 sub-defect **AM** — browser `handleAnnotationQueryRunnerError TypeError: Failed to fetch` on analytics embed; curl reproduces **200** on `ds/query` + `/api/annotations`  
+**Query:** WebSocket, subpath, CORS, and Grafana 11 client-side failure modes when HTTP transport passes  
+**Sources:**
+- [R-0056](research.md#r-0056--us-0011-grafana-embed-proxy-auth-csp-subpath-websocket-traefik) — prefix strip, WS `/api/live/`, same-origin proxy (DEC-0057)
+- [Grafana annotations cancelled requests #85292](https://github.com/grafana/grafana/issues/85292) — `status: -1`, `Request was aborted`; logged as 500 server-side
+- [Grafana community — DashboardQueryRunner failed to fetch](https://community.grafana.com/t/dashboardqueryrunner-failed-failed-to-fetch/89118) — `handleAnnotationQueryRunnerError` + default **Annotations & Alerts** source
+- [Grafana proxy subpath #16135](https://github.com/grafana/grafana/issues/16135) — `root_url` must match browser URL
+- Discovery probes 2026-06-08: `POST /analytics/grafana/api/ds/query` **200**; `GET …/api/annotations` **200**; `<base href="/analytics/grafana/">` present; raw WS without upgrade **400** (expected)
+- Repo: `backend/src/analytics/proxy.rs`, `docker-compose.yml` (`GF_SERVER_ROOT_URL`), `grafana/provisioning/dashboards/analytics/budgets.json` (built-in dashboard annotation only)
+
+### 1. Ruled out (discovery + R-0056)
+
+| Hypothesis | Verdict | Evidence |
+|------------|---------|----------|
+| **CORS cross-origin** | **Unlikely** | Same-origin `/analytics/grafana/*` proxy; no third-party Grafana host |
+| **ds/query transport failure** | **Refuted** | curl **200** with anonymous Viewer behind edge |
+| **Traefik auth blocking API** | **Unlikely** | curl without browser still hits same paths; basic auth reused same-origin in iframe |
+| **Missing proxy** | **Refuted** | US-0011 shipped; assets **200** under prefix |
+
+### 2. Plausible causes (ranked)
+
+| Rank | Cause | Mechanism | Fix direction |
+|------|-------|-----------|---------------|
+| **1** | **Annotation request cancellation** | Grafana 11.3+ aborts in-flight `GET api/annotations` when dashboard refreshes (30s on budgets) or panel re-queries; browser surfaces `Failed to fetch` / `NetworkError` though server may log `context canceled` ([#85292](https://github.com/grafana/grafana/issues/85292)) | **AM-defer:** treat as cosmetic unless panels fail to load; optional disable built-in **Annotations & Alerts** on dashboards with `annotations.list: []` (5/6 already empty; **budgets** has built-in dashboard annotation) |
+| **2** | **WebSocket `/api/live/` proxy gap** | Live refresh uses WS; HTTP ds/query succeeds while live channel stale — errors may surface in console without blocking static SQL panels ([R-0056 §4](research.md#r-0056--us-0011-grafana-embed-proxy-auth-csp-subpath-websocket-traefik)) | QA browser smoke: DevTools WS to `/analytics/grafana/api/live/` **101**; verify `proxy.rs` upgrade path |
+| **3** | **`GF_SERVER_ROOT_URL` drift** | Mis-set root_url breaks relative fetches in iframe ([Grafana #16135](https://github.com/grafana/grafana/issues/16135)) | Omniflow default set in compose; operator override audit only |
+| **4** | **Extension / client noise** | MetaMask `contentscript.js` — **out of scope** per acceptance | Exclude from defect |
+
+### 3. Provisional recommendation (architecture)
+
+- **Do not reopen DEC-0057** without authenticated browser HAR showing **non-200** on `ds/query` or annotations.
+- **AM1 execute (if needed):** (a) remove or disable built-in dashboard annotation on `budgets.json`; (b) add QA checklist item — browser WS **101** on live route; (c) suppress/log-level only for cancelled annotation fetches if Grafana upstream documents fix.
+- **Acceptance AM:** Pass when panels render data and curl **200** holds; console-only annotation abort **waived** unless operator proves panel breakage.
+
+**Alternatives considered:**
+- *Proxy HTML rewrite for subpath* — rejected unless `GF_SERVER_ROOT_URL` smoke fails (BUG-0001 B1 already shipped)
+- *Public Grafana host* — rejected (R-0054 / DEC-0056)
+- *CORS headers on proxy* — rejected (same-origin; CORS not applicable)
+
+**Risks:**
+- Chasing AM may distract from confirmed **AL1** + **AN1** fixes
+- WS proxy failures silent until operator opens DevTools
+- Disabling annotations removes low-value "No active plan" built-in marker on budgets dashboard
+
+**Linked:** BUG-0013, US-0011, DEC-0057, R-0056, R-0076 §5  
+**Confidence:** medium (HTTP refuted; browser failure mode inferred from Grafana issues + community reports)  
+**Status:** fulfilled — AM waived at architecture; pass-with-prerequisites at Q0020 release; console-only annotation abort out of scope; retain for traceability
+
+---
+
+## R-0078 — US-0017 README omniflow smoke templates, H3 layout, validate_doc_profile gates
+
+**Date:** 2026-06-09  
+**Topic:** US-0017 — root README Examples/Troubleshooting expansion; per-segment Product status maintenance  
+**Query:** Omniflow `curl` template contract; budget-safe H3 placement; `validate_doc_profile` gates for balanced profile; maintenance hook wording for release segment  
+**Sources:**
+- Repo: `README.md`, `scripts/doc_profile_lib.py`, `scripts/validate_doc_profile.py`, `docs/developer/README.md`, `docs/engineering/runbook.md` (§ README maintenance, § Omniflow AC-6, §23 BUG-0013)
+- UAT: `sprints/quick/Q0020/uat.md` — operator gates + live probe rows AL–REG
+- Prior: [R-0066](research.md#r-0066--root-readme-split-layout-and-living-doc-maintenance), [R-0067](research.md#r-0067--us-0016-root-readme-research-template-parity-product-status-maintenance-hooks), [R-0053 §6](research.md#r-0053--us-0010-omniflow-external-deploy-timescaledb-profile-guard-traefik-env-grafana-oidc-ci), [R-0077](research.md#r-0077--bug-0013-grafana-embed-failed-to-fetch--annotation-runner-am)
+- Normative: **DEC-0070**, **DEC-0059** (doc audience profile)
+
+### 1. H3 layout contract (extends R-0067)
+
+`count_profile_root_h2s` (`doc_profile_lib.py`) counts **only** required `USER_*` H2 titles for the active profile — **H3 subsections are not budgeted**. For `(both, balanced)` the required user H2 set is Purpose, Quickstart, Limitations, Examples, Related documentation (5 titles); `## Contributing` is a pointer and does not increment the budget counter.
+
+| Placement | Pros | Cons | Verdict |
+|-----------|------|------|---------|
+| `### Omniflow smoke (external profile)` under `## Examples` | Omniflow curls beside localhost samples; no new TOC H2 | Slightly lengthens Examples | **Recommend** |
+| `### Troubleshooting` under `## Limitations` | Satisfies AC "Limitations or budget-safe Troubleshooting subsection"; keeps ML-unavailable context adjacent | Troubleshooting nested under Limitations semantically | **Recommend** (balanced profile does not require `USER_TROUBLESHOOTING` as root H2 — only `technical-deep` adds `## Troubleshooting`) |
+| Dedicated `## Troubleshooting` H2 | Visible TOC entry | Consumes H2 budget; redundant with Limitations for balanced profile | **Reject** |
+| Expand Limitations bullets only (no H3) | Minimal diff | Harder to scan symptom table; AC asks for subsection | **Reject** |
+
+**Architecture carry:** formalize as DEC-0070 extension — no new root H2; two H3 additions only.
+
+### 2. Omniflow curl template (canonical for README `### Omniflow smoke`)
+
+**Host:** `https://financegnome.omniflow.cc` (override via `TRAEFIK_HOST` in operator `.env` — document placeholder, not hardcode alternate hosts in README body beyond default).
+
+**Edge auth:** Traefik `auth` basic-auth on public routes — use placeholder `-u '<basic-auth-user>:<pass>'` per runbook § Omniflow AC-6 (consistent with R-0053 §6). **Never** commit operator credentials. API routes (`/api/v1/*`) additionally require OIDC session or `AUTH_DEV_BYPASS=true` on external profile — note in README one-liner; full matrix stays in runbook.
+
+**Copy-paste block (README Examples H3):**
+
+```bash
+OMNI=https://financegnome.omniflow.cc
+AUTH='-u <basic-auth-user>:<pass>'   # Traefik edge only — replace placeholders
+
+# Health
+curl -sf "$OMNI/health" $AUTH
+
+# Sync status + entity counts
+curl -s "$OMNI/api/v1/sync/status" | jq .
+curl -s "$OMNI/api/v1/sync/entities" | jq .
+
+# Manual Full sync (requires Firefly PAT + running backend)
+curl -s -X POST "$OMNI/api/v1/sync/trigger" \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"full"}' | jq .
+
+# Forecast recompute signal (after Full sync from SPA or trigger above)
+curl -s "$OMNI/api/v1/forecast/meta" | jq '.last_computed_at, .computation_id'
+
+# Exchange / crypto sanity
+curl -s "$OMNI/api/v1/wealth" | jq '.crypto.subtotal_eur, .total_eur'
+
+# Grafana embed proxy health
+curl -s -o /dev/null -w '%{http_code}\n' "$OMNI/analytics/grafana/api/health" $AUTH
+```
+
+**Six SPA analytics routes** (table already in README — extend with full URLs or keep slug column + `OMNI` prefix note):
+
+| Route | Smoke focus |
+|-------|-------------|
+| `/analytics/cashflow` | Baseline balances acct **114** (not **116**) |
+| `/analytics/subscriptions` | Price-changes panel or documented empty-state |
+| `/analytics/budgets` | MTD planned/actual plausible post-DEC-0079 |
+| `/analytics/portfolio` | Crypto stat non-zero post-DEC-0080 |
+| `/analytics/forecast-horizons` | Baseline + optional ML banner |
+| `/analytics/platform-health` | Stack health |
+
+**Operator gates** (link runbook §23; one-liner in README H3): **BACKEND_FRONTEND_DEPLOY** → **GRAFANA_PROVISIONING_RELOAD** → **FULL_FIREFLY_SYNC** + forecast recompute before attributing flat **0 €** panels to code defects (Q0020 uat.md).
+
+**Anti-pattern (R-0066):** do not duplicate full runbook §23 table in README — keep essentials + deep link.
+
+### 3. Troubleshooting H3 content contract
+
+Place under `## Limitations` → `### Troubleshooting`. Lead with gate sequence, then symptom table.
+
+| Symptom | Likely cause | Operator action |
+|---------|--------------|-----------------|
+| All analytics panels flat **0 €** after deploy | Stale image / gates skipped | BACKEND_FRONTEND_DEPLOY → GRAFANA_PROVISIONING_RELOAD → FULL_FIREFLY_SYNC + recompute |
+| Budgets MTD **−€150K** planned, **€0** actual | Pre-DEC-0079 MTD SQL artifact | Deploy DEC-0079 build + Grafana reload; runbook §23 Row AL |
+| Crypto **€0** in wealth/portfolio | Pre-DEC-0080 pricing or exchanges-only sync | Deploy DEC-0080 build + Full sync + exchange sync; `crypto.subtotal_eur` probe |
+| Forecast **0 €** on default panels | Wrong `$account_id` or no recompute | Full sync; verify acct **114** (not **116**); BUG-0013 **AI** ops verdict |
+| **ML unavailable** banner on forecast-horizons | ML overlay off (US-0013 / DEC-0049) | **Expected** — baseline statistical forecast still applies; not data-missing |
+| Grafana **Failed to fetch** (browser console) | Embed annotation cancel / WS edge (R-0077) | curl ds/query **200**; Traefik session; do not Save dashboard overrides |
+
+**Distinction (AC-2):** empty Grafana SQL panels after gates = data/deploy defect; **ML unavailable** banner = honest degraded mode when sidecar disabled.
+
+### 4. validate_doc_profile gates
+
+**Runtime proof (2026-06-09 research):** `python3 scripts/validate_doc_profile.py --repo . --no-template-parity` → `[DOC_PROFILE_VALIDATE_OK]` exit **0**.
+
+| Check | Pre-execute (today) | Post-execute requirement |
+|-------|-------------------|--------------------------|
+| Profile | `(both, balanced)` from scratchpad defaults | Unchanged |
+| Root H2 budget | 5 required user H2s counted; 6 physical H2s incl. Contributing; budget **8** | No new root H2; H3 additions allowed |
+| `--no-template-parity` | **Required** (`template/` absent per R-0067) | Unchanged until template tree ships |
+| `DEV_*` in root | Absent | Must remain absent (DEC-0059 split) |
+| Optional crosslink weak | `USER_GUIDE_MODE=1` — user-guides mention present | Preserve |
+
+**Execute gate:** non-zero `validate_doc_profile` → fail closed; remediation → runbook § README maintenance.
+
+### 5. Maintenance per-segment wording (extends R-0067 §3)
+
+US-0017 tightens hooks so **each** closed US/BUG in the **release segment** (sprint or quick task batch) gets a Product status bullet — not implied by vague "closes backlog items".
+
+**Recommended release hook delta** (runbook § README maintenance + `docs/developer/README.md` Quality gates):
+
+> For **each** US or BUG that transitions to **DONE** / **CLOSED** in the **current release segment** (target sprint, quick task, or paired intake batch), append one bullet to root `README.md` **`### Product status`** …
+
+**Recommended refresh-context hook delta:**
+
+> When the **release segment** or sprint artifacts closed **one or more** US/BUG ids since the prior refresh, verify **each** closed id appears in Product status; update missing bullets before completing refresh.
+
+**Product status at execute:** post-Q0020 refresh already lists US-0015, BUG-0013, US-0013–0016 — AC-3 is **verify-only** at execute unless segment closes additional work.
+
+### Alternatives considered
+
+- *Dedicated `## Troubleshooting` H2* — rejected (balanced profile + H2 budget; R-0067 scannability precedent)
+- *Auto-generated README on commit* — rejected (R-0066 / DEC-0070 phase-boundary cadence)
+- *Full runbook §23 inline in README* — rejected (noise; link instead)
+
+### Risks
+
+1. **Dual auth confusion** — operators mix Traefik basic-auth with OIDC API session; mitigate with explicit "edge vs API" note in H3
+2. **Placeholder hygiene** — angle-bracket placeholders must not resemble real credentials in examples
+3. **Segment definition drift** — "release segment" needs architecture one-liner (sprint id or quick task id scope)
+4. **README length creep** — symptom table + curls approach H2 scannability limit; cap prose, link runbook
+
+**Linked:** US-0017, US-0016, DEC-0070, DEC-0059, R-0066, R-0067, R-0053, R-0077, BUG-0013, Q0020  
+**Confidence:** high  
+**Status:** fulfilled — US-0017 released Q0021 via **DEC-0070** extension (2026-06-09); R-0066/R-0067 retained for traceability
+
+---
+
+## R-0079 — BUG-0014 post-rebuild omniflow (ML sidecar, crypto display, Grafana, planning)
+
+**Date:** 2026-06-07  
+**Topic:** Operator post-rebuild smoke on `financegnome.omniflow.cc` — ML banner, crypto €0, Grafana cashflow zeros, planning delete gap  
+**Query:** Intake synthesis for **BUG-0014** after operator rebuilt `flow-finance-ai` + `grafana` with `FORECAST_ML_ENABLED=true`  
+**Sources:**
+- Live probes (2026-06-07): `GET /api/v1/forecast/meta`, `GET /api/v1/wealth`, `docker ps` (no `stats-forecast`)
+- Operator report + cashflow screenshot; env vars: `BITUNIX_ENABLED_FUTURES=true`, `STATS_FORECAST_URL`, Grafana embed paths
+- Code: `docker-compose.external.yml` (`stats-forecast` `profiles: [external]`), `frontend/src/pages/PlanningPage.tsx` (no plan delete), `frontend/src/pages/WealthPage.tsx` (FX banners)
+- Prior: [R-0071](research.md#r-0071--us-0013-production-ml-enablement-on-omniflow-external-profile), [R-0076](research.md#r-0076--omniflow-analytics-regression-hypotheses-post-us-0015), [R-0034](research.md#r-0034--fx-conversion-for-crypto--eur-reporting-currency), **DEC-0080**, **DEC-0076**
+
+**Findings:**
+
+| Sub | Verdict | Root cause (intake) |
+|-----|---------|---------------------|
+| **AO** | **CONFIRMED (ops)** | `FORECAST_ML_ENABLED=true` in app container; **`stats-forecast` not running** → `ml_skipped_reason: sidecar_unavailable`. Rebuild command scoped to two services only (**AT**). |
+| **AT** | **CONFIRMED (ops)** | External overlay defines sidecar; operator `compose up` did not include `stats-forecast`. Runbook/README gate should list **three** services when ML on. |
+| **AP** | **CONFIRMED (display/pricing)** | Wealth API: `holdings_count: 7`, `crypto.subtotal_eur: 0`, `pnl.unrealized_eur: 411.74`, `holdings_top: []` — unrealized priced but subtotal/cards empty; **DEC-0080** wallet equity may not surface in subtotal UI. |
+| **AQ** | **LIKELY (product gap)** | Operator wants **native currency** + point-in-time EUR via CEX/public FX; tier-2 price book deferred in DEC-0080; portfolio forecast `fx_incomplete_warning` path separate from wealth `fx_incomplete`. |
+| **AR** | **LIKELY (ops/stale)** | Screenshot shows flat **0** balances; prior **BUG-0013 AI** refuted when acct **114** + recompute — re-verify `$account_id`, Full sync, panel SQL post-Q0020. |
+| **AS** | **CONFIRMED (UI gap)** | `DELETE /api/v1/plans/:id` in backend; **no** delete-plan in React; `target_type` enum **household/subscription/account** by design — UX/doc gap post-US-0014. |
+
+**Recommended discovery order:** AT/AO (start sidecar + Full sync) → AP/AQ (holdings DB + pricing) → AR (Grafana variable + SQL) → AS (plan delete UI spike).
+
+**Alternatives rejected:** Reopen **BUG-0013** — closed Q0020 with operator gates; residual symptoms are new cluster. Merge into **US-0013** — epic DONE; defect is deployment/operator scope + display residuals.
+
+### 5. Discovery verdicts (2026-06-09 — `discovery-20260607-bug0014`)
+
+Code audit + intake probes; no live host access in discovery subagent.
+
+| ID | Verdict | Evidence |
+|----|---------|----------|
+| **AO** | **CONFIRMED (ops)** | `stats-forecast` absent; `ml_skipped_reason: sidecar_unavailable` with `FORECAST_ML_ENABLED=true`; Grafana `forecast-horizons.json` static US-0013 banner misleading when env opts in |
+| **AT** | **CONFIRMED (ops)** | `docker-compose.external.yml` lines 54–59 define sidecar `profiles: [external]`; operator rebuild two-service only |
+| **AP** | **CONFIRMED (code residual)** | `wealth/service.rs` subtotal = `sum(market_value_eur)`; probe unrealized **411.74** vs subtotal **0**; `holdings_top` filters priced rows only — wallet row or deploy gap |
+| **AQ** | **CONFIRMED (product gap)** | `unpriced_assets` hardcoded `[]` in wealth breakdown; `portfolio_forecast.fx_incomplete_warning` separate path; crypto holdings table empty |
+| **AR** | **LIKELY (ops/stale)** | `cashflow.json` SQL unchanged; BUG-0013 AI refuted acct **114**; June 2028 screenshot = wrong range/account hypothesis |
+| **AS** | **CONFIRMED (UI gap)** | `PlanningPage.tsx` adjustment delete only; backend `delete_plan` wired |
+
+**Research carry-forward:** AP1 wallet row SQL probe; AP2 subtotal vs unrealized display; AQ1 all-holdings native+EUR; AS1 active-plan delete guard; AO1 dynamic ML banner; AR1 API vs Grafana divergence test.
+
+**Linked:** BUG-0014, BUG-0013, US-0013, US-0014, DEC-0076, DEC-0080, R-0034, R-0071  
+**Confidence:** high (AO/AT/AP/AQ/AS); medium (AR — pending operator re-smoke)  
+**Status:** fulfilled — BUG-0014 released Q0022 via **DEC-0081**, **DEC-0082**, **DEC-0083** (2026-06-07); retain for traceability
+
+### 6. Research phase (2026-06-09 — `research-20260607-bug0014`)
+
+Code audit of wealth aggregation, PnL recompute, planning UI, Grafana dashboards, and forecast meta paths. No host `.env` / `.env_prod` read. Web: Grafana native text panels are static markdown only; dynamic ML status requires a Postgres query variable or combined static copy (Grafana docs, community workaround #82993).
+
+#### AP — crypto subtotal €0 vs unrealized €411.74 (`holdings_top` empty)
+
+**Trace (DEC-0080 / DEC-0064):**
+
+| Layer | Contract | Live symptom |
+|-------|----------|--------------|
+| `bitunix.rs` | `parse_futures_wallet` → `product_type=futures`, USDT equity → `market_value_usd` | Q0020 code present in repo |
+| `pnl.rs` `compute_hybrid_pnl` | Futures: `fx.to_eur(quantity, asset)` → `update_holding_eur(..., Some(mv), ...)`; linear: skip subtotal, convert `unrealizedPNL` → EUR | Probe: `unrealized_eur=411.74` ⇒ recompute path ran for linear |
+| `wealth/service.rs` | `subtotal_eur = sum(market_value_eur)`; `holdings_top` = top-5 priced rows only; `holdings_count` = **all** rows | Subtotal **0** + count **7** ⇒ **no priced rows** (wallet `market_value_eur` still NULL) |
+
+**Root-cause ranking:**
+
+1. **Deploy gate (most likely)** — Operator rebuilt 2026-06-07; Q0020 verify-work listed **BACKEND_FRONTEND_DEPLOY PENDING** (`sprints/quick/Q0020/uat.md`). Host may still run pre-DEC-0080 image or stale DB without futures wallet row.
+2. **Ops gate** — Exchanges-only sync without Full sync / PnL recompute after deploy leaves `market_value_eur` NULL even on Q0020 image.
+3. **Code residual (if AP1 fails)** — Unlikely new `bitunix.rs` bug given unit tests; wealth layer has no fallback to `portfolio.latest().crypto_value_eur` when holdings sum is zero but unrealized &gt; 0.
+
+**AP1 verify gate (mandatory before AP2 code):**
+
+```sql
+-- Wallet row must exist after Full sync + exchange recompute on Q0020+ image
+SELECT product_type, asset, quantity, market_value_eur, unrealized_pnl_eur
+FROM exchange_holdings WHERE exchange_id = 'bitunix' ORDER BY product_type, asset;
+```
+
+| AP1 outcome | Next |
+|-------------|------|
+| No `futures` row or all `market_value_eur` NULL after deploy + Full sync | Ops: redeploy Q0020 + Full sync; re-probe |
+| `futures` row priced, API still `subtotal_eur=0` | **AP2** — wealth aggregation bug (`wealth/service.rs` lines 126–158) |
+| Priced wallet, subtotal &gt; 0 | AP closed — was deploy/stale |
+
+**AP2 recommended fix surface (architecture):** Keep DEC-0064/DEC-0080 subtotal rules. Optional hardening: if `sum(market_value_eur)==0` but `pnl.crypto_value_eur>0`, use portfolio snapshot for subtotal (defensive). Clarify exchange card `holdings_count` — split wallet vs open contracts or annotate “N positions (M priced)”.
+
+**Risks:** Fixing count-only UX without wallet deploy still confuses operator; merging unrealized into subtotal violates DEC-0064.
+
+#### AQ — native currency + EUR display; `unpriced_assets` wiring
+
+**Gap analysis:**
+
+| Surface | Current | Gap |
+|---------|---------|-----|
+| `wealth/service.rs` | `unpriced_assets` always `[]`; `fx_incomplete` only when list non-empty | Never surfaces `pnl.unpriced_assets` from `compute_hybrid_pnl` |
+| `portfolio_forecast.rs` | `fx_incomplete_warning` passed from `extended.fx_incomplete` | Always false when wealth list empty — crypto tab portfolio banner may disagree with operator expectation |
+| `WealthPage.tsx` holdings table | Renders `holdings_top` only (priced rows) | 7 holdings, empty table; no native qty + EUR pairs for linear |
+| `ExchangePriceBook` | `default()` empty in `recompute_pnl` | Spot alts remain tier-2 deferred per DEC-0080 |
+
+**Display contract (recommended for architecture — candidate DEC):**
+
+- **All holdings** in API (`holdings` or extend `holdings_top` → `holdings_all`, capped e.g. 50): `asset`, `quantity`, `product_type`, `value_eur: Option<f64>`, `unrealized_pnl_eur`, `native_unit` (margin coin for futures wallet; symbol for linear).
+- **Linear rows:** show native contract qty + symbol + unrealized EUR; **do not** add notional to subtotal (DEC-0064).
+- **FX banner:** single gate — `fx_incomplete = pnl.fx_incomplete || !unpriced_assets.is_empty()`; list assets from PnL breakdown; portfolio-forecast warning uses same flag.
+- **Tier-2 pricing:** defer `ExchangePriceBook` population to post-BUG-0014 unless architecture accepts scope creep.
+
+**AQ fix surface:** `backend/src/wealth/service.rs` (wire PnL `unpriced_assets` + optional `holdings_all`); `backend/src/wealth/types.rs`; `frontend/src/pages/WealthPage.tsx` (table columns, unified banner); `frontend/src/lib/api.ts` types.
+
+**Risks:** Showing unpriced linear with “—” EUR may still feel broken without copy; expanding enum/pricing scope delays sprint.
+
+#### AR — Grafana cashflow zeros verify gate
+
+**Code unchanged:** `cashflow.json` panels query `forecast_balance_daily` / `forecast_cashflow_monthly` with `$account_id` and latest `forecast_computations.status='success'`. Variable query sorts accounts by `ABS(balance)` DESC — acct **114** should be default when funded.
+
+**BUG-0013 AI refuted** when acct **114** + Full sync + recompute (baseline non-zero). Operator screenshot (June **2028** window) likely **time-range / account mismatch**, not SQL regression: default range is `now-30d` → `now+6M`; scrolling to 2028 exceeds forecast horizon → empty or zero series.
+
+**AR verify gate (operator — mandatory before AR1 code):**
+
+| Step | Pass criterion |
+|------|----------------|
+| 1 | Three-service external `compose up` + Full Firefly sync + forecast recompute |
+| 2 | Grafana cashflow: `$account_id` = **114** (name matches funded Giro); not acct **116** or empty |
+| 3 | Reset time range to **Last 30 days → +6 months** (dashboard default) |
+| 4 | `GET /api/v1/forecast/daily?account_id=114` — `balances` non-zero for current month |
+| 5 | `GET /api/v1/forecast/meta` — `computation_id` set, status success |
+| 6 | Panel SQL (panel id 1) with same `account_id` + computation_id returns rows |
+
+**AR1 code trigger:** Step 4 passes (API non-zero) **and** step 6 returns zero — Grafana variable/computation_id mismatch only.
+
+**Risks:** Premature SQL edit duplicates BUG-0013; unfunded acct 116 looks like “missing data”.
+
+#### AS — plan delete UI; target_type scope
+
+**Delete API:** `DELETE /api/v1/plans/:id` in `backend/src/api/plans.rs` — no active-plan guard; `plans` → `plan_versions` → adjustments **ON DELETE CASCADE** (`004_plans.sql`).
+
+**UI gap:** `PlanningPage.tsx` has `deleteAdjustmentMutation` only; no `deletePlanMutation`, no confirmation dialog.
+
+**AS1 recommended fix:** Mirror adjustment delete pattern — `useMutation` → `DELETE /api/v1/plans/${id}`; confirm modal with plan name; disable when sole plan or require picking another active first; on success invalidate `plans`, clear `selectedPlanId` if deleted.
+
+**Active-plan delete:** Architecture must decide: (a) block delete of `is_active` plan with 409 + copy, or (b) allow cascade leaving `no_active_plan` (PVA already handles per DEC-0074). **Recommend (a)** — align with single-global-active contract (DEC-0024).
+
+**AS2 target_type:** UI offers `household | subscription | account` but DB enum is `household | subscription | category | custom_label | allocation_target` — **`account` is invalid** (insert would fail). Templates use `category` / `allocation_target` internally. **Recommend:** help copy explaining household = all accounts, subscription = payee patterns; remove or replace `account` option with `category` (no enum expansion unless new DEC). Enum expansion deferred to architecture.
+
+**Risks:** Deleting active plan breaks Grafana Dashboard 3 until another activated; no frontend delete precedent for confirm UX.
+
+#### AO — Grafana ML banner when env opts in but sidecar down
+
+**React (correct):** `ForecastPage.tsx` distinguishes `sidecar_disabled` (ML off) vs `sidecar_unavailable` / other skip reasons via `ml_skipped_reason` from `GET /api/v1/forecast/meta` (DEC-0066).
+
+**Grafana (misleading):** `forecast-horizons.json` panel id **13** static markdown: *"ML forecast not enabled on this deployment… Enable via US-0013"* — shows even when `FORECAST_ML_ENABLED=true` and metadata says `sidecar_unavailable`.
+
+**AO1 options:**
+
+| Option | Mechanism | Fit |
+|--------|-----------|-----|
+| **A (recommended MVP)** | Replace static copy with **dual-scenario** markdown: (1) ML not configured — set env; (2) ML configured but sidecar unreachable — start `stats-forecast` per DEC-0076 | No new plugins; provisioning-only |
+| **B** | Hidden Postgres variable: `SELECT metadata->>'ml_skipped_reason' FROM forecast_computations WHERE model_kind='baseline' ORDER BY computed_at DESC LIMIT 1`; text panel `${ml_skip_reason}` | Dynamic; matches API truth |
+| **C** | Business Text plugin | Rejected — not in current Compose image |
+
+**Risks:** Option A still not runtime-accurate; Option B shows stale reason until recompute.
+
+#### Ops bundle (AO/AT — unchanged)
+
+Per R-0071 / DEC-0076: `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d flow-finance-ai grafana stats-forecast`; then Full sync + recompute before attributing AP/AQ/AR to code.
+
+**Architecture decisions (accepted at architecture, shipped Q0022):** **DEC-0081** (AQ holdings+FX), **DEC-0082** (AS1 active delete 409), **DEC-0083** (AS2 target_type UI). AP2/AR1 remain conditional on operator gates.
+
+**Linked (extended):** DEC-0064, DEC-0066, DEC-0074, DEC-0076, DEC-0080, DEC-0081, DEC-0082, DEC-0083, R-0076 §6  
+**Confidence:** high (AP/AQ/AS/AO code paths); medium (AR — verify gate sufficient)  
+**Status:** fulfilled — BUG-0014 released Q0022 (2026-06-07); operator smoke AO–AT pass-with-prerequisites
+
+---
+
+## R-0080 — Category analytics, goal planning & subscription tags intake
+
+**Date:** 2026-06-07  
+**Topic:** Operator feature intake — category filters/trends, goal plans with AI savings, subscription manual discovery + tags  
+**Query:** Decompose into multiple user stories; research patterns and dependencies  
+**Sources:**
+- Operator request (intake `intake-20260607-category-planning-subscriptions`)
+- Code: `backend/src/transactions/repository.rs` (`aggregates_by_category`), `backend/src/plan/`, `frontend/src/pages/PlanningPage.tsx`, `frontend/src/pages/SubscriptionsPage.tsx`
+- Prior: [R-0015](research.md#r-0015--plan-engine-delta-overlay-on-forecast-baseline), [R-0009](research.md#r-0009--subscription-detection-engine-patterns--confidence-scoring), [R-0074](research.md#r-0074--us-0015-ai-forecast-bucket-mapping-rulellm-cascade-privacy), US-0014, US-0015, BUG-0006 category ingest
+
+**Findings:**
+
+### Decomposition (accepted — 3 stories)
+
+| Story | Operator value | Primary surfaces |
+|-------|----------------|------------------|
+| **US-0018** | Category filters + monthly expense trends/charts | Forecast, wealth, Grafana, shared filter API |
+| **US-0019** | Goal plans (10k/5mo), per-plan stats, AI savings picks | `/planning`, plan engine, AI tools |
+| **US-0020** | Manual sub search, majority category, custom tags | `/subscriptions`, product DB tags |
+
+**Sequence:** US-0018 first (category contract) → US-0019 (richest what-ifs) ∥ US-0020 (independent).
+
+### Category analytics (US-0018)
+
+- Mirror already supports `aggregates_by_category` by month — extend API + UI rather than new ingest
+- Grafana: add `$category` variable pattern per R-0008 dashboard-as-code; reuse Firefly category list query
+- Finanzguru-like "where do I save" = month-over-month delta per category — chart in React (ECharts) + optional Grafana panel
+- Forecast/planning filter: pass `category_id` into existing projection queries where DEC-0007 buckets map to categories (architecture must define join)
+
+### Goal planning (US-0019)
+
+- US-0004 plan engine today: template adjustments by household/subscription/account — **extend** with `category` target type + goal metadata (`target_balance_eur`, `target_date`)
+- Per-plan stats: scope `plan_computations` / compare API to `plan_id` — avoid aggregating all plans (operator pain point)
+- AI savings: new tool or extend `get_transactions` + category catalog — propose ranked reducible categories with aggregate amounts; operator opt-in lines (DEC-0032)
+- Risk: goal feasibility math must respect forecast baseline account selection (acct 114 vs 116 pattern from BUG-0013)
+
+### Subscriptions (US-0020)
+
+- US-0003 auto-detection remains; add **explorer** query over mirror: `GROUP BY payee, account, approximate_interval`
+- Majority category: `MODE() WITHIN GROUP (ORDER BY category_id)` on linked txs — exclude single-outlier miscategorization per operator note
+- Tags: new table `subscription_tags` + join — **not** Firefly tags; filter in list API
+- Search dimensions: account_id, `ILIKE` on description/payee, `HAVING COUNT(*) >= 3` for recurrence heuristic
+
+### Alternatives rejected
+
+| Option | Why |
+|--------|-----|
+| Single US-0018 mega-epic | Operator asked for multiple US; independent release value |
+| Firefly tag sync | Violates read-only contract |
+| Auto-apply AI savings | Operator must select suggestions |
+
+**Linked:** US-0018, US-0019, US-0020, US-0004, US-0003, US-0015, R-0015, R-0009, R-0074  
+**Confidence:** medium-high (intake synthesis; discovery validates SQL + UX)  
+**Status:** current — intake 2026-06-07
+
+---
+
+## R-0081 — BUG-0015 confirmed subscription reconfirm after rebuild
+
+**Date:** 2026-06-07  
+**Topic:** Operator defect — confirmed subscriptions reappear as pending with Confirm/Reject after container rebuild on omniflow external profile  
+**Query:** Intake synthesis for fingerprint stability, postgres persistence across rebuild, and detection/alert pipeline hypotheses  
+**Sources:**
+- Operator report (intake `intake-20260607-subscription-reconfirm`) — Cursor 95% €17.18/mo, Apple 60% €9.99/mo re-prompted post-rebuild
+- Code: `backend/src/subscriptions/repository.rs` (`upsert_pending_pattern` L144–147 preserves `confirmed`/`rejected` on same fingerprint); `detection.rs` (`confirmed_fps` skip L42–43); `compute_fingerprint(payee_key, interval_days, median_amount)`
+- Prior: [R-0009](research.md#r-0009--subscription-detection-engine-patterns--confidence-scoring), [R-0012](research.md#r-0012--subscription-persistence-schema-candidates-confirmed-rejections-events), [R-0068](research.md#r-0068--bug-0008-subscription-alert-dedup-unread-count-contract-orphan-lifecycle), **BUG-0008**, **BUG-0014** rebuild context
+
+**Findings:**
+
+### Symptom contract (BUG-0015)
+
+Operator trust requires **confirm-once** semantics: a subscription confirmed via US-0003 must survive app container rebuild when postgres persists on external volume. Re-prompting Cursor/Apple after rebuild is a **data-integrity / UX regression** distinct from BUG-0008 alert-count inflation (though AW hypothesis may overlap).
+
+### Hypothesis ranking (discovery order)
+
+| Priority | Hypothesis | Mechanism | Discovery probe |
+|----------|------------|-----------|-----------------|
+| 1 | **Fingerprint drift (AU)** | Payee normalization (`description` vs counterparty), median amount drift, or interval change → new fingerprint → fresh `pending` INSERT; status preservation only applies on fingerprint match | `SELECT fingerprint, status, payee_key, current_amount, interval_days FROM subscription_patterns WHERE display_name ILIKE '%cursor%' OR payee_key ILIKE '%apple%'` pre/post rebuild |
+| 2 | **DB ephemeral (AV)** | Compose rebuild recreated empty postgres or wrong `DATABASE_URL` target | Row count + `confirmed` patterns zero after rebuild without operator action |
+| 3 | **Alert/UI desync (AW)** | Pattern `confirmed` but unread `subscription_alerts` or UI reads alert-driven pending state | Compare pattern status vs `subscription_alerts` for same `pattern_id` |
+| 4 | **Detection re-run (AX)** | Full sync post-rebuild re-groups transactions; `confirmed_fps` loaded but new groups bypass skip | Trace detection log; verify `load_confirmed_fingerprints` set at run start |
+
+### Code anchors
+
+- **Same-fingerprint preserve:** `upsert_pending_pattern` `ON CONFLICT` keeps `confirmed`/`rejected` status — does **not** merge across fingerprint changes.
+- **Skip on detect:** `detection.rs` skips groups when `confirmed_fps.contains(&fingerprint)` — ineffective if fingerprint changed.
+- **Rebuild ops:** US-0010 external profile expects postgres on persistent volume; app-only rebuild (**BUG-0014** pattern) should not wipe `subscription_patterns`.
+
+### Recommended discovery sequence
+
+1. Operator gate: confirm Cursor + Apple → note fingerprints → rebuild app containers only → check DB before Full sync.
+2. Full sync → re-check fingerprints and statuses.
+3. If drift confirmed: evaluate merchant-level dedup or stable fingerprint (payee identity without amount in hash) — architecture decision, not intake closure.
+4. If DB empty: ops/runbook — volume mount and `docker compose` service set.
+
+### Alternatives rejected at intake
+
+| Option | Why |
+|--------|-----|
+| Reopen BUG-0008 | DONE; alert-count symptom ≠ confirm persistence after rebuild |
+| Merge BUG-0014 | DONE cluster; subscriptions independent |
+| Immediate fingerprint redesign | Needs discovery evidence first |
+
+**Linked:** BUG-0015, US-0003, BUG-0008, BUG-0014, R-0009, R-0012, R-0068, R-0082  
+**Confidence:** high (discovery verdicts + code audit + prior-art matrix)  
+**Status:** fulfilled — shipped Q0023 via DEC-0084/0085/0086; retain for traceability
+
+### Discovery verdict addendum (2026-06-07)
+
+| ID | Verdict | Implication for fix |
+|----|---------|---------------------|
+| **H1** fingerprint drift | **LIKELY PRIMARY** | Fix must survive `payee_key` / `median_amount` / `interval_days` recomputation across sync |
+| **H2** DB ephemeral | **UNLIKELY sole** | Ops SQL gate still required pre-execute; not a code substitute |
+| **H3** alert/UI desync | **REFUTED primary** | AW noise is **secondary** — new `pattern_id` from H1 bypasses DEC-0071 dedup |
+| **H4** detection re-run | **Subsumed by H1** | Skip logic works when fingerprint stable; no separate pipeline change |
+
+**Operator gate (pre-execute):** `SELECT status, COUNT(*) FROM subscription_patterns GROUP BY status` immediately after app rebuild **before** Full sync; probe Cursor/Apple rows for duplicate fingerprints on different `payee_key` values.
+
+### Root-cause mechanisms (code-confirmed)
+
+1. **Fingerprint is brittle:** `compute_fingerprint(payee_key, interval_days, median_amount)` — any of three inputs changing yields a new 16-hex hash (`detect.rs` L45–49). `subscription_patterns.fingerprint` is **UNIQUE**; new hash → new `pending` INSERT. ON CONFLICT status preservation (`repository.rs` L144–147) never fires.
+2. **Payee key still varies for card merchants:** DEC-0072 normalization strips SEPA noise and legal suffixes but **does not** collapse comma-separated card descriptors (`CURSOR, AI POWERED IDE, CURSOR.COM` vs `CURSOR.COM`) or shared billing roots (`APPLE.COM/BILL` vs `ITUNES.COM`). `display_name` comes from **last** transaction description (`detect.rs` L104–107) while `payee_key` comes from normalized source string — descriptor variance across months changes grouping key.
+3. **Median amount drift:** Recent-6-tx median (`detect.rs` L95–97) can shift ±€0.01 after new billings or FX rounding → new fingerprint even when payee stable.
+4. **Confirmed skip is exact-match only:** `load_confirmed_fingerprints` + `confirmed_fps.contains(&fingerprint)` (`detection.rs` L42–44) — no payee-level inheritance. **BUG-0008** DEC-0072 recall changes increased grouping consistency but did not add confirm propagation.
+5. **Alert dedup is per-pattern_id (DEC-0071):** `sub_alert:new_detection:{pattern_id}` — drift creates new row → new unread alert. Confirm already marks alerts read for **that** `pattern_id` (`confirm_pattern` → `mark_read_unread_alerts_for_pattern`); does not block re-detection under new id.
+
+### Fix option matrix
+
+| Option | Mechanism | Surfaces | Solves AU/AV | Solves AW | Effort | Risks |
+|--------|-----------|----------|--------------|-----------|--------|-------|
+| **A. Card-merchant `payee_key` normalization** | Extend `payee_key()`: left-prefix before `,` / `*`; collapse `*.com/bill` / `itunes.com` / domain tails to merchant root (see [R-0082](research.md#r-0082--card-billing-descriptor-normalization-for-subscription-identity)) | `recurrence/normalize.rs`, tests | **Partial** — reduces drift at source | Indirect | Low | Over-merge distinct products same biller (multiple Apple subs); forecast/recurrence shared (DEC-0013) |
+| **B. Stable fingerprint (drop amount)** | `compute_fingerprint(payee_key, interval_days)` only | `recurrence/detect.rs`, migration backfill optional | **Partial** — price/FX drift only | Indirect | Low–med | Same payee + interval, different amounts (tier changes) collapse; breaks price-change tracking identity |
+| **C. Payee-level confirm inheritance** | Load `confirmed`/`rejected` by `payee_key` (+ interval tolerance); **skip** emit when matched; on upsert **merge into** existing confirmed row (update amounts/dates/fingerprint) instead of new pending | `repository.rs`, `detection.rs`, `service.rs` | **Yes** — confirm-once semantics | **Yes** — no new pending → no new alert | Med | Multiple subs same merchant need `payee_key + interval_days` composite; stale confirmed row if merchant truly new |
+| **D. Detection skip by `payee_key` only** | Subset of C: skip without merge — confirmed payee never re-emits pending | `detection.rs`, `repository.rs` | **Yes** for re-prompt | **Yes** | Low–med | Confirmed row drifts from live amount/interval until manual refresh; orphan old fingerprint rows |
+| **E. Alert dedup on confirm / by payee** | Extend DEC-0071 fingerprint to `sub_alert:new_detection:payee:{payee_key}` or mark-read by payee on confirm | `repository.rs`, migration | **No** — pending cards still show | **Partial** — banner only | Low | Violates DEC-0071 contract; masks AU failure |
+| **F. Merchant identity table** | `merchant_id` canonical map; operator or rules-assigned | New migration, admin API | **Yes** | **Yes** | High | Over-engineered for two-operator merchants; deferred |
+
+**BUG-0008 prior art (coordinate — do not reopen):**
+
+| Prior | Relevance to BUG-0015 |
+|-------|----------------------|
+| **DEC-0071** (R-0068) | Alert dedup + confirm mark-read — **necessary but insufficient** when H1 creates new `pattern_id` |
+| **DEC-0072** (R-0069) | Payee normalization + transfer guard — **reduced** SEPA drift; card descriptor variance remains |
+| **R-0065 coordinate table** | Detection internals only; `list_patterns` additive JSON OK; no alert-count semantic regression |
+
+### Recommendation (architecture gate)
+
+**Adopt two-layer bundle (primary):**
+
+1. **Layer 1 — A (normalization):** Card-billing descriptor rules in `payee_key()` per [R-0082](research.md#r-0082--card-billing-descriptor-normalization-for-subscription-identity). Low-risk complement to DEC-0072; reduces false splits for Cursor/Apple class descriptors.
+2. **Layer 2 — C (payee + interval inheritance):** Detection skip **and** upsert merge keyed on `(payee_key, interval_days)` with ±3-day interval tolerance for monthly cadence. On match to **confirmed**: refresh `current_amount`, `last_seen_at`, `confidence_pct`, optionally rotate `fingerprint` in-place (single row). On match to **rejected**: skip (extend rejection load beyond fingerprint-only). Reject **B** as sole fix (price collisions). Reject **E** as primary (AW without AU). Reject **F** for MVP.
+
+**Alternative (if Layer 1 tests show sufficient stability):** **D only** — skip without merge — acceptable for `/quick` if operator accepts stale amount on confirmed card until price-change pipeline updates.
+
+**Explicit non-goals:** Reopen BUG-0008; postgres volume runbook (H2 ops gate only); UI changes (H3 refuted).
+
+### Architecture decision gates
+
+| Gate | Question |
+|------|------------|
+| DEC-???? | Payee+interval confirm inheritance vs normalization-only |
+| DEC-???? | Interval tolerance (±3 days monthly) and multi-subscription-per-merchant policy |
+| DEC-???? | In-place `fingerprint` rotation on confirmed merge vs keep legacy fingerprint |
+| DEC-???? | Index `(payee_key, status)` for detection lookup |
+
+### Execute task surfaces (for sprint-plan)
+
+| Task | Surface | Depends |
+|------|---------|---------|
+| **AU1** | `recurrence/normalize.rs` — card descriptor rules + unit tests | — |
+| **AU2** | `subscriptions/repository.rs` — `load_confirmed_payee_intervals`, merge upsert | AU1 |
+| **AU3** | `subscriptions/detection.rs` — skip + merge call path; rejection by payee | AU2 |
+| **AU4** | `subscriptions/detection.rs` — `mark_stale_inactive` active map by payee+interval | AU2 |
+| **V1** | verify-work: confirm Cursor/Apple → rebuild app → Full sync → AU/AV/AW | deploy |
+
+**Ops gate:** operator SQL probe documented in UAT before V1.
+
+---
+
+## R-0082 — Card billing descriptor normalization for subscription identity
+
+**Date:** 2026-06-07  
+**Topic:** Web + industry patterns for stabilizing card/PSP billing descriptors in recurrence grouping (BUG-0015 Layer 1)  
+**Query:** How do payment processors and enrichment APIs treat variable billing descriptors for recurring merchant identity?  
+**Sources:**
+- [Ntropy Recurrence API](https://docs.ntropy.com/enrichment/recurrence) — ML grouping by counterparty + periodicity; tolerates amount variance and gaps
+- [Visa compelling evidence FAQs](https://usa.visa.com/content/dam/VCOM/regional/na/us/support-legal/documents/evolution-of-compelling-evidence-merchant-faqs-mar2023.pdf) — descriptor consistency: keep **leftmost** characters stable; dynamic suffixes on the **right**
+- [Recurly payment descriptors](https://docs.recurly.com/recurly-subscriptions/docs/payment-descriptors) — `DBA*Plan Name` pattern; prefix stable, suffix variable
+- Code gap: `payee_key()` handles SEPA (DEC-0072) but not comma-separated card memos or `*.com/bill` roots
+
+**Findings:**
+
+| Pattern | Industry practice | Proposed rule for `payee_key()` |
+|---------|-------------------|--------------------------------|
+| Dynamic suffix | Right-side variable (`AcmeInc*Gold Plan`) | Take token before `*` if present |
+| Multi-field memo | `MERCHANT, PRODUCT, DOMAIN` comma lists | Take **leftmost** segment before `,`; normalize domain |
+| Billing aggregator | `APPLE.COM/BILL`, `ITUNES.COM`, `APPLE.COM/BILL ITUNES` | Map known roots to `apple` (configurable alias list or heuristic) |
+| Domain tail | `CURSOR.COM`, `cursor.com` | Strip `.com` / `/bill` tails for known SaaS merchants |
+
+**Risks:** Alias list maintenance; EU descriptor charset; over-merge per R-0069 §5. Mitigation: inheritance Layer 2 (R-0081 §C) catches residual drift.
+
+**Linked:** BUG-0015, R-0081, DEC-0072, DEC-0013  
+**Confidence:** medium (heuristic; validate against operator Cursor/Apple rows)  
+**Status:** fulfilled — shipped DEC-0084 (AU1); retain for traceability
 
 ---

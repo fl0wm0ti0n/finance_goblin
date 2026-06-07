@@ -1,0 +1,118 @@
+{
+  "sprint": "Q0021",
+  "story_id": "US-0017",
+  "orchestrator_run_id": "auto-20260609-us0017-001",
+  "verified_at": "2026-06-09T19:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0017",
+  "tasks_source": "sprints/quick/Q0021/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#US-0017",
+  "decision_alignment": {
+    "decisions": ["DEC-0070"],
+    "research_basis": ["R-0078", "R-0066", "R-0067"],
+    "contract_elements_covered": [
+      "DEC-0070 US-0017 extension: H3 Omniflow smoke under ## Examples (E1)",
+      "DEC-0070 US-0017 extension: H3 Troubleshooting under ## Limitations (E2)",
+      "DEC-0070 per-segment Product status maintenance hooks (E4, E5)",
+      "E1: external-profile curls — health, sync trigger full mode, forecast meta, wealth crypto probe, Grafana embed, six /analytics/{slug} routes, exchange sanity",
+      "E1: Traefik placeholder auth; API OIDC/dev-bypass one-liner; gate sequence BACKEND_FRONTEND_DEPLOY → GRAFANA_PROVISIONING_RELOAD → FULL_FIREFLY_SYNC + recompute",
+      "E2: 6-row symptom table (Q0020 / BUG-0013); ML-unavailable vs empty-panel distinction; no root ## Troubleshooting H2",
+      "E3: Product status verify-only — US-0015, BUG-0013, US-0013–0016; append only if new segment closures",
+      "E4/E5: release-segment definition; per-US/BUG release and refresh hooks in developer README + runbook § README maintenance",
+      "E6: validate_doc_profile --no-template-parity exit 0; no DEV_* H2; H2 budget ≤ 8; split layout preserved",
+      "UG1: operator user guide distill (USER_GUIDE_MODE=1) — AC-1/AC-2 operator channel"
+    ],
+    "frozen_boundaries_respected": [
+      "Doc-only — no application source, compose, template/, analytics dashboards, or CI structural changes",
+      "No dedicated ## Troubleshooting root H2 (H3 under ## Limitations only)",
+      "No full runbook §23 inline duplicate in README",
+      "No credential literals — angle-bracket placeholders only",
+      "E3 verify-only unless release segment closes additional US/BUG ids",
+      "US-0013 ML overlay code out of scope",
+      "No new DEC-xxxx — DEC-0070 extension only"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "E1 ∥ E2 ∥ E4 ∥ E5 (parallel) → E3 → UG1 → E6",
+    "notes": "E1/E2/E4/E5 touch disjoint files; E3 and UG1 depend on E1+E2 content; E6 blocked on all prior tasks including UG1"
+  },
+  "test_coverage": {
+    "unit_fixtures": "N/A — doc-only sprint",
+    "integration": "N/A — doc-only sprint",
+    "operator_tests": "N/A at execute — content references Q0020 uat.md operator gates; no runtime gates required for doc execute",
+    "doc_review": "E1/E2 manual H3 content review; E3 Product status verify; E4/E5 maintenance hook wording; E6 validate_doc_profile --no-template-parity exit 0; UG1 operator guide cross-links",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Root README.md Examples include omniflow external-profile smoke commands (sync trigger, forecast recompute pointer, six /analytics/{slug} routes, exchange sync sanity) — not only localhost curls",
+      "tasks": ["E1", "UG1"],
+      "covered": true,
+      "notes": "E1 adds ### Omniflow smoke (external profile) H3 with R-0078 §2 curl block; UG1 distills operator quick reference with README/runbook cross-links"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "Limitations or budget-safe Troubleshooting subsection documents empty-Grafana vs ML-unavailable distinction, BACKEND_FRONTEND_DEPLOY cadence, and sync+recompute prerequisite for non-zero analytics",
+      "tasks": ["E2", "UG1"],
+      "covered": true,
+      "notes": "E2 adds ### Troubleshooting H3 under ## Limitations with gate sequence, 6-row symptom table, ML-off vs data-missing distinction; UG1 summarizes for operators"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Product status subsection lists US-0015 and other closures shipped after US-0016 baseline when this story closes",
+      "tasks": ["E3"],
+      "covered": true,
+      "notes": "E3 verify-only — post-Q0020 refresh-context already lists US-0015, BUG-0013, US-0013–0016; append bullets only if segment closes additional ids before story close"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "docs/developer/README.md and runbook § documentation profile require Product status README update in release and refresh-context checklists for each closed US/BUG in the segment",
+      "tasks": ["E4", "E5"],
+      "covered": true,
+      "notes": "E4 tightens developer README per-segment wording; E5 defines release segment and per-US/BUG release/refresh hooks in runbook § README maintenance"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "python scripts/validate_doc_profile.py --repo . exits 0; split layout preserved (no DEV_* H2 in root; H2 budget ≤ 8 per DEC-0059)",
+      "tasks": ["E6"],
+      "covered": true,
+      "notes": "E6 runs validate_doc_profile --no-template-parity after all edits; confirms no forbidden root H2 and H3-only additions under existing H2s"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "UG1 (docs/user-guides/US-0017.md) extends architecture E1–E6 contract per USER_GUIDE_MODE=1 — not in architecture file touch list but maps to AC-1/AC-2 operator channel; no coverage gap."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "AC-5 acceptance text omits --no-template-parity flag; E6 and architecture E6 frozen on --no-template-parity — satisfies core exit-0 and layout requirements; template tree unchanged in US-0017 scope."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "E3 verify-only may require zero README edits if Product status already current — execute should document verify outcome in summary per task done-when."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 5,
+    "covered_count": 5,
+    "gap_count": 0,
+    "task_count": 7,
+    "mandatory_task_count": 7,
+    "optional_task_count": 0,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0070_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true
+  },
+  "notes": "QA plan-verify 2026-06-09: sprints/quick/Q0021/tasks.md aligns with docs/product/acceptance.md US-0017 AC-1..AC-5 and architecture § US-0017 / DEC-0070; 7/7 tasks mapped (E1, E2, E3, E4, E5, UG1, E6); E1∥E2∥E4∥E5 parallel; 0 gaps; 0 orphans. Approved for /execute."
+}

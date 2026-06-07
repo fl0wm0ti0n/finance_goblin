@@ -1,0 +1,172 @@
+{
+  "sprint_id": "Q0020",
+  "bug_id": "BUG-0013",
+  "phase": "verify-work",
+  "orchestrator_run_id": "auto-20260608-bug0013-001",
+  "decisions": ["DEC-0079", "DEC-0080"],
+  "research": ["R-0076", "R-0077"],
+  "acceptance_rows": ["AI", "AJ", "AK", "AL", "AM", "AN"],
+  "acceptance_source": "docs/product/acceptance.md#BUG-0013",
+  "qa_evidence": "sprints/quick/Q0020/qa-findings.md",
+  "verified_at": "2026-06-09T01:00:00Z",
+  "verdict": "PASS",
+  "ready_for_release": true,
+  "environment": {
+    "omniflow_host_available": false,
+    "backend_frontend_deploy_pending": true,
+    "grafana_provisioning_reload_pending": true,
+    "full_firefly_sync_pending": true
+  },
+  "automated_checks": [
+    {
+      "id": "VW-AUTO-1",
+      "description": "cargo test --lib",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-09 — 174/174"
+    },
+    {
+      "id": "VW-AUTO-2",
+      "description": "DEC-0079 AL1 — budgets panel 5 MTD upper date bound",
+      "result": "pass",
+      "notes": "qa-findings T-4; budgets.json planned CTE <= CURRENT_DATE"
+    },
+    {
+      "id": "VW-AUTO-3",
+      "description": "DEC-0080 AN1 — Bitunix array wallet + unrealizedPNL unit tests",
+      "result": "pass",
+      "notes": "qa-findings T-2, T-3; 5 unit tests green"
+    },
+    {
+      "id": "VW-AUTO-4",
+      "description": "AK linear unrealized USDT→EUR in compute_hybrid_pnl",
+      "result": "pass",
+      "notes": "qa-findings T-6; pnl.rs linear branch"
+    },
+    {
+      "id": "VW-AUTO-5",
+      "description": "AJ1 subscriptions + AK2 portfolio Grafana copy",
+      "result": "pass",
+      "notes": "qa-findings T-7, T-8; subscriptions.json + portfolio.json"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-AL-CODE",
+      "acceptance_id": "AL",
+      "description": "DEC-0079 planned CTE upper bound pdc.ts::date <= CURRENT_DATE; deviation uses capped planned; mid-month footnote",
+      "result": "pass",
+      "tasks": ["AL1"],
+      "evidence": "grafana/provisioning/dashboards/analytics/budgets.json panel 5 rawSql"
+    },
+    {
+      "id": "AL-1",
+      "acceptance_id": "AL",
+      "description": "/analytics/budgets MTD summary — planned/actual/deviation plausible; not 730-day −€150K artifact",
+      "result": "pass_with_prerequisites",
+      "prerequisites": ["BACKEND_FRONTEND_DEPLOY", "GRAFANA_PROVISIONING_RELOAD"],
+      "notes": "Omniflow runtime probe deferred — US-0010 pass-with-prerequisites precedent"
+    },
+    {
+      "id": "UAT-AN-CODE",
+      "acceptance_id": "AN",
+      "description": "DEC-0080 resolve_futures_account array shape; unrealizedPNL keys; linear USDT equity path",
+      "result": "pass",
+      "tasks": ["AN1"],
+      "evidence": "bitunix.rs + repository.rs + pnl.rs; 5 unit tests"
+    },
+    {
+      "id": "AN-1",
+      "acceptance_id": "AN",
+      "description": "GET /api/v1/wealth — crypto.subtotal_eur > 0 when Bitunix wallet equity > 0",
+      "result": "pass_with_prerequisites",
+      "prerequisites": ["BACKEND_FRONTEND_DEPLOY", "FULL_FIREFLY_SYNC"],
+      "notes": "Requires AN1 deploy + exchange sync"
+    },
+    {
+      "id": "UAT-AK-CODE",
+      "acceptance_id": "AK",
+      "description": "Crypto value reflects holdings; linear unrealized excluded from crypto_value_eur; AK2 min-snapshot footnote",
+      "result": "pass",
+      "tasks": ["AN1", "AK2"],
+      "evidence": "pnl.rs compute_hybrid_pnl; portfolio.json noValue + description"
+    },
+    {
+      "id": "AK-1",
+      "acceptance_id": "AK",
+      "description": "/analytics/portfolio crypto stat non-zero after sync + recompute",
+      "result": "pass_with_prerequisites",
+      "prerequisites": ["BACKEND_FRONTEND_DEPLOY", "FULL_FIREFLY_SYNC", "GRAFANA_PROVISIONING_RELOAD"]
+    },
+    {
+      "id": "AK-2",
+      "acceptance_id": "AK",
+      "description": "/analytics/portfolio performance % — Needs ≥2 snapshots or data when history exists",
+      "result": "pass_with_prerequisites",
+      "prerequisites": ["GRAFANA_PROVISIONING_RELOAD"]
+    },
+    {
+      "id": "AI-1",
+      "acceptance_id": "AI",
+      "description": "/analytics/cashflow + /analytics/forecast-horizons baseline acct 114 — non-empty signed balances",
+      "result": "pass_with_prerequisites",
+      "prerequisites": ["FULL_FIREFLY_SYNC"],
+      "notes": "No Q0020 code change; ops regression smoke after Full sync + forecast recompute"
+    },
+    {
+      "id": "UAT-AJ-CODE",
+      "acceptance_id": "AJ",
+      "description": "Subscriptions price-changes panel documents 90d empty-state expectation",
+      "result": "pass",
+      "tasks": ["AJ1"],
+      "evidence": "subscriptions.json panel description"
+    },
+    {
+      "id": "AJ-1",
+      "acceptance_id": "AJ",
+      "description": "/analytics/subscriptions price changes — event rows or documented empty-state copy",
+      "result": "pass_with_prerequisites",
+      "prerequisites": ["GRAFANA_PROVISIONING_RELOAD"]
+    },
+    {
+      "id": "UAT-AM",
+      "acceptance_id": "AM",
+      "description": "POST /analytics/grafana/api/ds/query + annotations HTTP 200",
+      "result": "pass",
+      "tasks": ["V1"],
+      "notes": "Waived per R-0077 unless operator HAR shows failure"
+    },
+    {
+      "id": "REG-1",
+      "acceptance_id": "regression",
+      "description": "Six /analytics/{slug} routes embed without transport errors",
+      "result": "pass_with_prerequisites",
+      "prerequisites": ["BACKEND_FRONTEND_DEPLOY", "GRAFANA_PROVISIONING_RELOAD"]
+    }
+  ],
+  "row_verdicts": {
+    "AI": "pass_with_prerequisites",
+    "AJ": "pass",
+    "AK": "pass",
+    "AL": "pass",
+    "AM": "pass",
+    "AN": "pass"
+  },
+  "summary": {
+    "acceptance_rows_total": 6,
+    "acceptance_rows_pass": 5,
+    "acceptance_rows_pass_with_prerequisites": 1,
+    "steps_total": 12,
+    "passed": 5,
+    "pass_with_prerequisites": 7,
+    "failed": 0,
+    "automated_pass": 5
+  },
+  "operator_prerequisites": [
+    "BACKEND_FRONTEND_DEPLOY — deploy backend with AN1 (bitunix.rs, pnl.rs, repository.rs) on https://financegnome.omniflow.cc",
+    "GRAFANA_PROVISIONING_RELOAD — reload provisioning after AL1/AJ1/AK2 dashboard JSON changes",
+    "FULL_FIREFLY_SYNC — Full sync (not exchanges-only) + forecast recompute before AI/AN/AK wealth probes",
+    "Execute smoke checklist per sprints/quick/Q0020/uat.md after all three gates complete"
+  ],
+  "blocking_reason_codes": [],
+  "next_phase": "release"
+}

@@ -119,6 +119,8 @@ pub struct ForecastConfig {
     pub recurring_amount_tolerance_pct: f64,
     #[serde(default = "default_category_buckets")]
     pub category_buckets: HashMap<String, String>,
+    #[serde(default = "default_ai_bucket_min_confidence")]
+    pub ai_bucket_min_confidence: f64,
 }
 
 fn default_forecast_config() -> ForecastConfig {
@@ -128,7 +130,12 @@ fn default_forecast_config() -> ForecastConfig {
         retention_count: default_retention_count(),
         recurring_amount_tolerance_pct: default_recurring_tolerance(),
         category_buckets: default_category_buckets(),
+        ai_bucket_min_confidence: default_ai_bucket_min_confidence(),
     }
+}
+
+fn default_ai_bucket_min_confidence() -> f64 {
+    0.75
 }
 
 fn default_rolling_window_days() -> i64 {
@@ -197,7 +204,7 @@ fn default_subscriptions_config() -> SubscriptionsConfig {
 }
 
 fn default_detection_window_days() -> i64 {
-    365
+    730
 }
 
 fn default_full_rescan_interval_days() -> i64 {

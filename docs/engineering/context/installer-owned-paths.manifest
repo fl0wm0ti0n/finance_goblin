@@ -32,6 +32,12 @@ scripts/remote_config_summary.py
 scripts/guard_installer_publish.py
 scripts/enforce-triad-hot-surface.py
 scripts/caveman_compress_input.py
+scripts/readme_feature_coverage_lib.py
+scripts/validate_readme_feature_coverage.py
+scripts/check_downstream_ci_guard.py
+scripts/downstream_ci_guard_lib.py
+scripts/auto_outer_driver.py
+scripts/uat_probe_lib.py
 .github/workflows
 README.md
 its_magic
@@ -59,6 +65,12 @@ scripts/remote_config_summary.py
 scripts/guard_installer_publish.py
 scripts/enforce-triad-hot-surface.py
 scripts/caveman_compress_input.py
+scripts/readme_feature_coverage_lib.py
+scripts/validate_readme_feature_coverage.py
+scripts/check_downstream_ci_guard.py
+scripts/downstream_ci_guard_lib.py
+scripts/auto_outer_driver.py
+scripts/uat_probe_lib.py
 .github/workflows/ci.yml
 .github/workflows/deploy.yml
 its_magic

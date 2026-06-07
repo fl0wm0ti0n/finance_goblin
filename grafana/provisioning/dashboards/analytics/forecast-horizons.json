@@ -167,7 +167,7 @@
       "gridPos": { "h": 4, "w": 24, "x": 0, "y": 22 },
       "id": 13,
       "options": {
-        "content": "**ML forecast not enabled on this deployment.** Baseline DEC-0007 forecast is authoritative. Enable ML-enhanced projections via **US-0013** when the StatsForecast sidecar is configured.",
+        "content": "**ML forecast status — operator guidance**\n\nThe baseline DEC-0007 forecast remains authoritative when the ML overlay is unavailable. Match your deployment to one of these scenarios:\n\n**1. ML not configured** — set `FORECAST_ML_ENABLED=true` and `STATS_FORECAST_URL` per the **US-0013** operator guide (`docs/user-guides/US-0013.md`). Rebuild the external profile and run Full Firefly sync + forecast recompute.\n\n**2. ML configured but sidecar unreachable** — `FORECAST_ML_ENABLED=true` is set but the StatsForecast sidecar is not healthy. Start the **`stats-forecast`** service with the DEC-0076 three-service external compose alongside **`flow-finance-ai`** and **`grafana`**, then re-run Full sync + forecast recompute.",
         "mode": "markdown"
       },
       "title": "ML forecast status",

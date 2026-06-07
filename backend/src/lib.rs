@@ -137,6 +137,9 @@ pub async fn run() -> anyhow::Result<()> {
         Some(portfolio.clone()),
     )
     .map_err(|e| anyhow::anyhow!("AI provider startup failed: {e}"))?;
+    forecast
+        .attach_bucket_inference(ai.provider(), config.privacy.clone())
+        .await;
     ai.run_audit_retention().await?;
 
     let sync = SyncService::new(

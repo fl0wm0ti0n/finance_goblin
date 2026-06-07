@@ -1,0 +1,72 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260606-omniflow-regression-readme",
+  "intake_work_item_kind": "mixed",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Grafana analytics on financegnome.omniflow.cc show non-empty cashflow, portfolio crypto, forecast, subscriptions, and plausible budget MTD after sync; root README stays current for devs and users as US/BUG close.",
+      "intake_run_id": "intake-20260606-omniflow-regression-readme",
+      "turn_index": 0,
+      "ref": "ie:intake-20260606-omniflow-regression-readme:0:02e415c4d2e8e19a"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "grafana/provisioning dashboards; /analytics/grafana proxy; wealth FX pricing; exchange crypto sync; forecast recompute post US-0015; budgets SQL; root README.md Product status; release and refresh-context hooks.",
+      "intake_run_id": "intake-20260606-omniflow-regression-readme",
+      "turn_index": 1,
+      "ref": "ie:intake-20260606-omniflow-regression-readme:1:e4a03fd043b59782"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Post US-0015 deploy may need BACKEND_FRONTEND_DEPLOY + full sync + recompute; BUG-0009/0010 DONE — treat as regression not reopen; MetaMask console noise out of scope; no host .env secrets; US-0016 README exists — enhancement only.",
+      "intake_run_id": "intake-20260606-omniflow-regression-readme",
+      "turn_index": 2,
+      "ref": "ie:intake-20260606-omniflow-regression-readme:2:42e325621285042c"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "POST /analytics/grafana/api/ds/query 200 without Failed to fetch; representative panels non-empty on omniflow; crypto totals match exchange sync; budgets MTD sane; validate_doc_profile PASS; README Product status includes US-0015.",
+      "intake_run_id": "intake-20260606-omniflow-regression-readme",
+      "turn_index": 3,
+      "ref": "ie:intake-20260606-omniflow-regression-readme:3:d3428ebf52c09ee7"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator confirms analytics populated and README living-doc contract holds; BUG-0013 + US-0017 acceptance checked; OIDC regression pass.",
+      "intake_run_id": "intake-20260606-omniflow-regression-readme",
+      "turn_index": 4,
+      "ref": "ie:intake-20260606-omniflow-regression-readme:4:04c45266e0cda729"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "dual-work-item",
+    "work_items": ["BUG-0013", "US-0017"],
+    "rationale": "Operator bundled independent concerns: (1) P0 omniflow analytics data-pipeline regression cluster with six sub-defects; (2) P2 README living-doc enhancement beyond US-0016 DONE baseline. Vertical split preserves independent user value and testability.",
+    "split_axis": "user-value boundary (defect remediation vs documentation upkeep)",
+    "boundaries": {
+      "BUG-0013": "Grafana panels, wealth/crypto/FX pipeline, forecast zeros, budgets MTD SQL, ds/query proxy — data correctness on omniflow",
+      "US-0017": "Root README Examples/Limitations/Troubleshooting expansion + release-gate maintenance hook — no analytics code"
+    },
+    "alternatives_considered": [
+      "Single mega-bug — rejected (README is enhancement not defect; mixes doc and data surfaces)",
+      "Reopen BUG-0009/0010 — rejected (DONE without closure-evidence to reopen; operator report is post-US-0015 regression)",
+      "Skip US-0017 — rejected (operator explicitly requests hold README up-to-date while solving US/Bugs; US-0016 shipped baseline only)"
+    ],
+    "bug_routing_guard": "INTAKE_BUG_ROUTING_OK kind=story exit=0 — dual allocation BUG-0013 + US-0017 per operator decomposition"
+  }
+}

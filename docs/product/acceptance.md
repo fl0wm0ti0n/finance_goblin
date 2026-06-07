@@ -16,15 +16,21 @@
 
 - [x] **BUG-0007** — **(S)** On US-0010 external profile after successful sync, AI Chat enumerates subscription/streaming **merchant/payee names** from `get_subscriptions` and/or `get_transactions` when operator asks to list services (e.g. after reporting cancelable streaming total)—not generic industry-only lists or "cannot retrieve" when mirror holds recurring patterns. **(T)** Merchant/category queries (**Strom**/electricity, **Amazon** for Jan–Oct 2023, streaming) return data-backed amounts or explicit empty-state showing category/description/account search was attempted—not blanket "no expenses" when mirror plausibly contains matches. **(U)** AI fuses **category, transaction name/description, account, and amounts** in tool orchestration without requiring the user to name merchants. Privacy `allow_raw_transactions=false` and six-tool registry preserved; OIDC-enabled deploy regression checks pass. Discovery documents RAG vs tool-enhancement tradeoff (intake note V—not acceptance gate). Verify-work 2026-06-07: S/U pass; T partial (`group_by: month` + `category_search` advisory, non-blocking).
 
-- [ ] **BUG-0008** — **(W)** On US-0010 external profile after sync, subscription-scoped alert unread count reconciles with visible `/subscriptions` list rows (pending + confirmed + standing orders per tab contract)—not **33 alerts vs 11 list rows** or equivalent mismatch without documented dismissed/rejected/dedup semantics in UI. **(X)** Subscription detection surfaces materially more recurring patterns from 922+ synced transactions for operator-known merchants (higher recall than post-BUG-0004 **11 pending** alone) without alert spam; improved rules and/or AI-assisted detection documented if used. OIDC-enabled and bundled-firefly deploy regression checks pass.
+- [x] **BUG-0008** — **(W)** On US-0010 external profile after sync, subscription-scoped alert unread count reconciles with visible `/subscriptions` list rows (pending + confirmed + standing orders per tab contract)—not **33 alerts vs 11 list rows** or equivalent mismatch without documented dismissed/rejected/dedup semantics in UI. **(X)** Subscription detection surfaces materially more recurring patterns from 922+ synced transactions for operator-known merchants (higher recall than post-BUG-0004 **11 pending** alone) without alert spam; improved rules and/or AI-assisted detection documented if used. OIDC-enabled and bundled-firefly deploy regression checks pass.
 
 - [x] **BUG-0009** — **(Y)** On US-0010 external profile with 922+ synced transactions, representative Grafana analytics dashboards (`POST /analytics/grafana/api/ds/query` for cashflow, portfolio, subscriptions, budgets, forecast) return **200** with **non-empty panel values** when `account_id` variable matches synced Firefly asset accounts—not persistent empty panels post-BUG-0004. **(Z)** Operator has **cross-account value overview** in analytics (Grafana summary panel/table or documented equivalent via embedded wealth link showing per-account totals). Six `/analytics/{slug}` routes operator smoke pass. OIDC-enabled deploy regression checks pass.
 
 - [x] **BUG-0010** — **(AA)** On US-0010 external profile, Forecast UI/API shows **plausible signed balances** for selected account—including 3-month **End balance** not implausible **-25365.78** without explicit deficit scenario; daily/monthly/long-term series populated after recompute. **(AB)** Wealth UI/API shows **non-empty** account breakdown and `total_eur` for synced Firefly asset accounts. **(AC)** ML forecast path runs when US-0009 sidecar/config available on profile, or UI/API **accurately** states degraded baseline-only mode; message **"ML skipped: ML forecast unavailable…"** only when ML truly unavailable and baseline DEC-0007 numbers are correct. OIDC-enabled deploy regression checks pass. Epic ML hardening tracked in **US-0013**.
 
-- [ ] **BUG-0011** — **(AD)** On `/planning` Scenarios, clicking **"Start empty and add lines"** creates an editable empty plan (add-line UX)—not silent no-op. **(AE)** Compare tab with empty/minimal plan shows **zero or neutral deltas**, not illogical aggregates (e.g. **-127489.44** monthly delta, **-4042.41** projected month-end) from missing baseline guards. **(AF)** `GET /api/v1/plans/active/plan-vs-actual` returns **200** with JSON when active plan exists, or **200 documented empty-state/guided UX** when none—not raw **404** breaking Plan vs Actual tab. OIDC-enabled deploy regression checks pass. Intuitive UX epic tracked in **US-0014**.
+- [x] **BUG-0011** — **(AD)** On `/planning` Scenarios, clicking **"Start empty and add lines"** creates an editable empty plan (add-line UX)—not silent no-op. **(AE)** Compare tab with empty/minimal plan shows **zero or neutral deltas**, not illogical aggregates (e.g. **-127489.44** monthly delta, **-4042.41** projected month-end) from missing baseline guards. **(AF)** `GET /api/v1/plans/active/plan-vs-actual` returns **200** with JSON when active plan exists, or **200 documented empty-state/guided UX** when none—not raw **404** breaking Plan vs Actual tab. OIDC-enabled deploy regression checks pass. Intuitive UX epic tracked in **US-0014**.
 
 - [x] **BUG-0012** — **(AG)** On US-0010 external profile after Full Firefly sync and forecast recompute, monthly forecast API/UI shows **non-zero Income** for a funded account when mirror holds income-category inflows (salary, refunds, etc.) in the forecast month—not permanently **Income: 0** while categorized rows exist. **(AH)** Monthly forecast shows **non-zero Fixed** when mirror holds fixed-cost category outflows (rent, utilities, standing orders per DEC-0007 category map)—not **Fixed: 0** with all spend under Variable only. OIDC-enabled deploy regression checks pass. AI-assisted bucket mapping epic tracked in **US-0015**.
+
+- [x] **BUG-0013** — **(AI)** On US-0010 external profile after Full Firefly sync and forecast recompute (post-US-0015 deploy), cashflow **Balance forecast with scarcity threshold** and forecast-horizons **baseline** panels show **non-empty signed balances** for a funded asset account—not persistent flat **0 €** regression vs BUG-0009/0010 closure. **(AJ)** Subscriptions **Price changes (90 days)** panel shows change rows when confirmed subscriptions had amount changes in period, or documented empty-state when none. **(AK)** Portfolio **crypto value** reflects exchange holdings when sync populated positions; FX incomplete warning only with documented partial totals; **total return %** populated when snapshot history exists. **(AL)** Budgets MTD plan/actual/deviation rows are **plausible** for active plan—not unexplained **Planned MTD −€150K** with **Actual €0** unless plan defines that magnitude. **(AM)** `POST /analytics/grafana/api/ds/query` and annotation queries return **200** without browser **Failed to fetch** on omniflow. **(AN)** Exchange crypto balances appear in wealth/portfolio totals when venue sync succeeds—not permanently **€0** with configured read-only keys. OIDC-enabled deploy regression checks pass. ML overlay remains **US-0013**.
+
+- [x] **BUG-0014** — **(AO)** With `FORECAST_ML_ENABLED=true` and healthy `stats-forecast` on external profile, `GET /api/v1/forecast/meta` shows ML available (`ml_computation_id` set after Full sync) or accurate sidecar-down degraded copy—not permanent **US-0013 not enabled** when env opts in. **(AP)** Wealth crypto subtotal, exchange cards, and portfolio panels show **non-zero** values when Bitunix reports connected holdings (e.g. **7** positions) and wallet/unrealized equity exists per DEC-0080—not **€0** everywhere with only a holdings count *(code PASS; AP1/AP-1 live operator-deferred; AP2 conditional skipped)*. **(AQ)** Crypto surfaces show **native asset amounts** and **EUR equivalents** at valuation time; **FX incomplete** banner appears only with documented `unpriced_assets` or partial totals—not when wallet equity is priced. **(AR)** Cashflow Grafana **balance forecast** and **recent daily balances** show **non-zero signed values** for funded account **114** after Full sync + recompute—not persistent flat **0** when API forecast non-zero *(AR-API/AR-GRAF operator-deferred; AR1 conditional skipped)*. **(AS)** Operator can **delete** a plan from `/planning` UI (or documented equivalent); plan mutations surface errors; target-type UX documented or improved beyond household/subscription/account confusion. **(AT)** External profile operator rebuild/runbook starts **`stats-forecast`** with app + Grafana when ML enabled *(ops-only pass-with-prerequisites)*. OIDC-enabled deploy regression checks pass.
+
+- [x] **BUG-0015** — **(AU)** On US-0010 external profile, after operator confirms subscription patterns (e.g. **CURSOR** €17.18/mo, **APPLE.COM/BILL** €9.99/mo) and rebuilds application containers, previously confirmed patterns remain **confirmed** in `GET /api/v1/subscriptions` and `/subscriptions` UI—not re-surfaced as **pending** with Confirm/Reject after container start and Full sync *(code PASS; AU-1/AU-2/H2-1 live operator-deferred)*. **(AV)** Post-rebuild Full sync + detection rerun does not create duplicate pending rows for the same merchant identity; confirmed fingerprints are skipped in detection (`confirmed_fps` / `upsert_pending_pattern` status preservation) or fingerprint drift is documented and remediated *(code PASS; AV-1 live operator-deferred)*. **(AW)** Subscription-scoped unread alerts reconcile with list tabs—no spurious `new_detection` unread forcing re-review of merchants already confirmed in DB *(code PASS; AW-1/OIDC live operator-deferred)*. OIDC-enabled deploy regression checks pass.
 
 ## US-0001 — Self-hosted platform foundation & Firefly read-only integration
 
@@ -142,26 +148,80 @@
 
 ## US-0013 — Production ML forecast & wealth analytics hardening
 
-- [ ] StatsForecast/ML sidecar reachable and invoked on US-0010 external profile after sync (not `full` Compose profile only; `FORECAST_ML_ENABLED` on omniflow external merge)
-- [ ] ML-enhanced forecast produces non-flat 6–24 month projections with confidence bands when data sufficient
-- [ ] UI compare baseline vs ML-enhanced forecast works on production profile (extends US-0009)
-- [ ] Wealth analytics integrate ML overlay without empty/incorrect totals
-- [ ] Operator runbook documents ML deps, degraded-mode, and health checks on omniflow
-- [ ] Parent defect **BUG-0010** AC rows AA/AB/AC pass before or with this story closure
+- [x] External compose overlay adds `stats-forecast` on **`external`** profile (not `full`-only); `FORECAST_ML_ENABLED`, `STATS_FORECAST_URL`, and omniflow port remap (`STATS_FORECAST_PORT=8091`) documented in `.env.example`
+- [x] Backend `[forecast_ml] enabled=true` on external merge resolves sidecar health on traefik network before sync ML phase
+- [x] Post-sync `forecast_ml` phase runs after baseline per DEC-0052; ML failure records skip metadata without failing sync; sync status UI shows "ML forecast…" when active
+- [x] `model_kind=ml_enhanced` computations persisted with p10/p90 bands when history ≥ `min_monthly_points`; GET `/api/v1/forecast` with `variant=ml_enhanced` returns non-empty 6–24 month series on omniflow after Full sync + recompute
+- [x] React `/forecast` Compare control shows baseline + ML-enhanced overlay when ML available (extends US-0009); degraded copy uses `sidecar_disabled` per DEC-0066—not generic skip message
+- [x] Wealth API/UI integrates ML portfolio overlay when US-0007 data present; signed totals and account breakdown remain correct (DEC-0065); `portfolio_forecast_low_confidence` banner per R-0034 when FX incomplete
+- [x] Grafana forecast-horizons ML panels return data when `$forecast_variant=ml_enhanced` and computations exist (post-enablement; BUG-0009 banner remains when ML off)
+- [x] Operator runbook documents omniflow ML enablement: compose profile union, env vars, sidecar health probe, minimum history gate, degraded-mode troubleshooting
+- [x] Automated test or CI fixture proves sidecar invoke + overlay persist path (mock HTTP or testcontainers) without production secrets
+- [x] Prerequisite verified: **BUG-0010** AA/AB/AC **DONE** (Q0013)—baseline DEC-0007 numbers authoritative before ML overlay closure
 
 ## US-0015 — AI-assisted forecast category bucket mapping
 
-- [ ] Forecast projection applies DEC-0007 category→bucket map using mirror `category_id` and recurring pattern labels (baseline path; parent **BUG-0012** AG/AH pass first)
-- [ ] AI layer proposes income/fixed/variable bucket for uncategorized or ambiguous mirror rows with confidence metadata under privacy defaults
-- [ ] Monthly forecast UI/API surfaces AI-mapped buckets distinctly from config-mapped buckets when AI path used
-- [ ] AI bucket mapping reuses US-0006 audit/privacy constraints; no Firefly write-back
-- [ ] Parent defect **BUG-0012** AC rows AG/AH pass before or with this story closure
+- [x] **Prerequisite:** Parent defect **BUG-0012** AC rows AG/AH released (Q0014) — DEC-0007 config-driven category→bucket projection baseline authoritative
+- [x] **AC-1 Baseline precedence:** Forecast projection applies DEC-0007 config map via mirror `category_id` and recurring pattern labels before any AI fallback; config-mapped rows never overridden by AI
+- [x] **AC-2 AI inference:** For uncategorized or ambiguous mirror rows, AI layer proposes income/fixed/variable bucket with confidence metadata; low-confidence proposals fall back to Variable (not silent zero absorption)
+- [x] **AC-3 Privacy defaults:** Bucket inference operates under `allow_raw_transactions=false` default (DEC-0032) — aggregates and allowlisted category/merchant signals only; no raw transaction row leakage to model
+- [x] **AC-4 API visibility:** `GET /api/v1/forecast/monthly` exposes per-bucket `bucket_source` (`config` \| `ai` \| `default`) or equivalent when AI path contributes to Income/Fixed/Variable totals
+- [x] **AC-5 UI badge:** Monthly tab stat cards show **AI-mapped** indicator (badge or tooltip) when any bucket total includes AI-assigned rows; config-only months show no AI badge
+- [x] **AC-6 Audit trail:** AI bucket assignments logged per US-0006 audit patterns (operator-reviewable; no Firefly write-back)
+- [x] **AC-7 Regression:** `/forecast` Monthly tab OIDC-enabled deploy smoke pass-with-prerequisites **BACKEND_FRONTEND_DEPLOY**; BUG-0007 chat tool surface unchanged; US-0013 ML overlay unchanged
 
 ## US-0014 — Planning mode intuitive UX completion
 
-- [ ] First-visit planning onboarding guides scenario creation without broken empty states
-- [ ] Empty-plan → add-lines flow is discoverable and completes without silent failures
-- [ ] Compare tab shows contextual empty-state copy and sane zero baselines
-- [ ] Plan-vs-actual tab guides operator when no active plan (no raw 404 UX)
-- [ ] Built-in scenario templates discoverable from Scenarios tab
-- [ ] Parent defect **BUG-0011** AC rows AD/AE/AF pass before or with this story closure
+- [x] **Prerequisite:** Parent defect **BUG-0011** AC rows AD/AE/AF released (Q0019, DEC-0073, DEC-0074) — functional gates satisfied
+- [x] **AC-1 Onboarding (first visit):** When `plans.length === 0`, `/planning` Scenarios shows template card grid (Current, Leasing, Savings mode, House purchase, Custom) plus name field and primary **Create empty plan** CTA per [R-0070](docs/engineering/research.md#r-0070--bug-0011-planning-mode-compare-delta-empty-state-api-first-run-ux) §4 — operator reaches add-lines flow without Leasing-only dead end
+- [x] **AC-2 Empty-plan add-lines:** After custom/empty plan create, inline add-adjustment form is visible and wired; submitting a line updates compare/PVA after recompute; API/mutation errors surface as toast or inline — no silent no-op
+- [x] **AC-3 Compare contextual UX:** Compare tab with zero-adjustment plan shows **0.00** monthly delta (DEC-0073) and contextual help explaining overlay-only delta vs projected balance — no illogical aggregates
+- [x] **AC-4 PVA guided UX:** When no active plan, Plan vs Actual tab renders guided card from `status: no_active_plan` 200 payload (DEC-0074) with link to Set active / Scenarios — not blank tab
+- [x] **AC-5 Template discoverability:** Built-in templates reachable from first-run empty state and from existing-plan Scenarios UI; **Create from {template}** succeeds with visible confirmation
+- [x] **AC-6 Set-active guidance:** After first plan create (`is_active=false` default), inline banner or persistent cue explains Set active requirement for Plan vs Actual and Grafana Dashboard 3
+- [x] **AC-7 Error surfaces:** Planning mutations (create plan, add adjustment, set active, version create) show operator-visible errors on failure — no silent console-only failures
+- [x] **AC-8 OIDC regression:** `/planning` all three tabs pass OIDC-enabled deploy smoke on US-0010 external profile (pass-with-prerequisites **BACKEND_FRONTEND_DEPLOY**)
+
+## US-0016 — Root README for operators and contributors (living documentation)
+
+- [x] Root `README.md` exists with all **DEC-0059** user-channel H2 sections for `DOC_AUDIENCE_PROFILE=both` and `DOC_DETAIL_LEVEL=balanced` (Purpose, Quickstart, Examples, Limitations, Related documentation) populated with Flow Finance AI-specific content—not placeholder stubs
+- [x] Root README includes `## Contributing` pointing to `docs/developer/README.md`; no forbidden `DEV_*` H2 titles in root per split layout
+- [x] Related documentation section links `docs/user-guides/`, `docs/engineering/runbook.md`, and documents minimal / bundled-firefly / external omniflow compose entry commands
+- [x] `python scripts/validate_doc_profile.py --repo .` exits **0** on CI and locally with current scratchpad profile flags
+- [x] Runbook documents README maintenance cadence: release or refresh-context updates **Product status** (or equivalent) when a US or BUG closes; validator run at release gate
+- [x] `template/README.md` present and profile H2 parity matches active root when `template/` tree exists
+
+## US-0017 — README living-doc expansion and troubleshooting (post-US-0016)
+
+- [x] Root `README.md` **Examples** include omniflow external-profile smoke commands (sync trigger, forecast recompute pointer, six `/analytics/{slug}` routes, exchange sync sanity) — not only localhost curls
+- [x] **Limitations** or budget-safe **Troubleshooting** subsection documents empty-Grafana vs ML-unavailable distinction, `BACKEND_FRONTEND_DEPLOY` cadence, and sync+recompute prerequisite for non-zero analytics
+- [x] **Product status** subsection lists **US-0015** and other closures shipped after US-0016 baseline when this story closes
+- [x] `docs/developer/README.md` and runbook § documentation profile require Product status README update in release and refresh-context checklists for each closed US/BUG in the segment
+- [x] `python scripts/validate_doc_profile.py --repo .` exits **0**; split layout preserved (no `DEV_*` H2 in root; H2 budget ≤ 8 per DEC-0059)
+
+## US-0018 — Category filters & expense trend analytics
+
+- [ ] **AC-1 Category filter contract:** Shared category filter (single or multi) available on `/forecast` monthly view, `/planning` compare context, `/wealth` firefly breakdown, and at least **two** embedded Grafana analytics dashboards via variable or filter panel
+- [ ] **AC-2 Monthly series API:** `GET` category expense API returns per-month EUR outflow (and inflow where scoped) for selected `category_id`(s) over configurable window (default 12 months, max 24)
+- [ ] **AC-3 Trend chart UI:** React category trend chart renders month labels with EUR amounts (e.g. Jan €300, Feb €250); supports at least one category; empty-state when mirror has no categorized rows in period
+- [ ] **AC-4 Performance insight:** UI surfaces month-over-month change and best/worst month indicator for selected category in period (table or chart annotation)
+- [ ] **AC-5 Mirror fidelity:** Series uses Firefly-synced `category_id` on mirror transactions; uncategorized bucket explicit — not silent zero
+- [ ] **AC-6 Regression:** OIDC-enabled US-0010 external profile smoke pass; read-only Firefly preserved; US-0015 bucket mapping unchanged
+
+## US-0019 — Goal-driven planning with per-plan stats & AI savings suggestions
+
+- [ ] **AC-1 Goal plan type:** Operator creates plan with **target balance** + **target date** (e.g. €10 000 in 5 months); plan persists and appears in Scenarios list
+- [ ] **AC-2 Per-plan statistics:** Dedicated stats for **selected plan only** — monthly delta vs baseline, yearly rollup, projected balance at target date — not household-wide aggregates on plan detail view
+- [ ] **AC-3 Category adjustments:** Plan builder accepts category-scoped spend changes (e.g. reduce "crypto" category); adjustments affect compare/PVA for that plan after recompute
+- [ ] **AC-4 AI savings suggestions:** AI proposes reducible expense categories/lines with evidence summary; operator **selects** suggestions to add as plan adjustments — no silent auto-apply
+- [ ] **AC-5 Privacy:** AI path uses aggregate/category signals only (`allow_raw_transactions=false`); audit log per US-0006 patterns
+- [ ] **AC-6 Regression:** US-0014 onboarding/templates still work; OIDC external profile smoke pass
+
+## US-0020 — Subscription manual discovery, majority category & operator tags
+
+- [ ] **AC-1 Manual search:** `/subscriptions` (or discovery-named surface) filters potential candidates by **account**, **title/payee** text, and **repeating interval** (months); results paginated or capped with documented limit
+- [ ] **AC-2 Operator confirm:** Operator can confirm a searched candidate into confirmed subscriptions without auto-detection-only path
+- [ ] **AC-3 Majority category:** Confirmed subscription **display category** defaults to **mode category** of constituent transactions; tie-break rule documented in UI or tooltip
+- [ ] **AC-4 Operator tags:** CRUD for operator-defined tags (e.g. luxus, important); assign multiple tags per subscription; filter subscription list by tag
+- [ ] **AC-5 Storage contract:** Tags and majority-category metadata in product DB — no Firefly write-back
+- [ ] **AC-6 Regression:** US-0003/US-0008 detection and alert dedup unchanged; OIDC external profile smoke pass

@@ -152,10 +152,13 @@ fn account_id_variable_uses_abs_balance_sort() {
 fn forecast_horizons_ml_banner_and_no_value() {
     let dashboard =
         read_dashboard("grafana/provisioning/dashboards/analytics/forecast-horizons.json");
+    assert!(has_text_panel_content(&dashboard, "ML not configured"));
     assert!(has_text_panel_content(
         &dashboard,
-        "ML forecast not enabled on this deployment"
+        "ML configured but sidecar unreachable"
     ));
+    assert!(has_text_panel_content(&dashboard, "US-0013"));
+    assert!(has_text_panel_content(&dashboard, "stats-forecast"));
     for id in ml_panel_ids() {
         assert_eq!(
             panel_no_value(&dashboard, id).as_deref(),

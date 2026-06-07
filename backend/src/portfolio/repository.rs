@@ -9,6 +9,7 @@ pub struct PnlSnapshotRow {
     pub unrealized_pnl_eur: f64,
     pub total_return_pct: Option<f64>,
     pub crypto_value_eur: f64,
+    pub payload: serde_json::Value,
 }
 
 pub struct PortfolioRepository {
@@ -86,7 +87,8 @@ impl PortfolioRepository {
                    realized_pnl_eur::float8 AS realized_pnl_eur,
                    unrealized_pnl_eur::float8 AS unrealized_pnl_eur,
                    total_return_pct::float8 AS total_return_pct,
-                   crypto_value_eur::float8 AS crypto_value_eur
+                   crypto_value_eur::float8 AS crypto_value_eur,
+                   payload
             FROM portfolio_pnl_snapshots
             ORDER BY snapshot_date DESC LIMIT 1
             "#,

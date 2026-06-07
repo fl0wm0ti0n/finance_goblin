@@ -123,6 +123,41 @@ pub fn overlay_horizon_end(start: NaiveDate) -> NaiveDate {
     start + chrono::Duration::days(HORIZON_DAYS)
 }
 
+fn calendar_month_end(month_start: NaiveDate) -> NaiveDate {
+    let (y, m) = (month_start.year(), month_start.month());
+    if m == 12 {
+        NaiveDate::from_ymd_opt(y + 1, 1, 1)
+            .unwrap()
+            .pred_opt()
+            .unwrap()
+    } else {
+        NaiveDate::from_ymd_opt(y, m + 1, 1)
+            .unwrap()
+            .pred_opt()
+            .unwrap()
+    }
+}
+
+/// Sum overlay deltas from `month_start` through `min(today, calendar month end)`.
+/// Empty adjustments always return **0.00** (DEC-0073).
+pub fn monthly_overlay_delta_sum(
+    adjustments: &[PlanAdjustment],
+    confirmed_subs: &[ConfirmedSubscription],
+    month_start: NaiveDate,
+    today: NaiveDate,
+) -> f64 {
+    if adjustments.is_empty() {
+        return 0.0;
+    }
+    let month_end = calendar_month_end(month_start);
+    let effective_end = if today < month_end { today } else { month_end };
+    if effective_end < month_start {
+        return 0.0;
+    }
+    let overlay = build_overlay_deltas(adjustments, confirmed_subs, month_start, effective_end);
+    overlay.values().sum()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,6 +233,31 @@ mod tests {
         let deltas = build_overlay_deltas(&adjustments, &[], start, end);
         assert_eq!(deltas.len(), 1);
         assert!(deltas.get(&start).copied().unwrap_or(0.0) < -999.0);
+    }
+
+    #[test]
+    fn monthly_overlay_delta_sum_zero_when_no_adjustments() {
+        let today = NaiveDate::from_ymd_opt(2026, 6, 15).unwrap();
+        let month_start = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
+        let sum = monthly_overlay_delta_sum(&[], &[], month_start, today);
+        assert_eq!(sum, 0.0);
+    }
+
+    #[test]
+    fn monthly_overlay_delta_sum_leasing_template_approx_minus_300() {
+        let today = NaiveDate::from_ymd_opt(2026, 6, 15).unwrap();
+        let month_start = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
+        let adjustments = vec![adj(
+            AdjustmentDirection::AddOutflow,
+            300.0,
+            AdjustmentFrequency::Monthly,
+            month_start,
+        )];
+        let sum = monthly_overlay_delta_sum(&adjustments, &[], month_start, today);
+        assert!(
+            sum < -299.0 && sum > -301.0,
+            "leasing overlay delta expected ~-300, got {sum}"
+        );
     }
 
     #[test]

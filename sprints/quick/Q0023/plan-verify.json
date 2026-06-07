@@ -1,0 +1,162 @@
+{
+  "sprint": "Q0023",
+  "bug_id": "BUG-0015",
+  "orchestrator_run_id": "auto-20260607-bug0015-001",
+  "verified_at": "2026-06-07T21:30:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0015",
+  "tasks_source": "sprints/quick/Q0023/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#bug-0015--confirmed-subscriptions-reappear-as-pending-after-rebuild",
+  "decision_alignment": {
+    "decisions": ["DEC-0084", "DEC-0085", "DEC-0086"],
+    "extensions": ["DEC-0071", "DEC-0072", "DEC-0013", "DEC-0015"],
+    "research_basis": ["R-0081", "R-0082"],
+    "contract_elements_covered": [
+      "DEC-0084 AU1: card billing payee_key rules (asterisk, comma memo, billing roots, domain tail) in normalize.rs",
+      "DEC-0085 AU2: load_confirmed_payee_intervals + load_rejected_payee_intervals + merge_confirmed_pattern",
+      "DEC-0085 AU3: detection skip+merge before pending upsert; no new_detection on confirmed match",
+      "DEC-0085 AU4: mark_stale_inactive keyed by payee+interval active set; wire into run_detection",
+      "DEC-0086: interval_matches ±3d tolerance on confirmed/rejected/stale paths",
+      "DEC-0086: in-place fingerprint rotation on merge; preserve status=confirmed and pattern_id",
+      "AU2 migration: idx_subscription_patterns_payee_status index",
+      "V1: confirm → rebuild app → H2 SQL probe → Full sync → AU/AV/AW smoke",
+      "Ops-only H2: subscription_patterns status counts + Cursor/Apple rows before Full sync"
+    ],
+    "frozen_boundaries_respected": [
+      "No reopen BUG-0008",
+      "No alert-only dedup as primary fix (option E rejected)",
+      "No merchant identity table (option F rejected)",
+      "No normalization-only sole fix",
+      "No global drop amount from fingerprint (option B rejected)",
+      "No UI changes (H3 refuted primary)",
+      "H2 ops probe operator-only — not sprint execute task",
+      "Single release bundle AU1–AU4 — no partial deploy"
+    ],
+    "sprint_artifact_verification": "PASS — sprint.json, task.json, tasks.md, sprint.md, uat.md, uat.json materialized; acceptance_mapping 1:1 with architecture task table"
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "AU1 → AU2 → AU3 ∥ AU4 (AU4 after AU2) → single release deploy → operator BACKEND_FRONTEND_DEPLOY → H2 SQL probe → Full sync → V1 verify-work",
+    "notes": "task.json depends_on: AU2←AU1; AU3←AU2; AU4←AU2; V1←AU1–AU4. AU3 and AU4 may parallel after AU2 per tasks.md deploy_order."
+  },
+  "operator_gates_review": {
+    "documented": true,
+    "gates": [
+      {
+        "id": "BACKEND_FRONTEND_DEPLOY",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md", "uat.json"]
+      },
+      {
+        "id": "POSTGRES_PERSISTENCE_PROBE",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md", "uat.json"],
+        "description": "SELECT status counts + Cursor/Apple fingerprint rows immediately after app rebuild before Full sync",
+        "enter_criteria": "confirmed rows present post-rebuild",
+        "abort_criteria": "zero confirmed rows after rebuild without operator action — ops volume/DB target issue"
+      },
+      {
+        "id": "FULL_FIREFLY_SYNC",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md", "uat.json"],
+        "covers_acceptance": ["AU", "AV", "AW"]
+      }
+    ],
+    "waived_ops_only": {
+      "H2_SQL_PROBE": "Operator SQL gate — prerequisite for V1, not sprint execute task",
+      "rebuild": "Operator rebuilds flow-finance-ai only — verify in V1 only"
+    }
+  },
+  "conditional_tasks_review": {},
+  "test_coverage": {
+    "unit_fixtures": "AU1 payee_key normalization unit tests; AU2 repository merge/skip/interval_matches tests; AU3/AU4 detection paths",
+    "integration": "AU3 detection pipeline skip+merge; AU4 stale inactive by payee+interval wired in run_detection",
+    "operator_tests": "V1 uat.md: confirm Cursor+Apple → rebuild → H2 probe → Full sync → API/UI tabs + alert reconciliation + OIDC regression",
+    "doc_review": "uat.md acceptance traceability + operator gates checklist; uat.json steps mapped to AU/AV/AW",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AU",
+      "criterion": "After operator confirms subscription patterns (e.g. CURSOR, APPLE.COM/BILL) and rebuilds app containers, previously confirmed patterns remain confirmed in API and /subscriptions UI — not re-surfaced as pending",
+      "tasks": ["AU1", "AU2", "AU3", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY", "POSTGRES_PERSISTENCE_PROBE", "FULL_FIREFLY_SYNC"],
+      "covered": true,
+      "notes": "DEC-0084 Layer 1 + DEC-0085/0086 Layer 2 skip+merge; V1 rebuild smoke probes confirmed status post-Full sync"
+    },
+    {
+      "acceptance_id": "AV",
+      "criterion": "Post-rebuild Full sync + detection rerun does not create duplicate pending rows; confirmed fingerprints skipped or fingerprint drift remediated via merge",
+      "tasks": ["AU1", "AU2", "AU3", "AU4", "V1"],
+      "operator_gates": ["FULL_FIREFLY_SYNC"],
+      "covered": true,
+      "notes": "AU4 stale-by-payee+interval + AU3 skip+merge + DEC-0086 tolerance and fingerprint rotation; V1 AV-1 duplicate pending probe"
+    },
+    {
+      "acceptance_id": "AW",
+      "criterion": "Subscription-scoped unread alerts reconcile with list tabs — no spurious new_detection unread forcing re-review of confirmed merchants",
+      "tasks": ["AU3", "V1"],
+      "operator_gates": ["FULL_FIREFLY_SYNC"],
+      "covered": true,
+      "notes": "AU3 merge path suppresses new_detection per DEC-0085; V1 AW-1 unread-count reconciliation + AW-CODE unit test hook"
+    }
+  ],
+  "coverage_matrix": {
+    "acceptance_rows": [
+      { "acceptance_id": "AU", "tasks": ["AU1", "AU2", "AU3", "V1"], "decisions": ["DEC-0084", "DEC-0085", "DEC-0086"], "covered": true },
+      { "acceptance_id": "AV", "tasks": ["AU1", "AU2", "AU3", "AU4", "V1"], "decisions": ["DEC-0084", "DEC-0085", "DEC-0086"], "covered": true },
+      { "acceptance_id": "AW", "tasks": ["AU3", "V1"], "decisions": ["DEC-0085"], "covered": true }
+    ],
+    "tasks": [
+      { "task_id": "AU1", "acceptance_rows": ["AU", "AV"], "decision": "DEC-0084", "surface": "recurrence/normalize.rs" },
+      { "task_id": "AU2", "acceptance_rows": ["AU", "AV"], "decision": "DEC-0085, DEC-0086", "surface": "subscriptions/repository.rs + migration" },
+      { "task_id": "AU3", "acceptance_rows": ["AU", "AV", "AW"], "decision": "DEC-0085, DEC-0086", "surface": "subscriptions/detection.rs, service.rs" },
+      { "task_id": "AU4", "acceptance_rows": ["AV"], "decision": "DEC-0085", "surface": "detection.rs stale map + service.rs wire" },
+      { "task_id": "V1", "acceptance_rows": ["AU", "AV", "AW"], "decision": null, "surface": "verify-work rebuild smoke" }
+    ]
+  },
+  "gaps": [],
+  "orphan_tasks": [],
+  "resolved_gaps": [
+    { "id": "GAP-1", "was": "Sprint-plan not completed", "resolution": "sprints/quick/Q0023/ artifacts materialized 2026-06-07T20:30:00Z" },
+    { "id": "GAP-2", "was": "No acceptance_mapping in sprint.json", "resolution": "acceptance_mapping AU/AV/AW in sprint.json, task.json, tasks.md, uat.md, uat.json" },
+    { "id": "GAP-3", "was": "No tl_to_dev.md sprint-plan handoff", "resolution": "handoffs/tl_to_dev.md sprint-plan-20260607-q0023-bug0015 prepended" }
+  ],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "AU3 and AU4 both touch detection.rs + service.rs — execute may parallelize after AU2; sprint-plan documents AU3 ∥ AU4 after repository contracts land."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Prior plan-verify FAIL (21:00:00Z) raced sprint-plan — superseded by this PASS after artifact materialization."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "uat.md/uat.json are TEMPLATE at plan-verify — runtime probes populate at verify-work; structure and traceability verified."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 3,
+    "covered_count": 3,
+    "gap_count": 0,
+    "task_count": 5,
+    "mandatory_task_count": 5,
+    "conditional_task_count": 0,
+    "optional_task_count": 0,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0084_0085_0086_aligned": true,
+    "operator_gates_documented": true,
+    "conditional_gates_documented": true,
+    "v1_e2e_smoke": true,
+    "scope_creep_beyond_architecture": false,
+    "dependency_graph_valid": true,
+    "execute_ready": true
+  },
+  "notes": "QA plan-verify re-run 2026-06-07: Q0023 sprint artifacts present; AU–AW mapped to AU1–AU4 + V1 per DEC-0084/0085/0086; 3/3 acceptance rows covered; 5/5 tasks traced; 0 gaps; 0 orphans; prior FAIL GAP-1/2/3 resolved. Approved for /execute."
+}

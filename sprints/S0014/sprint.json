@@ -1,0 +1,31 @@
+{
+  "id": "S0014",
+  "story_ids": ["US-0013"],
+  "status": "PLANNED",
+  "created": "2026-06-08",
+  "orchestrator_run_id": "auto-20260608-us0013-001",
+  "goal": "Deliver DEC-0076 external-profile ML enablement: overlay stats-forecast on external profile, env opt-in passthrough, dual CI guard, verify US-0009 sync/API/UI/Grafana paths on omniflow, operator runbook for ML enablement.",
+  "scope": [
+    "docker-compose.external.yml stats-forecast overlay (profiles [external], traefik network, port 8091)",
+    "flow-finance-ai FORECAST_ML_ENABLED and STATS_FORECAST_URL env passthrough",
+    ".env.example omniflow ML enablement block",
+    "scripts/compose-config-check.sh 3-service external set + traefik assert",
+    "Verify sync forecast_ml phase + health_ok() gate + skip metadata (DEC-0052/0066)",
+    "Verify ml_enhanced persistence + GET /forecast variant=ml_enhanced",
+    "Verify ForecastPage Compare + WealthPage portfolio-forecast + Grafana ML panels",
+    "Runbook § Omniflow ML enablement + docs/user-guides/US-0013.md cross-ref",
+    "Retain forecast_ml_integration wiremock test in tests/run-tests.sh"
+  ],
+  "risks": [
+    "Cold-start race — first sync may skip ML until sidecar healthy; runbook re-sync guidance",
+    "CI drift — compose-config-check must land atomically with overlay (S1)",
+    "Host memory — sidecar RSS on shared omniflow host (R-0044); runbook monitoring note",
+    "minimal+external profile regression — DEC-0056 guard unchanged in compose-config-check",
+    "Short mirror history — insufficient_history skip; Full sync prerequisite in runbook"
+  ],
+  "task_count": 11,
+  "decisions": ["DEC-0076"],
+  "research": ["R-0071", "R-0043", "R-0044", "R-0045", "R-0053", "R-0062"],
+  "slices": ["US-0013-S1", "US-0013-S2", "US-0013-S3", "US-0013-S4"],
+  "split_decision": "no_split — 11 tasks < SPRINT_MAX_TASKS 12"
+}

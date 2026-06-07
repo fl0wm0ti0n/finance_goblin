@@ -14,6 +14,9 @@ services:
       # Traefik basic-auth protects the UI only; API must not require JWT until IdP is configured.
       AUTH_DEV_BYPASS: "true"
       OIDC_ISSUER_URL: ""
+      # US-0013 / DEC-0076 — opt-in ML overlay (DEC-0049 default-off)
+      FORECAST_ML_ENABLED: ${FORECAST_ML_ENABLED:-false}
+      STATS_FORECAST_URL: ${STATS_FORECAST_URL:-http://stats-forecast:8090}
     labels:
       - traefik.enable=true
       - traefik.docker.network=traefik
@@ -47,6 +50,13 @@ services:
       - traefik.http.routers.grafana-financegnome.tls.certresolver=myresolver
       - traefik.http.routers.grafana-financegnome.middlewares=${TRAEFIK_MIDDLEWARE:-auth}
       - traefik.http.services.grafana-financegnome.loadbalancer.server.port=3000
+
+  stats-forecast:
+    profiles: [external]
+    networks:
+      traefik:
+    ports:
+      - "${STATS_FORECAST_PORT:-8091}:8090"
 
 networks:
   traefik:

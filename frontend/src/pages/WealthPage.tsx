@@ -1,7 +1,13 @@
 import { lazy, Suspense, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { apiFetch, ExtendedWealthBreakdown, PortfolioForecast, WealthHistoryPoint } from "../lib/api";
+import {
+  apiFetch,
+  ExtendedWealthBreakdown,
+  HoldingsAllRow,
+  PortfolioForecast,
+  WealthHistoryPoint,
+} from "../lib/api";
 
 const WealthChart = lazy(() =>
   import("../components/wealth/WealthChart").then((m) => ({ default: m.WealthChart })),
@@ -232,16 +238,6 @@ export function WealthPage() {
                   </div>
                 )}
 
-              {portfolioForecastQuery.data?.fx_incomplete_warning && (
-                <div className="card" style={{ borderColor: "#f59e0b", marginBottom: "1rem" }}>
-                  <strong>FX incomplete</strong>
-                  <p style={{ margin: "0.5rem 0 0" }}>
-                    Portfolio outlook excludes assets without EUR pricing. Values may understate
-                    total crypto exposure.
-                  </p>
-                </div>
-              )}
-
               <div className="grid">
                 {data?.crypto.exchanges.map((ex) => (
                   <div key={ex.id} className="card">
@@ -284,20 +280,28 @@ export function WealthPage() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Exchange</th>
                       <th>Asset</th>
-                      <th>Qty</th>
+                      <th>Type</th>
+                      <th>Native qty</th>
+                      <th>Unit</th>
                       <th>Value EUR</th>
                       <th>Unrealized PnL</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(data?.crypto.holdings_top ?? []).map((h) => (
-                      <tr key={`${h.exchange_id}-${h.asset}-${h.product_type}`}>
-                        <td>{h.exchange_id}</td>
+                    {(data?.crypto.holdings_all ?? []).map((h: HoldingsAllRow) => (
+                      <tr key={`${h.asset}-${h.product_type}-${h.native_unit}`}>
                         <td>{h.asset}</td>
-                        <td>{h.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}</td>
-                        <td>{h.value_eur.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td>{h.product_type}</td>
+                        <td>
+                          {h.quantity.toLocaleString(undefined, { maximumFractionDigits: 8 })}
+                        </td>
+                        <td>{h.native_unit}</td>
+                        <td>
+                          {h.value_eur != null
+                            ? h.value_eur.toLocaleString(undefined, { minimumFractionDigits: 2 })
+                            : "—"}
+                        </td>
                         <td>
                           {h.unrealized_pnl_eur != null
                             ? h.unrealized_pnl_eur.toLocaleString(undefined, {
@@ -309,6 +313,10 @@ export function WealthPage() {
                     ))}
                   </tbody>
                 </table>
+                <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: "0.75rem" }}>
+                  Linear contract unrealized PnL is shown in EUR but excluded from the crypto
+                  subtotal.
+                </p>
               </div>
             </>
           )}

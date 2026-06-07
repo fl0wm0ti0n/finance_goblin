@@ -87,6 +87,7 @@ async fn plan_create_apply_recompute_plan_vs_actual() {
             retention_count: 5,
             recurring_amount_tolerance_pct: 5.0,
             category_buckets: std::collections::HashMap::new(),
+            ai_bucket_min_confidence: 0.75,
         },
     );
     let plans = PlanService::new(db, PlansConfig::default(), forecast);
@@ -109,6 +110,130 @@ async fn plan_create_apply_recompute_plan_vs_actual() {
     let pva = plans.plan_vs_actual(None).await.expect("plan vs actual");
     assert!(!pva.rows.is_empty() || pva.plan_stale);
     assert_eq!(pva.reporting_currency, "EUR");
+}
+
+#[tokio::test]
+async fn compare_zero_adjustments_overlay_delta_is_zero() {
+    let pool = match setup_db().await {
+        Some(p) => p,
+        None => {
+            eprintln!("SKIP: DATABASE_URL not set for plan integration test");
+            return;
+        }
+    };
+
+    let _forecast_id = seed_forecast_baseline(&pool).await;
+    let db = flow_finance_ai::db::DbPool::from_pool(pool.clone());
+    let forecast = ForecastService::new(
+        db.clone(),
+        ForecastConfig {
+            rolling_window_days: 90,
+            sparse_history_days: 90,
+            retention_count: 5,
+            recurring_amount_tolerance_pct: 5.0,
+            category_buckets: std::collections::HashMap::new(),
+            ai_bucket_min_confidence: 0.75,
+        },
+    );
+    let plans = PlanService::new(db, PlansConfig::default(), forecast);
+
+    let (plan, version) = plans
+        .create_plan("Empty Compare", Some("custom"))
+        .await
+        .expect("create plan");
+
+    let _ = plans.recompute_with_latest_forecast(version.id).await;
+
+    let compare = plans.compare_versions(plan.id).await.expect("compare");
+    assert_eq!(
+        compare.versions[0].monthly_delta_sum, "0.00",
+        "empty adjustments must yield overlay-only zero delta"
+    );
+}
+
+#[tokio::test]
+async fn compare_leasing_template_overlay_delta_approx_minus_300() {
+    let pool = match setup_db().await {
+        Some(p) => p,
+        None => {
+            eprintln!("SKIP: DATABASE_URL not set for plan integration test");
+            return;
+        }
+    };
+
+    let _forecast_id = seed_forecast_baseline(&pool).await;
+    let db = flow_finance_ai::db::DbPool::from_pool(pool.clone());
+    let forecast = ForecastService::new(
+        db.clone(),
+        ForecastConfig {
+            rolling_window_days: 90,
+            sparse_history_days: 90,
+            retention_count: 5,
+            recurring_amount_tolerance_pct: 5.0,
+            category_buckets: std::collections::HashMap::new(),
+            ai_bucket_min_confidence: 0.75,
+        },
+    );
+    let plans = PlanService::new(db, PlansConfig::default(), forecast);
+
+    let (plan, version) = plans
+        .create_plan("Leasing Compare", Some("leasing"))
+        .await
+        .expect("create plan");
+
+    plans
+        .apply_template(version.id, PlanTemplate::Leasing.as_str(), TemplateOverrides::default())
+        .await
+        .expect("apply template");
+
+    let _ = plans.recompute_with_latest_forecast(version.id).await;
+
+    let compare = plans.compare_versions(plan.id).await.expect("compare");
+    let delta: f64 = compare.versions[0].monthly_delta_sum.parse().expect("parse delta");
+    assert!(
+        delta < -299.0 && delta > -301.0,
+        "leasing overlay delta expected ~-300, got {delta}"
+    );
+}
+
+#[tokio::test]
+async fn plan_vs_actual_without_active_plan_returns_error() {
+    let pool = match setup_db().await {
+        Some(p) => p,
+        None => {
+            eprintln!("SKIP: DATABASE_URL not set for plan integration test");
+            return;
+        }
+    };
+
+    let _forecast_id = seed_forecast_baseline(&pool).await;
+    let db = flow_finance_ai::db::DbPool::from_pool(pool.clone());
+    let forecast = ForecastService::new(
+        db.clone(),
+        ForecastConfig {
+            rolling_window_days: 90,
+            sparse_history_days: 90,
+            retention_count: 5,
+            recurring_amount_tolerance_pct: 5.0,
+            category_buckets: std::collections::HashMap::new(),
+            ai_bucket_min_confidence: 0.75,
+        },
+    );
+    let plans = PlanService::new(db, PlansConfig::default(), forecast);
+
+    let (_plan, _version) = plans
+        .create_plan("Inactive PVA", Some("custom"))
+        .await
+        .expect("create plan");
+
+    let err = plans
+        .plan_vs_actual(None)
+        .await
+        .expect_err("service still errors without active plan");
+    assert!(matches!(
+        err,
+        flow_finance_ai::plan::service::PlanError::NoActivePlan
+    ));
 }
 
 #[test]

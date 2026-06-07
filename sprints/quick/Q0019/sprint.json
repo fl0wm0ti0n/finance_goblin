@@ -1,0 +1,68 @@
+{
+  "id": "Q0019",
+  "type": "quick",
+  "bug_ids": ["BUG-0011"],
+  "status": "PLANNED",
+  "created": "2026-06-08",
+  "goal": "Close BUG-0011: DEC-0073 AE overlay-only compare monthly_delta_sum (zero-overlay 0.00) + DEC-0074 AF PVA 200 no_active_plan + AD empty create/add-line UX; operator verify AD/AE/AF on financegnome.omniflow.cc /planning after deploy.",
+  "scope": [
+    "AE1: monthly_overlay_delta_sum helper (build_overlay_deltas)",
+    "AE2: repository version_metrics + service in-memory compare paths",
+    "AE3: compare metric unit tests (zero overlay → 0.00)",
+    "AF1: PlanVsActualApiResponse tagged enum; route 200 no_active_plan",
+    "AF2: PVA tab guided empty state (mirror risk-score)",
+    "AD1: first-run empty state + Create empty plan (POST template=custom)",
+    "AD2: inline add/edit adjustment form (POST/PATCH)",
+    "AD3: Custom Apply toast + query invalidation",
+    "AD4: compare help footnote + post-create Set active banner",
+    "T1: compare + plan-vs-actual integration tests",
+    "V1: verify-work OIDC /planning three-tab smoke"
+  ],
+  "risks": [
+    "Compare number shift for non-empty plans — release note mandatory (R-0016)",
+    "PVA 404→200 breaking change — changelog + user guide",
+    "Negative projected balance on empty overlay — help text; do not zero balance",
+    "Scope creep into US-0014 — AD bounded; epic deferred",
+    "AE-before-AF violation — mitigated by frozen execute order"
+  ],
+  "task_count": 11,
+  "estimate_total_hours": 20,
+  "decisions": ["DEC-0073", "DEC-0074"],
+  "research": ["R-0070", "R-0015", "R-0016", "R-0017", "R-0020"],
+  "acceptance_rows": ["AD", "AE", "AF"],
+  "execute_order": ["AE1", "AE2", "AE3", "AF1", "AF2", "AD1", "AD2", "AD3", "AD4", "T1", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Deploy AE1–T1 backend + AF2/AD1–AD4 frontend before V1 omniflow /planning smoke"
+    }
+  ],
+  "acceptance_mapping": {
+    "AD": {
+      "tasks": ["AD1", "AD2", "AD3", "T1", "V1"],
+      "verify": "Create empty plan + add-line UX; Custom Apply toast; not silent no-op"
+    },
+    "AE": {
+      "tasks": ["AE1", "AE2", "AE3", "AD4", "T1", "V1"],
+      "verify": "Zero-overlay monthly_delta_sum 0.00; Leasing ~overlay delta; projected balance unchanged"
+    },
+    "AF": {
+      "tasks": ["AF1", "AF2", "T1", "V1"],
+      "verify": "PVA 200 tagged no_active_plan; guided tab; no 404 on tab switch"
+    }
+  },
+  "deploy_order": [
+    "(AE1 → AE2) overlay helper + compare paths",
+    "AE3 unit tests",
+    "AF1 tagged PVA API",
+    "(AF2 + AD1 → AD2 → AD3 → AD4) frontend",
+    "T1 integration tests",
+    "Deploy backend + frontend on omniflow",
+    "V1 verify-work smoke"
+  ],
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260608-q0019-bug0011",
+  "architecture_ref": "architecture-20260608-bug0011"
+}

@@ -78,12 +78,22 @@ description: "its-magic architecture: define approach, risks, and decisions."
    - If `USER_GUIDE_MODE=0`, add no required user-guide steps or blocking checks (zero overhead).
    - If `USER_GUIDE_MODE=1`, reference canonical user-guide path and schema in
      architecture/state for in-scope feature stories; see runbook user-guide section.
-9. Triad hot-surface gate (DEC-0054) when `docs/engineering/architecture.md` is
-   mutated:
-   - run `python scripts/enforce-triad-hot-surface.py --rollover` then `--check`
-     from repository root,
-   - on failure stop with `STATE_ARCHIVE_REQUIRED` or
-     `ARTIFACT_HOT_SURFACE_OVERSIZE`,
+9. Triad hot-surface gate (DEC-0054; heading policy DEC-0076 / BUG-0010) when
+   `docs/engineering/architecture.md` is mutated:
+   - **Authoring mandate**: append new story sections as H1 `# US-xxxx` and new
+     bug sections as H1 `# BUG-xxxx` (not `## US-` / `## BUG-`).
+   - **Before** mutating the file, capture
+     `baseline_h2_count = count_h2_story_headings(architecture.md)` via
+     `python scripts/enforce-triad-hot-surface.py` (legacy `## US-xxxx` sections
+     remain rollover-visible; count must not increase during `/architecture`).
+   - Run `python scripts/enforce-triad-hot-surface.py --rollover` then `--check`
+     from repository root.
+   - Run heading policy check:
+     `python scripts/enforce-triad-hot-surface.py --check-arch-heading-policy
+     --baseline-h2-count <baseline_h2_count>`.
+   - On failure stop with `STATE_ARCHIVE_REQUIRED`, `ARTIFACT_HOT_SURFACE_OVERSIZE`,
+     or **`ARCH_STORY_HEADING_LEVEL_INVALID`** (non-suppressible `blocked` when H2
+     story-heading count increased),
    - preserve non-target history in archive packs only (never delete unrelated
      story sections without archival evidence).
 10. Codebase map lifecycle gate (US-0082 / DEC-0065) — before handoff to

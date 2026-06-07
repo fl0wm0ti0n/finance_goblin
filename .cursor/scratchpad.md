@@ -1,8 +1,8 @@
-# its-magic scratchpad
+# its-magic scratchpad (framework default catalog — Model B / DEC-0055)
 #
-# Shared team defaults live here.
-# Personal developer overrides belong in `.cursor/scratchpad.local.md`
-# (copy from `.cursor/scratchpad.local.example.md`).
+# Copy this file to `.cursor/scratchpad.local.md` for personal overrides (gitignored).
+# Merge precedence: local > materialized `.cursor/scratchpad.md` > this example
+# (installers materialize the baseline from template when missing).
 #
 # Core behavior
 # - MAGIC_CONTEXT_STRICT: 0|1 (require context refresh after code changes)
@@ -27,7 +27,15 @@ DONE=0
 MAGIC_BENCH_SESSION=
 #
 # Automation
-# - AUTO_FLOW_MODE: manual|auto_until_decision
+# - AUTO_FLOW_MODE: manual|auto_until_decision|full_autonomy
+#   - manual: operator invokes phases explicitly (default when unset)
+#   - auto_until_decision: continuous until decision_gate
+#   - full_autonomy: outer-driver loop + relaxable transient stops + drain-without-pause (default-off; US-0092 / DEC-0078)
+#   - opt-in enablement: AUTO_FLOW_MODE=full_autonomy
+# - AUTO_BLOCK_RETRY_MAX: integer >= 1 (default 3; per (story_id, stop_reason) recoverable retries before BLOCK_RETRY_CAP_EXHAUSTED)
+# - AUTO_OUTER_DRIVER_TIMEOUT_SECONDS: optional integer; unset = no hook timeout (timeout -> exit 124)
+# Interaction (full_autonomy): PHASE_MODE/PERMISSION_MODE orthogonal; AUTO_BACKLOG_DRAIN/AUTO_BUG_QUEUE per US-0044/US-0087;
+#   AUTO_LOOP_MAX_CYCLES/AUTO_BACKLOG_MAX_STORIES hard caps; TOKEN_PROFILE = context breadth / token cost only (DEC-0062 / US-0092).
 # - PHASE_MODE: interactive|auto
 # - PERMISSION_MODE: interactive|auto
 # - AUTO_INSTALL_DEPS: 0|1
@@ -52,7 +60,7 @@ MAGIC_BENCH_SESSION=
 #   Orthogonal to TOKEN_PROFILE (DEC-0035 / US-0080) — TOKEN_PROFILE controls
 #   context breadth / token cost, not notification policy.
 AUTO_QUIET=1
-AUTO_FLOW_MODE=auto_until_decision
+AUTO_FLOW_MODE=full_autonomy
 PHASE_MODE=auto
 PERMISSION_MODE=auto
 AUTO_INSTALL_DEPS=1
@@ -70,6 +78,7 @@ AUTO_BUG_QUEUE=0
 AUTO_BUG_TARGET=all-open
 AUTO_BUG_MAX_ITEMS=0
 AUTO_BUG_ON_BLOCK=skip
+AUTO_BLOCK_RETRY_MAX=5
 #
 # `/auto` phase role policy (US-0069 / DEC-0051)
 # - AUTO_ROLE_RESEARCH: po|tech-lead (empty -> default tech-lead)
@@ -117,17 +126,11 @@ SPRINT_BULK_MAX_SPRINTS=3
 SPRINT_BULK_SELECTION=priority_then_backlog_order
 #
 # Remote execution (US-0086 / US-0084 / US-0064)
-# - REMOTE_EXECUTION: 0|1 — 0 skips remote.json validation (zero overhead; DEC-0070).
-# - REMOTE_CONFIG: path to dev/Cursor remote JSON (default .cursor/remote.json).
-# - AUTO_REMOTE_AUTOMATION_PROFILE: off|deterministic_v1 (default off; manual
-#   mode remains unchanged unless explicitly enabled for automation workflows).
-# - AUTO_REMOTE_ENVIRONMENT_LABEL: local|docker|ssh (names-only evidence label
-#   for execute/qa/release handoffs when automation routing is used).
-#   Release/QA SSH/Docker connectivity fields live in docs/engineering/release-targets.json
-#   (ssh-server, dockerOverSsh); map WSL vs SSH vs Docker-over-SSH in
-#   docs/engineering/runtime-connectivity.md and docs/engineering/us-0084-remote-e2e.md.
-# - Summary helper (names-only stdout): python scripts/remote_config_summary.py
-REMOTE_EXECUTION=1
+# - REMOTE_EXECUTION: 0|1
+# - REMOTE_CONFIG: path to remote config
+# - AUTO_REMOTE_AUTOMATION_PROFILE: off|deterministic_v1 (default off/manual-safe)
+# - AUTO_REMOTE_ENVIRONMENT_LABEL: local|docker|ssh (names-only evidence label)
+REMOTE_EXECUTION=0
 REMOTE_CONFIG=.cursor/remote.json
 AUTO_REMOTE_AUTOMATION_PROFILE=off
 AUTO_REMOTE_ENVIRONMENT_LABEL=local
@@ -141,7 +144,7 @@ AUTO_REMOTE_ENVIRONMENT_LABEL=local
 #   auto-push. Protected/default branches are denied unless allowlisted.
 SYNC_POLICY_MODE=by_phase
 SYNC_CUSTOM_PHASES=
-ALLOW_AUTO_PUSH=1
+ALLOW_AUTO_PUSH=0
 AUTO_PUSH_BRANCH_ALLOWLIST=main
 #
 # Knowledge curation
@@ -152,9 +155,10 @@ AUTO_PUSH_BRANCH_ALLOWLIST=main
 # - INTAKE_WORK_ITEM_KIND: story|bug (default story; bug selects BUG-#### path per DEC-0061 / US-0079)
 # - ID_NAMESPACE_BOOTSTRAP: 0|1 (optional fresh-project ID bootstrap mode; when 1, allow first IDs to start at 0001 only if deterministic freshness checks pass)
 # - TOKEN_PROFILE: lean|balanced|full (tiered token-cost profile defaults)
-#   - lean: lowest-token default profile; reduce non-critical automation/research intensity
-#   - balanced: default profile; preserves current behavior with moderate overhead
-#   - full: highest-context profile; maximize context breadth/autonomy
+#   TOKEN_PROFILE controls context breadth / token cost only (DEC-0062 / US-0092).
+#   - lean: lowest context breadth / token cost defaults
+#   - balanced: default profile; moderate context breadth
+#   - full: highest context breadth / token cost for complex work
 # - STATE_HOT_MAX_LINES: integer >= 200 (hot-surface soft cap trigger for
 #   archival rollover checks)
 # - STATE_HOT_MAX_CHECKPOINTS: integer >= 10 (max recent checkpoints to retain
@@ -170,7 +174,7 @@ INTAKE_GUIDED_MODE=1
 INTAKE_SUBAGENT_FALLBACK=deny
 INTAKE_WORK_ITEM_KIND=story
 ID_NAMESPACE_BOOTSTRAP=0
-TOKEN_PROFILE=lean
+TOKEN_PROFILE=full
 STATE_HOT_MAX_LINES=1000
 STATE_HOT_MAX_CHECKPOINTS=50
 PO_TO_TL_HOT_MAX_LINES=500
@@ -230,6 +234,10 @@ USER_GUIDE_MODE=1
 DOC_AUDIENCE_PROFILE=both
 DOC_DETAIL_LEVEL=balanced
 
+# README feature coverage gate (US-0091 / DEC-0074)
+# - README_FEATURE_COVERAGE_ENFORCE: 0|1 (default 0 until backfill + --report green)
+README_FEATURE_COVERAGE_ENFORCE=1
+
 #
 # ## Caveman mode (US-0089)
 # Response-side voice toggle. Default off. Composition is orthogonal to
@@ -245,5 +253,5 @@ DOC_DETAIL_LEVEL=balanced
 #   no behavior until compression story ships
 CAVEMAN_MODE=1
 CAVEMAN_LEVEL=full
-CAVEMAN_COMPRESS_INPUT=1
+CAVEMAN_COMPRESS_INPUT=0
 CAVEMAN_FILE_SCOPE=

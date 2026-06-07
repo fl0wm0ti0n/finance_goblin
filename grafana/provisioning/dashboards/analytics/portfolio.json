@@ -140,7 +140,8 @@
     },
     {
       "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
-      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] },
+      "description": "Total return % requires at least two priced net worth snapshots with a baseline; series stays empty until snapshot history exists.",
+      "fieldConfig": { "defaults": { "noValue": "Needs ≥2 snapshots", "unit": "percent" }, "overrides": [] },
       "gridPos": { "h": 10, "w": 12, "x": 12, "y": 18 },
       "id": 10,
       "options": { "legend": { "displayMode": "list", "placement": "bottom" } },

@@ -94,8 +94,23 @@ traceable for generated-project scope:
   `TEST_SCAFFOLD_GENERATION_FAILED` and require `/execute` or `/qa` rerun with
   deterministic evidence capture.
 
+## Self-verify UAT probes (US-0092 / DEC-0078)
+
+When stack profile resolves, derive UAT steps from acceptance and execute probes via
+the shared resolver **`scripts/uat_probe_lib.py`** (active + `template/scripts/` mirror).
+Record evidence in **`sprints/Sxxxx/uat.json`** `probe_results[]` and
+**`sprints/Sxxxx/qa-findings.md`** (path refs for stdout/stderr — no inline secrets).
+**No silent PASS** — unresolvable steps must record fail-closed reason codes:
+
+`UAT_PROBE_UNRESOLVED`, `UAT_STACK_PROFILE_UNKNOWN`, `UAT_PROBE_TIMEOUT`,
+`UAT_PROBE_FAILED`, `UAT_PROBE_FORBIDDEN`, `UAT_PROBE_PASS`.
+
+Probe catalog: **`build`**, **`test`**, **`api_health`**, **`process_health`**,
+**`browser_smoke`**, **`cli_smoke`**, **`manual_operator`**. CLI:
+`python scripts/uat_probe_lib.py --repo . --step "<acceptance step>" --report`.
+
 ## Steps
-1. Convert acceptance criteria into testable UAT steps. Derive steps directly from the story's acceptance criteria in `docs/product/acceptance.md`. Each AC should map to at least one UAT step.
+1. Convert acceptance criteria into testable UAT steps. Derive steps directly from the story's acceptance criteria in `docs/product/acceptance.md`. Each AC should map to at least one UAT step. Run **`scripts/uat_probe_lib.py`** for each step where automation applies; record `probe_results[]` in **`uat.json`**.
 2. Populate UAT artifacts: write derived steps into `uat.json` (with description and result per step, accurate pass/fail counts) and `uat.md` (step list with results, summary section). Ensure UAT artifacts are in **populated** state per DEC-0009 — not placeholder.
 3. Record results and failures.
 4. Update state with pass/fail summary.

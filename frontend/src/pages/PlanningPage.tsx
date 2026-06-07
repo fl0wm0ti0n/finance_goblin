@@ -8,8 +8,14 @@ import {
   PlanListItem,
   PlanRiskScoreResponse,
   PlanVsActual,
+  PlanVsActualRow,
   SavingsSuggestion,
 } from "../lib/api";
+import {
+  formatPlanningError,
+  PlanningFeedbackCard,
+  usePlanningFeedback,
+} from "./planningFeedback";
 
 const CompareChart = lazy(() =>
   import("../components/planning/CompareChart").then((m) => ({ default: m.CompareChart })),
@@ -31,6 +37,26 @@ const TEMPLATES = [
   { id: "custom", label: "Custom", desc: "Start empty and add lines" },
 ];
 
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+type AdjustmentFormState = {
+  direction: string;
+  amount: string;
+  frequency: string;
+  target_type: string;
+  label: string;
+  effective_from: string;
+};
+
+const defaultAdjustmentForm = (): AdjustmentFormState => ({
+  direction: "add_outflow",
+  amount: "100",
+  frequency: "monthly",
+  target_type: "household",
+  label: "",
+  effective_from: todayIso(),
+});
+
 export function PlanningPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("scenarios");
@@ -42,6 +68,12 @@ export function PlanningPage() {
   const [selectedPayees, setSelectedPayees] = useState<string[]>([]);
   const [discretionaryCut, setDiscretionaryCut] = useState(false);
   const [month, setMonth] = useState<string>("");
+  const { feedback, showPlanningFeedback, dismissFeedback } = usePlanningFeedback();
+  const [showSetActiveBanner, setShowSetActiveBanner] = useState(false);
+  const [addForm, setAddForm] = useState<AdjustmentFormState>(defaultAdjustmentForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<AdjustmentFormState>(defaultAdjustmentForm);
+  const [deleteConfirmPlan, setDeleteConfirmPlan] = useState<PlanListItem | null>(null);
 
   const plansQuery = useQuery({
     queryKey: ["plans"],
@@ -105,7 +137,10 @@ export function PlanningPage() {
       return apiFetch<PlanVsActual>(`/api/v1/plans/active/plan-vs-actual${qs}`);
     },
     enabled: tab === "plan-vs-actual",
+    retry: false,
   });
+
+  const pvaData = pvaQuery.data?.status === "ok" ? pvaQuery.data : undefined;
 
   const savingsQuery = useQuery({
     queryKey: ["savings-suggestions"],
@@ -114,23 +149,56 @@ export function PlanningPage() {
     enabled: savingsOpen,
   });
 
+  const templateLabel = (id: string) => TEMPLATES.find((t) => t.id === id)?.label ?? id;
+
   const createPlanMutation = useMutation({
     mutationFn: (payload: { name: string; template?: string }) =>
       apiFetch<PlanDetail>("/api/v1/plans", {
         method: "POST",
         body: JSON.stringify(payload),
       }),
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["plans"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-vs-actual"] });
       setSelectedPlanId(data.plan.id);
       setSelectedVersionId(null);
+      if (!data.plan.is_active) {
+        setShowSetActiveBanner(true);
+      }
+      setTab("scenarios");
+      if (variables.template && variables.template !== "custom") {
+        showPlanningFeedback({
+          kind: "success",
+          message: `Plan "${variables.name}" created from ${templateLabel(variables.template)}`,
+        });
+      } else {
+        showPlanningFeedback({
+          kind: "success",
+          message: `Plan "${variables.name}" created`,
+        });
+      }
     },
+    onError: (err) =>
+      showPlanningFeedback({
+        kind: "error",
+        message: formatPlanningError(err, "Could not create plan"),
+      }),
   });
 
   const activateMutation = useMutation({
     mutationFn: (planId: string) =>
       apiFetch<void>(`/api/v1/plans/${planId}/activate`, { method: "POST" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["plans"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plans"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-vs-actual"] });
+      setShowSetActiveBanner(false);
+      showPlanningFeedback({ kind: "success", message: "Plan set as active" });
+    },
+    onError: (err) =>
+      showPlanningFeedback({
+        kind: "error",
+        message: formatPlanningError(err, "Could not set active plan"),
+      }),
   });
 
   const applyTemplateMutation = useMutation({
@@ -149,11 +217,28 @@ export function PlanningPage() {
         method: "POST",
         body: JSON.stringify({ template, subscription_payee_keys, discretionary_cut }),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["plan-version"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-detail"] });
       queryClient.invalidateQueries({ queryKey: ["plan-compare"] });
       setSavingsOpen(false);
+      if (variables.template === "custom") {
+        showPlanningFeedback({
+          kind: "success",
+          message: "Custom plan ready — add lines below",
+        });
+      } else {
+        showPlanningFeedback({
+          kind: "success",
+          message: `Template applied (${templateLabel(variables.template)})`,
+        });
+      }
     },
+    onError: (err) =>
+      showPlanningFeedback({
+        kind: "error",
+        message: formatPlanningError(err, "Could not apply template"),
+      }),
   });
 
   const createVersionMutation = useMutation({
@@ -162,7 +247,94 @@ export function PlanningPage() {
     onSuccess: (v) => {
       queryClient.invalidateQueries({ queryKey: ["plan-detail"] });
       setSelectedVersionId(v.id);
+      showPlanningFeedback({ kind: "success", message: "New version created" });
     },
+    onError: (err) =>
+      showPlanningFeedback({
+        kind: "error",
+        message: formatPlanningError(err, "Could not create version"),
+      }),
+  });
+
+  const addAdjustmentMutation = useMutation({
+    mutationFn: (payload: AdjustmentFormState) =>
+      apiFetch<PlanAdjustment>(
+        `/api/v1/plans/${activePlanId}/versions/${viewingVersionId}/adjustments`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            direction: payload.direction,
+            amount: Number(payload.amount),
+            frequency: payload.frequency,
+            target_type: payload.target_type,
+            label: payload.label || null,
+            effective_from: payload.effective_from,
+          }),
+        },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plan-version"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-compare"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-vs-actual"] });
+      setAddForm(defaultAdjustmentForm());
+      showPlanningFeedback({ kind: "success", message: "Adjustment added" });
+    },
+    onError: (err) =>
+      showPlanningFeedback({
+        kind: "error",
+        message: formatPlanningError(err, "Could not add adjustment"),
+      }),
+  });
+
+  const updateAdjustmentMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: AdjustmentFormState }) =>
+      apiFetch<PlanAdjustment>(
+        `/api/v1/plans/${activePlanId}/versions/${viewingVersionId}/adjustments/${id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            direction: payload.direction,
+            amount: Number(payload.amount),
+            frequency: payload.frequency,
+            target_type: payload.target_type,
+            label: payload.label || null,
+            effective_from: payload.effective_from,
+          }),
+        },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plan-version"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-compare"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-vs-actual"] });
+      setEditingId(null);
+      showPlanningFeedback({ kind: "success", message: "Adjustment updated" });
+    },
+    onError: (err) =>
+      showPlanningFeedback({
+        kind: "error",
+        message: formatPlanningError(err, "Could not update adjustment"),
+      }),
+  });
+
+  const deletePlanMutation = useMutation({
+    mutationFn: (planId: string) =>
+      apiFetch<void>(`/api/v1/plans/${planId}`, { method: "DELETE" }),
+    onSuccess: (_data, planId) => {
+      queryClient.invalidateQueries({ queryKey: ["plans"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-detail"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-vs-actual"] });
+      if (selectedPlanId === planId) {
+        setSelectedPlanId(null);
+        setSelectedVersionId(null);
+      }
+      setDeleteConfirmPlan(null);
+      showPlanningFeedback({ kind: "success", message: "Plan deleted" });
+    },
+    onError: (err) =>
+      showPlanningFeedback({
+        kind: "error",
+        message: formatPlanningError(err, "Could not delete plan"),
+      }),
   });
 
   const deleteAdjustmentMutation = useMutation({
@@ -171,14 +343,92 @@ export function PlanningPage() {
         `/api/v1/plans/${activePlanId}/versions/${viewingVersionId}/adjustments/${adjustmentId}`,
         { method: "DELETE" },
       ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["plan-version"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["plan-version"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-compare"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-vs-actual"] });
+      showPlanningFeedback({ kind: "success", message: "Adjustment removed" });
+    },
+    onError: (err) =>
+      showPlanningFeedback({
+        kind: "error",
+        message: formatPlanningError(err, "Could not delete adjustment"),
+      }),
   });
 
   const empty = !plansQuery.isLoading && (plansQuery.data?.length ?? 0) === 0;
   const planStale = plansQuery.data?.find((p) => p.id === activePlanId)?.plan_stale;
+  const activePlanIsSelected = plansQuery.data?.find((p) => p.id === activePlanId)?.is_active;
+
+  const startEdit = (a: PlanAdjustment) => {
+    setEditingId(a.id);
+    setEditForm({
+      direction: a.direction,
+      amount: a.amount,
+      frequency: a.frequency,
+      target_type: a.target_type,
+      label: a.label ?? "",
+      effective_from: a.effective_from,
+    });
+  };
+
+  const renderAdjustmentFields = (
+    form: AdjustmentFormState,
+    onChange: (next: AdjustmentFormState) => void,
+  ) => (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+      <select value={form.direction} onChange={(e) => onChange({ ...form, direction: e.target.value })}>
+        <option value="add_outflow">Add outflow</option>
+        <option value="remove_outflow">Remove outflow</option>
+        <option value="add_inflow">Add inflow</option>
+        <option value="remove_inflow">Remove inflow</option>
+      </select>
+      <input
+        type="number"
+        step="0.01"
+        placeholder="Amount"
+        value={form.amount}
+        onChange={(e) => onChange({ ...form, amount: e.target.value })}
+        style={{ width: "6rem" }}
+      />
+      <select value={form.frequency} onChange={(e) => onChange({ ...form, frequency: e.target.value })}>
+        <option value="monthly">Monthly</option>
+        <option value="weekly">Weekly</option>
+        <option value="quarterly">Quarterly</option>
+        <option value="one_time">One-time</option>
+      </select>
+      <select
+        value={form.target_type}
+        onChange={(e) => onChange({ ...form, target_type: e.target.value })}
+      >
+        <option value="household">Household</option>
+        <option value="subscription">Subscription</option>
+        <option value="category">Category</option>
+        <option value="custom_label">Custom label</option>
+        <option value="allocation_target">Allocation target</option>
+      </select>
+      <input
+        placeholder="Label"
+        value={form.label}
+        onChange={(e) => onChange({ ...form, label: e.target.value })}
+      />
+      <input
+        type="date"
+        value={form.effective_from}
+        onChange={(e) => onChange({ ...form, effective_from: e.target.value })}
+      />
+      <p style={{ flexBasis: "100%", fontSize: "0.85rem", color: "#64748b", margin: "0.25rem 0 0" }}>
+        Household applies across all linked accounts; Subscription matches recurring payees;
+        Category scopes to a budget category; Custom label and Allocation target are advanced
+        options templates may pre-fill.
+      </p>
+    </div>
+  );
 
   return (
     <div>
+      <PlanningFeedbackCard feedback={feedback} onDismiss={dismissFeedback} />
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1>Planning</h1>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
@@ -195,37 +445,66 @@ export function PlanningPage() {
               Risk {riskScore.score} ({riskScore.band})
             </span>
           )}
-          {(planStale || pvaQuery.data?.plan_stale || pvaQuery.data?.actuals_stale) && (
+          {(planStale ||
+            (pvaData?.status === "ok" && (pvaData.plan_stale || pvaData.actuals_stale))) && (
             <>
               {planStale && <span className="badge stale">Plan stale</span>}
-              {pvaQuery.data?.actuals_stale && <span className="badge stale">Actuals stale</span>}
+              {pvaData?.status === "ok" && pvaData.actuals_stale && (
+                <span className="badge stale">Actuals stale</span>
+              )}
             </>
           )}
         </div>
       </div>
 
       {empty ? (
-        <div className="card">
-          <p>No plans yet. Create your first scenario from a template.</p>
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
-            <input
-              placeholder="Plan name"
-              value={newPlanName}
-              onChange={(e) => setNewPlanName(e.target.value)}
-            />
-            <button
-              className="btn primary"
-              disabled={!newPlanName.trim()}
-              onClick={() =>
-                createPlanMutation.mutate({ name: newPlanName.trim(), template: "leasing" })
-              }
-            >
-              Create from Leasing template
-            </button>
+        <div>
+          <div className="card" style={{ marginBottom: "1rem" }}>
+            <p>No plans yet. Create your first scenario from a template or start empty.</p>
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem", flexWrap: "wrap" }}>
+              <input
+                placeholder="Plan name"
+                value={newPlanName}
+                onChange={(e) => setNewPlanName(e.target.value)}
+              />
+              <button
+                className="btn primary"
+                disabled={!newPlanName.trim() || createPlanMutation.isPending}
+                onClick={() =>
+                  createPlanMutation.mutate({ name: newPlanName.trim(), template: "custom" })
+                }
+              >
+                Create empty plan
+              </button>
+            </div>
+          </div>
+          <div className="card-grid">
+            {TEMPLATES.map((t) => (
+              <div key={t.id} className="card">
+                <strong>{t.label}</strong>
+                <p style={{ fontSize: "0.9rem", color: "#64748b" }}>{t.desc}</p>
+                <button
+                  className="btn"
+                  disabled={!newPlanName.trim() || createPlanMutation.isPending}
+                  onClick={() =>
+                    createPlanMutation.mutate({ name: newPlanName.trim(), template: t.id })
+                  }
+                >
+                  Create from {t.label}
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       ) : (
         <>
+          {showSetActiveBanner && !activePlanIsSelected && activePlanId && (
+            <div className="card" style={{ marginBottom: "1rem", background: "#fffbeb" }}>
+              Plan created. Click <strong>Set active</strong> below so Plan vs Actual and Grafana
+              Dashboard 3 (<strong>Budgets</strong>) use this scenario.
+            </div>
+          )}
+
           <div className="card" style={{ marginBottom: "1rem" }}>
             <label>
               Active plan{" "}
@@ -245,13 +524,33 @@ export function PlanningPage() {
               </select>
             </label>
             {activePlanId && (
-              <button
-                className="btn"
-                style={{ marginLeft: "1rem" }}
-                onClick={() => activateMutation.mutate(activePlanId)}
-              >
-                Set active
-              </button>
+              <>
+                <button
+                  className="btn"
+                  style={{ marginLeft: "1rem" }}
+                  onClick={() => activateMutation.mutate(activePlanId)}
+                >
+                  Set active
+                </button>
+                <button
+                  className="btn"
+                  style={{ marginLeft: "0.5rem" }}
+                  disabled={activePlanIsSelected}
+                  title={
+                    activePlanIsSelected
+                      ? "Set another plan active before deleting the active plan"
+                      : "Delete this plan"
+                  }
+                  onClick={() => {
+                    const plan = plansQuery.data?.find((p) => p.id === activePlanId);
+                    if (plan) {
+                      setDeleteConfirmPlan(plan);
+                    }
+                  }}
+                >
+                  Delete plan
+                </button>
+              </>
             )}
           </div>
 
@@ -308,6 +607,20 @@ export function PlanningPage() {
 
               <div className="card">
                 <h3>Adjustments {viewingFrozen ? "(read-only)" : ""}</h3>
+                {!viewingFrozen && viewingVersionId && (
+                  <div style={{ marginBottom: "1rem" }}>
+                    <h4 style={{ marginTop: 0 }}>Add adjustment</h4>
+                    {renderAdjustmentFields(addForm, setAddForm)}
+                    <button
+                      className="btn primary"
+                      style={{ marginTop: "0.5rem" }}
+                      disabled={!addForm.amount || addAdjustmentMutation.isPending}
+                      onClick={() => addAdjustmentMutation.mutate(addForm)}
+                    >
+                      Add
+                    </button>
+                  </div>
+                )}
                 <table className="data-table">
                   <thead>
                     <tr>
@@ -321,20 +634,48 @@ export function PlanningPage() {
                   <tbody>
                     {(versionQuery.data?.adjustments ?? []).map((a) => (
                       <tr key={a.id}>
-                        <td>{a.label ?? "—"}</td>
-                        <td>{a.amount}</td>
-                        <td>{a.frequency}</td>
-                        <td>{a.target_type}</td>
-                        <td>
-                          {!viewingFrozen && (
-                            <button
-                              className="btn"
-                              onClick={() => deleteAdjustmentMutation.mutate(a.id)}
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </td>
+                        {editingId === a.id && !viewingFrozen ? (
+                          <>
+                            <td colSpan={4}>
+                              {renderAdjustmentFields(editForm, setEditForm)}
+                            </td>
+                            <td>
+                              <button
+                                className="btn primary"
+                                onClick={() =>
+                                  updateAdjustmentMutation.mutate({ id: a.id, payload: editForm })
+                                }
+                              >
+                                Save
+                              </button>{" "}
+                              <button className="btn" onClick={() => setEditingId(null)}>
+                                Cancel
+                              </button>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td>{a.label ?? "—"}</td>
+                            <td>{a.amount}</td>
+                            <td>{a.frequency}</td>
+                            <td>{a.target_type}</td>
+                            <td>
+                              {!viewingFrozen && (
+                                <>
+                                  <button className="btn" onClick={() => startEdit(a)}>
+                                    Edit
+                                  </button>{" "}
+                                  <button
+                                    className="btn"
+                                    onClick={() => deleteAdjustmentMutation.mutate(a.id)}
+                                  >
+                                    Delete
+                                  </button>
+                                </>
+                              )}
+                            </td>
+                          </>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -367,7 +708,9 @@ export function PlanningPage() {
                         <td>{v.monthly_delta_sum}</td>
                         <td>{v.projected_month_end_balance}</td>
                         <td>
-                          {v.version_number === compareQuery.data.versions[compareQuery.data.versions.length - 1]?.version_number && riskScore
+                          {v.version_number ===
+                            compareQuery.data.versions[compareQuery.data.versions.length - 1]
+                              ?.version_number && riskScore
                             ? `${riskScore.score} (${riskScore.band})`
                             : "—"}
                         </td>
@@ -375,6 +718,10 @@ export function PlanningPage() {
                     ))}
                   </tbody>
                 </table>
+                <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: "0.75rem" }}>
+                  Monthly delta = scenario adjustments only; projected month-end balance includes
+                  the baseline household forecast and may be negative even when delta is zero.
+                </p>
               </div>
               <Suspense fallback={<div>Loading chart…</div>}>
                 <CompareChart data={compareQuery.data} />
@@ -384,51 +731,100 @@ export function PlanningPage() {
 
           {tab === "plan-vs-actual" && (
             <div>
-              <div className="card" style={{ marginBottom: "1rem" }}>
-                <label>
-                  Month (YYYY-MM, optional){" "}
-                  <input
-                    placeholder="2026-05"
-                    value={month}
-                    onChange={(e) => setMonth(e.target.value)}
-                  />
-                </label>
-                <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: "0.5rem" }}>
-                  Planned series extends beyond today; Ist (actual) stops at last sync date.
-                </p>
-              </div>
-              {pvaQuery.data && (
-                <>
-                  <Suspense fallback={<div>Loading chart…</div>}>
-                    <PlanVsActualChart rows={pvaQuery.data.rows} />
-                  </Suspense>
-                  <div className="card" style={{ marginTop: "1rem" }}>
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Date</th>
-                          <th>Planned</th>
-                          <th>Ist (actual)</th>
-                          <th>Deviation</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pvaQuery.data.rows.map((r) => (
-                          <tr key={r.date}>
-                            <td>{r.date}</td>
-                            <td>{r.planned ?? "—"}</td>
-                            <td>{r.actual ?? "—"}</td>
-                            <td>{r.deviation ?? "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              {pvaQuery.data?.status === "no_active_plan" ? (
+                <div className="card">
+                  <h3>No active plan</h3>
+                  <p>
+                    Plan vs Actual needs an active plan. Create a scenario on the Scenarios tab,
+                    then click <strong>Set active</strong> above.
+                  </p>
+                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+                    <button className="btn primary" onClick={() => setTab("scenarios")}>
+                      Go to Scenarios
+                    </button>
+                    {activePlanId && (
+                      <button
+                        className="btn"
+                        onClick={() => activateMutation.mutate(activePlanId)}
+                      >
+                        Set active now
+                      </button>
+                    )}
                   </div>
+                </div>
+              ) : (
+                <>
+                  <div className="card" style={{ marginBottom: "1rem" }}>
+                    <label>
+                      Month (YYYY-MM, optional){" "}
+                      <input
+                        placeholder="2026-05"
+                        value={month}
+                        onChange={(e) => setMonth(e.target.value)}
+                      />
+                    </label>
+                    <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: "0.5rem" }}>
+                      Planned series extends beyond today; Ist (actual) stops at last sync date.
+                    </p>
+                  </div>
+                  {pvaData?.status === "ok" && (
+                    <>
+                      <Suspense fallback={<div>Loading chart…</div>}>
+                        <PlanVsActualChart rows={pvaData.rows} />
+                      </Suspense>
+                      <div className="card" style={{ marginTop: "1rem" }}>
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>Date</th>
+                              <th>Planned</th>
+                              <th>Ist (actual)</th>
+                              <th>Deviation</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pvaData.rows.map((r: PlanVsActualRow) => (
+                              <tr key={r.date}>
+                                <td>{r.date}</td>
+                                <td>{r.planned ?? "—"}</td>
+                                <td>{r.actual ?? "—"}</td>
+                                <td>{r.deviation ?? "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>
           )}
         </>
+      )}
+
+      {deleteConfirmPlan && (
+        <div className="modal-backdrop">
+          <div className="card modal">
+            <h3>Delete plan?</h3>
+            <p>
+              Permanently delete <strong>{deleteConfirmPlan.name}</strong> and all versions and
+              adjustments? This cannot be undone.
+            </p>
+            <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+              <button
+                className="btn primary"
+                disabled={deletePlanMutation.isPending}
+                onClick={() => deletePlanMutation.mutate(deleteConfirmPlan.id)}
+              >
+                Delete
+              </button>
+              <button className="btn" onClick={() => setDeleteConfirmPlan(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {savingsOpen && (

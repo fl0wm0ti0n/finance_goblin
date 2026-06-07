@@ -39,11 +39,22 @@ pub struct CryptoHoldingRow {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HoldingsAllRow {
+    pub asset: String,
+    pub quantity: f64,
+    pub product_type: String,
+    pub value_eur: Option<f64>,
+    pub unrealized_pnl_eur: Option<f64>,
+    pub native_unit: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CryptoBreakdown {
     pub subtotal_eur: f64,
     pub fx_complete: bool,
     pub exchanges: Vec<CryptoExchangeSummary>,
     pub holdings_top: Vec<CryptoHoldingRow>,
+    pub holdings_all: Vec<HoldingsAllRow>,
     pub unpriced_assets: Vec<String>,
 }
 

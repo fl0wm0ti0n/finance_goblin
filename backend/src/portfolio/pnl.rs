@@ -1,12 +1,9 @@
-use std::sync::Arc;
-
 use tracing::warn;
 
 use crate::exchanges::repository::{ExchangeRepository, HoldingRow};
 use crate::fx::{ExchangePriceBook, EurAmount, FxError, FxService};
 
 use super::avg_cost::average_cost_from_trades;
-use super::baseline::BaselineService;
 
 #[derive(Debug, Clone)]
 pub struct PnlBreakdown {
@@ -30,6 +27,33 @@ pub async fn compute_hybrid_pnl(
     let mut unpriced = Vec::new();
 
     for h in &holdings {
+        if h.product_type == "linear" {
+            let upnl_usdt = parse_unrealized_pnl_usdt(&h.payload);
+            let upnl_eur = match upnl_usdt {
+                Some(pnl) => match fx.to_eur(pnl, "USDT", price_book).await {
+                    Ok(v) => Some(v.eur),
+                    Err(_) => {
+                        fx_incomplete = true;
+                        None
+                    }
+                },
+                None => None,
+            };
+            repo.update_holding_eur(
+                &h.exchange_id,
+                &h.asset,
+                &h.product_type,
+                None,
+                upnl_eur,
+                h.avg_cost_eur,
+            )
+            .await?;
+            if let Some(upnl) = upnl_eur {
+                unrealized += upnl;
+            }
+            continue;
+        }
+
         let value_eur = match holding_value_eur(h, fx, price_book).await {
             Ok(v) => {
                 repo.update_holding_eur(
@@ -37,7 +61,11 @@ pub async fn compute_hybrid_pnl(
                     &h.asset,
                     &h.product_type,
                     Some(v.eur),
-                    h.unrealized_pnl_eur,
+                    if h.product_type == "futures" {
+                        None
+                    } else {
+                        h.unrealized_pnl_eur
+                    },
                     h.avg_cost_eur,
                 )
                 .await?;
@@ -56,10 +84,10 @@ pub async fn compute_hybrid_pnl(
 
         crypto_value += value_eur;
 
-        if let Some(upnl) = h.unrealized_pnl_eur {
-            unrealized += upnl;
-        } else if h.product_type == "spot" {
-            if let Some(avg) = h.avg_cost_eur {
+        if h.product_type == "spot" {
+            if let Some(upnl) = h.unrealized_pnl_eur {
+                unrealized += upnl;
+            } else if let Some(avg) = h.avg_cost_eur {
                 unrealized += value_eur - avg * h.quantity;
             }
         }
@@ -132,6 +160,30 @@ async fn holding_value_eur(
     fx.to_eur(h.quantity, &h.asset, price_book).await
 }
 
+pub fn parse_unrealized_pnl_usdt(payload: &serde_json::Value) -> Option<f64> {
+    const KEYS: &[&str] = &[
+        "unrealizedPNL",
+        "unrealizedPnl",
+        "unrealizedProfit",
+        "crossUnPnl",
+        "unPnl",
+        "profit",
+    ];
+    for key in KEYS {
+        if let Some(v) = payload.get(*key) {
+            if let Some(n) = v.as_f64() {
+                return Some(n);
+            }
+            if let Some(s) = v.as_str() {
+                if let Ok(n) = s.parse() {
+                    return Some(n);
+                }
+            }
+        }
+    }
+    None
+}
+
 pub fn compute_avg_cost_fallback(
     trades: &[crate::exchanges::types::ExchangeTrade],
     asset: &str,
@@ -166,5 +218,17 @@ mod tests {
         }];
         let upnl = compute_avg_cost_fallback(&trades, "ETH", 2.0, 2500.0);
         assert!((upnl - 500.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_unrealized_pnl_usdt_bitunix_casing() {
+        let payload = serde_json::json!({ "unrealizedPNL": "42.5" });
+        assert_eq!(parse_unrealized_pnl_usdt(&payload), Some(42.5));
+    }
+
+    #[test]
+    fn parse_unrealized_pnl_usdt_camel_case() {
+        let payload = serde_json::json!({ "unrealizedPnl": 10.2 });
+        assert_eq!(parse_unrealized_pnl_usdt(&payload), Some(10.2));
     }
 }

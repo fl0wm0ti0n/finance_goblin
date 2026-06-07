@@ -45,7 +45,9 @@ PO_ARCH_DIR = Path("handoffs/archive")
 ARCH_ARCH_DIR = Path("docs/engineering/architecture-archive")
 
 CHECKPOINT_HEADING = re.compile(r"^## .*\bcheckpoint\b.*$", re.I)
-STORY_HEADING = re.compile(r"^# US-\d{4}\s*[:\u2014\-].+$")
+STORY_HEADING_H1 = re.compile(r"^# (?:US|BUG)-\d{4}\s*[:\u2014\-].+$")
+STORY_HEADING_H2 = re.compile(r"^## US-\d{4}\s*[:\u2014\-].+$")
+_STORY_ID_FROM_LINE = re.compile(r"(?:US|BUG)-\d{4}")
 
 
 class PolicyError(Exception):
@@ -135,9 +137,34 @@ def split_po_sections(text: str) -> List[str]:
     return sections
 
 
+def _story_boundary_candidates(text: str) -> List[Tuple[int, str, int]]:
+    """Collect (line_idx, story_id, level) for H1/H2 story-heading matches."""
+    lines = text.splitlines(keepends=True)
+    candidates: List[Tuple[int, str, int]] = []
+    for i, ln in enumerate(lines):
+        stripped = ln.rstrip("\r\n")
+        if STORY_HEADING_H1.match(stripped):
+            m = _STORY_ID_FROM_LINE.search(stripped)
+            if m:
+                candidates.append((i, m.group(0), 1))
+        elif STORY_HEADING_H2.match(stripped):
+            m = _STORY_ID_FROM_LINE.search(stripped)
+            if m:
+                candidates.append((i, m.group(0), 2))
+    return candidates
+
+
 def split_arch_stories(text: str) -> Tuple[str, List[str]]:
     lines = text.splitlines(keepends=True)
-    idxs = [i for i, ln in enumerate(lines) if STORY_HEADING.match(ln.rstrip("\r\n"))]
+    candidates = _story_boundary_candidates(text)
+    if not candidates:
+        return text, []
+    h1_ids = {story_id for _, story_id, level in candidates if level == 1}
+    idxs = sorted(
+        idx
+        for idx, story_id, level in candidates
+        if not (level == 2 and story_id in h1_ids)
+    )
     if not idxs:
         return text, []
     preamble = "".join(lines[: idxs[0]])
@@ -146,6 +173,18 @@ def split_arch_stories(text: str) -> Tuple[str, List[str]]:
         end = idxs[j + 1] if j + 1 < len(idxs) else len(lines)
         blocks.append("".join(lines[start:end]))
     return preamble, blocks
+
+
+def count_h2_story_headings(text: str) -> int:
+    return sum(
+        1 for ln in text.splitlines() if STORY_HEADING_H2.match(ln.rstrip("\r\n"))
+    )
+
+
+def check_arch_heading_policy(text_after: str, baseline_h2_count: int) -> Optional[str]:
+    if count_h2_story_headings(text_after) > baseline_h2_count:
+        return "ARCH_STORY_HEADING_LEVEL_INVALID"
+    return None
 
 
 def next_pack_path(repo: Path, archive_dir: Path, stem: str) -> Path:
@@ -352,7 +391,7 @@ def rollover_architecture(repo: Path, policy: Dict[str, str], dry_run: bool) -> 
             return None
         raise PolicyError(
             "STATE_ARCHIVE_BOUNDARY_AMBIGUOUS",
-            "architecture file exceeds line cap but has no US story headings to archive",
+            "architecture file exceeds line cap but has no story headings to archive",
         )
     moved = 0
     work = list(stories)
@@ -491,11 +530,43 @@ def cmd_self_test() -> int:
     if [line_count(s) for s in secs] != [3, 3, 3]:
         fail("po section split line counts unexpected")
 
-    # --- arch stories ---
+    # --- arch stories (H1 non-regression) ---
     arch = "# Preamble line\n\n# US-0001: One\nx\n# US-0002: Two\ny\n"
     apre, stories = split_arch_stories(arch)
     if "Preamble" not in apre or len(stories) != 2:
-        fail("architecture story split failed")
+        fail("architecture H1 story split failed")
+
+    # --- mixed H1+H2 same id: H1 wins ---
+    mixed = "# US-0067: Alpha\nbody\n## US-0067: Legacy\nmore\n# US-0068: Next\nz\n"
+    _, mixed_stories = split_arch_stories(mixed)
+    if len(mixed_stories) != 2:
+        fail("mixed H1+H2 same id should yield two blocks (H1-wins)")
+    if not mixed_stories[0].startswith("# US-0067"):
+        fail("mixed file first block should start at H1 US-0067")
+
+    # --- inner ## subheading inside # US- block is not a boundary ---
+    inner = "# US-0001: Story\n## Details\nnested\n# US-0002: Two\ny\n"
+    _, inner_stories = split_arch_stories(inner)
+    if len(inner_stories) != 2:
+        fail("inner ## Details must not create extra story boundary")
+    if "## Details" not in inner_stories[0]:
+        fail("inner subheading should remain inside first story block")
+
+    # --- BUG H1 parity ---
+    bug_arch = "# BUG-0009: Defect\nbody\n# US-0010: Story\nmore\n"
+    _, bug_stories = split_arch_stories(bug_arch)
+    if len(bug_stories) != 2 or not bug_stories[0].startswith("# BUG-0009"):
+        fail("BUG H1 story boundary not recognized")
+
+    # --- heading policy enforcement delta ---
+    baseline_text = "## US-0001: A\nx\n"
+    increased = baseline_text + "## US-0099: New H2\ny\n"
+    if check_arch_heading_policy(baseline_text, 1) is not None:
+        fail("stable H2 count should not fail policy")
+    if check_arch_heading_policy(increased, 1) != "ARCH_STORY_HEADING_LEVEL_INVALID":
+        fail("H2 count increase must return ARCH_STORY_HEADING_LEVEL_INVALID")
+    if check_arch_heading_policy(increased, 2) is not None:
+        fail("count decrease/normalization should pass policy")
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -543,14 +614,33 @@ def cmd_self_test() -> int:
         (root / ARCH_REL).write_text(arch_big, encoding="utf-8")
         a1 = rollover_architecture(root, policy_arch, dry_run=False)
         if not a1:
-            fail("architecture rollover expected")
+            fail("architecture H1 rollover expected")
         a2 = rollover_architecture(root, policy_arch, dry_run=False)
         if a2 is not None:
-            fail("architecture idempotent")
+            fail("architecture H1 idempotent")
         merged_arch = dict(DEFAULTS)
         merged_arch.update(policy_arch)
         if run_check(root, merged_arch):
-            fail("architecture check should pass")
+            fail("architecture H1 check should pass")
+
+        # --- ##-only rollover (legacy H2 sections) ---
+        policy_h2 = dict(DEFAULTS)
+        policy_h2["ARCH_HOT_MAX_LINES"] = "12"
+        policy_h2["ARCH_HOT_MAX_STORY_SECTIONS"] = "2"
+        h2_big = "# Top\n\n" + "".join(
+            f"## US-100{i}: Legacy\nL{i}\n\n" for i in range(4)
+        )
+        (root / ARCH_REL).write_text(h2_big, encoding="utf-8")
+        h2_1 = rollover_architecture(root, policy_h2, dry_run=False)
+        if not h2_1 or h2_1.get("moved", 0) < 1:
+            fail("##-only architecture rollover should move at least one block")
+        h2_2 = rollover_architecture(root, policy_h2, dry_run=False)
+        if h2_2 is not None:
+            fail("##-only architecture rollover should be idempotent")
+        merged_h2 = dict(DEFAULTS)
+        merged_h2.update(policy_h2)
+        if run_check(root, merged_h2):
+            fail("##-only architecture check should pass after rollover")
 
     if errors:
         for e in errors:
@@ -566,6 +656,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     mx.add_argument("--check", action="store_true", help="verify caps, no writes")
     mx.add_argument("--rollover", action="store_true", help="archive oldest units when over cap")
     mx.add_argument("--self-test", action="store_true", help="internal regression fixtures")
+    mx.add_argument(
+        "--check-arch-heading-policy",
+        action="store_true",
+        help="fail when H2 story-heading count increased vs baseline",
+    )
+    p.add_argument(
+        "--baseline-h2-count",
+        type=int,
+        help="baseline H2 story-heading count (required with --check-arch-heading-policy)",
+    )
     p.add_argument(
         "--json",
         action="store_true",
@@ -600,6 +700,33 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if errs:
             for e in errs:
                 print(e, file=sys.stderr)
+            return 1
+        return 0
+
+    if args.check_arch_heading_policy:
+        if args.baseline_h2_count is None:
+            print(
+                "STATE_ARCHIVE_VERIFICATION_FAILED "
+                "missing --baseline-h2-count for --check-arch-heading-policy",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            arch_text = (repo / ARCH_REL).read_text(encoding="utf-8")
+        except OSError as exc:
+            print(
+                f"STATE_ARCHIVE_WRITE_FAILED could_not_read_architecture detail={exc}",
+                file=sys.stderr,
+            )
+            return 2
+        code = check_arch_heading_policy(arch_text, args.baseline_h2_count)
+        if code:
+            print(
+                f"{code} h2_story_heading_count_increased "
+                f"baseline={args.baseline_h2_count} "
+                f"after={count_h2_story_headings(arch_text)}",
+                file=sys.stderr,
+            )
             return 1
         return 0
 

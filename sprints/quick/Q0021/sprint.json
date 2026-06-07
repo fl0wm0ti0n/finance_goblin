@@ -1,0 +1,61 @@
+{
+  "id": "Q0021",
+  "type": "quick",
+  "story_ids": ["US-0017"],
+  "status": "PLANNED",
+  "created": "2026-06-09",
+  "goal": "US-0017 DEC-0070 extension: README H3 Omniflow smoke + Troubleshooting; per-segment Product status maintenance; operator user guide; validate_doc_profile --no-template-parity exit 0. Doc-only.",
+  "scope": [
+    "E1: README.md ## Examples → ### Omniflow smoke (external profile) per R-0078 §2",
+    "E2: README.md ## Limitations → ### Troubleshooting; gate sequence + 6-row symptom table",
+    "E3: Product status verify-only — US-0015 + post-US-0016 closures present",
+    "E4: docs/developer/README.md per-segment Product status maintenance wording",
+    "E5: runbook § README maintenance release-segment definition + per-segment hooks",
+    "UG1: docs/user-guides/US-0017.md operator omniflow smoke + troubleshooting distill",
+    "E6: validate_doc_profile --repo . --no-template-parity exit 0 after all edits"
+  ],
+  "risks": [
+    "Dual auth confusion (Traefik basic-auth vs OIDC API) — explicit edge vs API note in E1",
+    "Placeholder hygiene — angle-bracket placeholders only; no credential-like literals",
+    "README length creep — cap prose; link runbook §23; do not inline full §23 table",
+    "Segment definition drift — runbook one-liner for release segment scope",
+    "Product status stale — verify-only E3; append only if segment closes additional US/BUG",
+    "H2 budget — no new root H2; H3 only per DEC-0059"
+  ],
+  "task_count": 7,
+  "mandatory_task_count": 7,
+  "optional_task_ids": [],
+  "estimate_total_hours": 5.5,
+  "decisions": ["DEC-0070", "DEC-0059"],
+  "research": ["R-0078", "R-0066", "R-0067"],
+  "acceptance_ids": ["AC-1", "AC-2", "AC-3", "AC-4", "AC-5"],
+  "execute_order": ["E1", "E2", "E4", "E5", "E3", "UG1", "E6"],
+  "gated_tasks": ["E6"],
+  "acceptance_mapping": {
+    "AC-1": {
+      "tasks": ["E1", "UG1"],
+      "verify": "README Examples H3 with omniflow external-profile smoke: sync trigger, recompute pointer, six /analytics/{slug} routes, exchange sync sanity — not localhost-only"
+    },
+    "AC-2": {
+      "tasks": ["E2", "UG1"],
+      "verify": "Limitations H3 Troubleshooting: empty-Grafana vs ML-unavailable distinction; BACKEND_FRONTEND_DEPLOY cadence; sync+recompute prerequisite"
+    },
+    "AC-3": {
+      "tasks": ["E3"],
+      "verify": "Product status lists US-0015 and other post-US-0016 closures; append only if release segment closes additional ids"
+    },
+    "AC-4": {
+      "tasks": ["E4", "E5"],
+      "verify": "docs/developer/README.md and runbook § README maintenance require Product status update per closed US/BUG in release segment"
+    },
+    "AC-5": {
+      "tasks": ["E6"],
+      "verify": "python scripts/validate_doc_profile.py --repo . --no-template-parity exit 0; no DEV_* H2 in root; H2 budget ≤ 8"
+    }
+  },
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260609-q0021-us0017",
+  "architecture_ref": "architecture-20260609-us0017",
+  "orchestrator_run_id": "auto-20260609-us0017-001",
+  "user_guide_mode": true
+}

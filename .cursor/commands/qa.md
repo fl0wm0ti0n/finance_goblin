@@ -48,6 +48,14 @@ QA completion evidence is required before `/release` may proceed. Record finding
 `RELEASE_QA_BLOCKERS_OPEN`. When clear, handoff to `/verify-work` so release gate can
 verify no unresolved blockers.
 
+## Self-verify UAT probes (US-0092 / DEC-0078)
+
+Share the **`scripts/uat_probe_lib.py`** resolver with **`/verify-work`**: derive
+acceptance steps, execute probes where stack profile resolves, record evidence in
+**`sprints/Sxxxx/uat.json`** `probe_results[]` and **`sprints/Sxxxx/qa-findings.md`**.
+Fail closed with **`UAT_PROBE_UNRESOLVED`** (not PASS) when no probe maps.
+Forbidden: auto-read **`.env`**, mutate intake evidence — **`UAT_PROBE_FORBIDDEN`**.
+
 ## Steps
 0. If `SECURITY_REVIEW=1`, verify `docs/engineering/security-review.md` exists
    and has no unresolved `critical` findings before proceeding. If unresolved

@@ -729,8 +729,10 @@ Priority: P1
 
 ### BUG-0008 — Subscription alerts vs list mismatch & under-detection
 
-Status: OPEN
+Status: DONE
 Priority: P1
+
+**closure_note:** verify-work PASS Q0018 + release PASS, 2026-06-08
 
 **environment:** US-0010 external Compose profile on `financegnome.omniflow.cc`; post-BUG-0004 deploy (11 pending subscription patterns, subscription UX partial fix); Firefly sync **922+ transactions**; operator report 2026-06-05. Do not read `.env` / `.env_prod` secrets.
 
@@ -786,7 +788,70 @@ Priority: P1
 
 **Related work:** BUG-0004 DONE (J partial — 11 pending); BUG-0007 DONE (AI enumeration — coordinate only; additive JSON shipped).
 
-**Recommended next phase:** `/discovery` (alert count semantics vs list filters; detection recall gaps).
+#### Discovery notes (2026-06-08 — `discovery-20260608-bug0008`, orchestrator `auto-20260608-bug0008-001`)
+
+**Probe environment:** `https://financegnome.omniflow.cc` public API (no `.env` / `.env_prod` secrets). Post-BUG-0004/BUG-0007 deploy; intake evidence `intake-20260605-subscription-alerts-detection`.
+
+| Sub | Verdict | Confidence |
+|-----|---------|------------|
+| **W** | **CONFIRMED** — unread subscription alerts accumulate without dedup; count diverges from visible list rows | high |
+| **X** | **CONFIRMED** — detection recall below operator expectation from 922+ txs; gates/th grouping limit candidates | high |
+
+**Live probe facts (2026-06-08):**
+
+- `GET /api/v1/subscriptions?status=pending` → **6** rows (operator intake **11** — counts drift as patterns confirm/reject).
+- `GET /api/v1/subscriptions` (all statuses) → **12** patterns (**3 confirmed**, **6 pending**, **3 rejected**).
+- `GET /api/v1/subscriptions/alerts?unread=true` → **83** unread alerts, all `alert_type=new_detection` (operator intake **33** — same failure mode, worsened with sync history).
+- `GET /api/v1/alerts/unread-count` → **0** (US-0005 unified inbox — not the operator-reported subscription banner).
+
+**Sub-defect W — alert vs list mismatch (root causes):**
+
+1. **No alert dedup:** `DetectionPipeline::run_candidates` calls `insert_alert` for every detected group every sync; `subscription_patterns` upserts on fingerprint but `subscription_alerts` always inserts (`detection.rs`, `repository.rs`).
+2. **Count semantics split:** Subscriptions page banner = unread **alert rows**; list tabs = **pattern rows** filtered by status/kind — no shared unread-count contract or API.
+3. **Header bell adjacent:** `AlertBell` badge uses unified `/api/v1/alerts/unread-count`; subscription unread only in popover link — unlikely primary W symptom but documents dual alert surfaces.
+
+**Sub-defect X — under-detection (root causes):**
+
+1. **Hard gates:** ≥3 txs per payee group, cadence stability, `min_emit_confidence: 60`, `detection_window_days: 365` — unchanged since US-0003/S0003.
+2. **Payee grouping:** `extract_payee_source` description → counterparty → destination; bank-memo/SEPA strings may fragment or over-merge (live pending includes long SEPA descriptor payees).
+3. **Category unused in grouping:** merchant signal in Firefly categories (see BUG-0007 probe: Amazon/Strom category totals) not used by `by_payee()` recurrence core.
+4. **AI not in pipeline:** `get_subscriptions` / orchestrator enrichment (BUG-0007) does not feed detection — operator AI suggestion remains optional research path only.
+
+**Discovery decomposition evidence:**
+
+| Evaluator | Result |
+|-----------|--------|
+| Feature/workflow count | 2 sub-defects W/X; shared detection+alert pipeline |
+| Cross-cutting | `subscription_alerts`, detection engine, `/subscriptions` UI, optional AI enrichment |
+| Acceptance breadth | W/X unchanged; live probe confirms failure mode |
+| Risk | W fix without dedup may re-break trust; X recall without dedup may amplify W |
+
+#### Sprint plan (2026-06-08 — `sprint-plan-20260608-q0018-bug0008`)
+
+**Quick sprint:** **Q0018** — 12 tasks (~24h); no split (12 = `SPRINT_MAX_TASKS` 12).  
+**quick_task_id:** Q0018  
+**sprint_id:** Q0018
+
+| Order | Task | Acceptance hook |
+|-------|------|-----------------|
+| 1 | **W1** — Fingerprint migration + backfill dedupe | **W** |
+| 2 | **W2** — `upsert_alert` repository | **W** |
+| 3 | **W3** — Detection emit gate | **W** |
+| 4 | **W4** — Unread-count API route | **W** |
+| 5 | **W5** — Orphan lifecycle hooks | **W** |
+| 6 | **W6** — Frontend banner + toast | **W** |
+| 7 | **W7** — Backend dedup + lifecycle tests | **W** regression |
+| 8 | **X1** — Payee normalization | **X** |
+| 9 | **X2** — Transfer counterparty priority | **X** |
+| 10 | **X3** — `detection_window_days` 730 | **X** |
+| 11 | **X4** — Forecast + subscription integration tests | **X** regression |
+| 12 | **V1** — verify-work omniflow smoke | **W**, **X** |
+
+**Operator gates:** deploy W1–X4+W7 backend + W6 frontend → **BACKEND_FRONTEND_DEPLOY** → V1.
+
+**Artifacts:** `sprints/quick/Q0018/*`, `handoffs/tl_to_dev.md` (`sprint-plan-20260608-q0018-bug0008`)
+
+**Recommended next phase:** _(closed — release PASS Q0018)_
 
 ---
 
@@ -1027,7 +1092,7 @@ Priority: P0
 
 ### BUG-0011 — Planning mode broken (empty plan, compare sums, plan-vs-actual 404)
 
-Status: OPEN
+Status: DONE
 Priority: P1
 
 **environment:** US-0010 external Compose profile on `financegnome.omniflow.cc`; post-BUG-0004 deploy; operator report 2026-06-05. Do not read `.env` / `.env_prod` secrets.
@@ -1052,11 +1117,96 @@ Priority: P1
 
 **evidence_refs:** operator report 2026-06-05 (4a/4b/4c); `handoffs/intake_evidence/intake-20260605-planning-mode-broken.json`; US-0004 DONE; BUG-0004 out-of-scope 404 note
 
-#### Known code cause (intake notes)
+#### Known code cause (intake notes — superseded by discovery 2026-06-08)
 
 - **AD (hypothesis):** Frontend handler for empty-plan template not wired or API create-plan fails silently.
 - **AE (hypothesis):** Compare aggregates uncapped forecast baseline without empty-plan guard.
 - **AF (hypothesis):** Route returns 404 instead of structured empty-state; no active plan seeded on first visit.
+
+#### Discovery notes (2026-06-08 — `discovery-20260608-bug0011`, orchestrator `auto-20260608-bug0011-001`)
+
+**Probe environment:** Code audit only (no `.env` / `.env_prod` secrets; no live omniflow API probe this phase). Intake evidence `intake-20260605-planning-mode-broken`.
+
+| Sub | Verdict | Confidence |
+|-----|---------|------------|
+| **AD** | **CONFIRMED** — no add-adjustment UI; custom Apply clears lines with no follow-up; first-run empty state lacks custom/empty create path | high |
+| **AE** | **CONFIRMED** — compare metrics sum full `planned_net` (baseline + overlay), not adjustment-only delta; mislabeled "Monthly delta sum" | high |
+| **AF** | **CONFIRMED** — `NoActivePlan` → HTTP 404; plans default `is_active=false`; frontend tab has no empty-state/error handling | high |
+
+**Sub-defect AD — empty plan click no-op (root causes):**
+
+1. **Missing frontend add-line UX:** `PlanningPage.tsx` adjustments table is read-only except delete; backend `POST .../adjustments` unwired (`add_adjustment` in `plans.rs`).
+2. **Custom template silent success:** `Apply` on **Custom** calls `apply-template` → `PlanTemplate::Custom` replaces adjustments with `[]` — no visible change when already empty.
+3. **First-run CTA gap:** `empty` branch only offers **Create from Leasing template** — operator cannot reach "Start empty and add lines" without an existing plan.
+
+**Sub-defect AE — compare illogical sums (root causes):**
+
+1. **Metric definition bug:** `repository.rs` `version_metrics` sums `plan_daily_cashflow.planned_net` values for the month — includes US-0002 forecast baseline, not overlay-only delta (`project.rs`: `planned_net = baseline_net + overlay_delta`).
+2. **Same bug in-memory path:** `service.rs` `project_adjustments_in_memory` filters `p.planned_net` for monthly sum — identical semantic mismatch.
+3. **Empty-plan guard absent:** zero adjustments still produce large negative totals from baseline forecast (operator **-127489.44** / **-4042.41**).
+
+**Sub-defect AF — plan-vs-actual 404 (root causes):**
+
+1. **404 on no active plan:** `plan_vs_actual` → `PlanError::NoActivePlan` → `plan_error_status` returns **404** `{ "error": "no_active_plan" }`.
+2. **No auto-activate:** `create_plan` inserts `is_active = false`; operator must click **Set active** — easy to miss on first visit.
+3. **Frontend silent failure:** `pvaQuery` enabled on tab switch only; no `retry: false` error UI or guided empty-state (contrast `risk-score` **200** `no_score` pattern).
+
+**Discovery decomposition evidence:**
+
+| Evaluator | Result |
+|-----------|--------|
+| Feature/workflow count | 3 sub-defects AD/AE/AF; shared `/planning` page, distinct layers (UI wiring, compare math, API contract) |
+| Cross-cutting | `PlanningPage.tsx`, plans API, Plan Engine compare + plan-vs-actual |
+| Acceptance breadth | AD/AE/AF unchanged; code audit confirms intake failure modes |
+| Risk | AE metric fix may change compare semantics for non-empty plans — research must lock delta definition |
+
+**Recommended next phase:** `/research` (compare delta contract; plan-vs-actual empty-state JSON shape; first-run activate/create UX).
+
+#### Research resolution (2026-06-08) — [R-0070](docs/engineering/research.md#r-0070--bug-0011-planning-mode-compare-delta-empty-state-api-first-run-ux)
+
+| Question | Resolution |
+|----------|------------|
+| Compare delta semantics | Overlay-only sum via `build_overlay_deltas`; zero adjustments → **0.00** (**DEC-0073**) |
+| PVA empty contract | HTTP **200** tagged `{ status: "no_active_plan" }` — mirror risk-score (**DEC-0074**) |
+| First-run UX | Inline add form + Create empty plan (`POST template=custom`); no auto-activate |
+| Grafana scope | Dashboard 3 unchanged — compare fix is `/compare` + React Compare tab only (**R-0020**) |
+| Regression | OIDC `/planning` three-tab smoke mandatory |
+
+**Architecture:** `docs/engineering/architecture.md` § **BUG-0011**; **DEC-0073**, **DEC-0074**.
+
+#### Sprint plan (2026-06-08 — `sprint-plan-20260608-q0019-bug0011`)
+
+**Quick sprint:** **Q0019** — 11 tasks (~20h); no split (< `SPRINT_MAX_TASKS` 12).  
+**quick_task_id:** Q0019  
+**sprint_id:** Q0019
+
+| Order | Task | Acceptance hook |
+|-------|------|-----------------|
+| 1 | **AE1** — Overlay delta helper | **AE** |
+| 2 | **AE2** — Wire repository + service compare paths | **AE** |
+| 3 | **AE3** — Compare metric unit tests | **AE** |
+| 4 | **AF1** — Tagged PVA API 200 `no_active_plan` | **AF** |
+| 5 | **AF2** — PVA guided empty state | **AF** |
+| 6 | **AD1** — First-run Create empty plan | **AD** |
+| 7 | **AD2** — Inline add/edit adjustment form | **AD** |
+| 8 | **AD3** — Custom Apply toast + invalidation | **AD** |
+| 9 | **AD4** — Compare footnote + Set active banner | **AD**, **AE** |
+| 10 | **T1** — Compare + PVA integration tests | **AD/AE/AF** |
+| 11 | **V1** — verify-work OIDC `/planning` smoke | footer |
+
+**Sequencing:** AE-before-AF frozen; AD after AF1 API contract.  
+**Artifacts:** `sprints/quick/Q0019/*`, `handoffs/tl_to_dev.md` (`sprint-plan-20260608-q0019-bug0011`)
+
+**Recommended next phase:** `/plan-verify`
+
+#### Release closure (2026-06-08 — Q0019 / `auto-20260608-bug0011-001`)
+
+- **Status:** DONE
+- **Quick task:** Q0019
+- **Acceptance:** AD/AE/AF checked (`docs/product/acceptance.md`)
+- **Release notes:** `handoffs/releases/Q0019-release-notes.md`
+- **Decisions:** DEC-0073 (AE overlay-only compare), DEC-0074 (AF PVA 200 no_active_plan)
+- **Operator follow-up:** **BACKEND_FRONTEND_DEPLOY** then omniflow smoke AD/AE/AF per `sprints/quick/Q0019/uat.md`
 
 #### Out of scope
 
@@ -1086,8 +1236,6 @@ Priority: P1
 **Alternatives considered:** treat 404 as documented empty-state only — rejected (operator reports non-functional mode); US-only — rejected (defect-shaped clicks and wrong sums).
 
 **Related work:** US-0004 DONE; BUG-0004 out-of-scope 404 note superseded by operator report; **US-0014** OPEN (epic UX).
-
-**Recommended next phase:** `/discovery` (create-plan API trace; compare math guards; plan-vs-actual empty-state contract).
 
 ---
 
@@ -1220,6 +1368,361 @@ Priority: P1
 **Artifacts:** `sprints/quick/Q0014/*`, `handoffs/tl_to_dev.md` (`sprint-plan-20260605-q0014-bug0012`)
 
 **Recommended next phase:** `/plan-verify` on **Q0014** → `/execute`
+
+---
+
+### BUG-0013 — Omniflow analytics regression cluster (Grafana zeros, crypto, budgets)
+
+Status: DONE
+Priority: P0
+
+**environment:** US-0010 external Compose profile on `financegnome.omniflow.cc`; post-**US-0015** release (`0.16.0-us0015`, S0016); operator may still need **BACKEND_FRONTEND_DEPLOY** + Full Firefly sync + forecast recompute before smoke. Firefly sync **922+ transactions**; 3 asset accounts. Operator report 2026-06-06. Do not read `.env` / `.env_prod` secrets.
+
+**steps_to_reproduce:**
+
+1. **Defect AI (cashflow + forecast scarcity empty):** Open `/analytics/cashflow` and `/analytics/forecast-horizons`. **Balance forecast with scarcity threshold** chart empty or flat zero; forecast-horizons panels show **0 €** despite funded Giro account (114).
+2. **Defect AJ (subscriptions price changes):** Open `/analytics/subscriptions` → **Price changes (90 days)** panel → **No data** when operator expects subscription amount changes.
+3. **Defect AK (portfolio crypto/FX/performance):** Open `/analytics/portfolio`. **Crypto value** shows **€0**; **FX incomplete** warning; **performance total return %** → **No data**; mixed-currency warning present.
+4. **Defect AL (budgets MTD implausible):** Open `/analytics/budgets`. **Planned MTD −€150K**, **Actual €0**, **Deviation €150K** — operator cannot interpret panel; sums appear wrong vs active plan.
+5. **Defect AM (Grafana fetch failures):** Browser console on analytics routes: `handleAnnotationQueryRunnerError TypeError: Failed to fetch` on Grafana `ds/query` or annotation proxy (in-scope). _(MetaMask `contentscript.js` MaxListenersExceededWarning / ObjectMultiplex — **out of scope**, extension noise.)_
+6. **Defect AN (crypto not parsed):** After exchange sync with read-only keys configured, crypto holdings do not appear in wealth/portfolio totals — operator sees no crypto value anywhere in analytics.
+
+**expected:**
+
+- **AI:** Cashflow scarcity-threshold chart and forecast-horizons baseline panels show **non-empty signed balances** for representative funded account after sync+recompute — not persistent zeros post-BUG-0009/0010 fixes.
+- **AJ:** Subscriptions price-changes panel shows rows when confirmed subscriptions had amount changes in the last 90 days, or documented empty-state when none exist.
+- **AK:** Portfolio crypto stat reflects combined exchange holdings when sync populated positions; FX warning only when pricing gaps remain with documented partial totals; performance return % populated when snapshot history exists.
+- **AL:** Budgets MTD plan/actual/deviation rows are **plausible** for active plan currency and period — not unexplained **−€150K** planned with **€0** actual unless plan truly defines that magnitude.
+- **AM:** `POST /analytics/grafana/api/ds/query` and annotation queries return **200** without browser **Failed to fetch** on omniflow external profile.
+- **AN:** Exchange crypto balances flow into `net_worth_snapshots` / portfolio panels when Bitunix (or configured venue) sync succeeds — not permanently **€0** when operator has spot/futures exposure per BUG-0005 contract.
+
+**actual:**
+
+- **AI:** Empty scarcity chart; forecast panels **0 €**; seasonal panel shows **ML unavailable** (may be acceptable when ML off — baseline must still be non-zero).
+- **AJ:** Price changes (90d) → **No data**.
+- **AK:** Crypto **€0**; FX incomplete; performance **No data**.
+- **AL:** Planned MTD **−€150K**, Actual **€0**, Deviation **€150K** — operator reports panel is unclear and sums wrong.
+- **AM:** `handleAnnotationQueryRunnerError` **Failed to fetch** in Grafana query path.
+- **AN:** Crypto generally not parsed — no visible value in portfolio/wealth analytics.
+
+**evidence_refs:** operator report 2026-06-06; `handoffs/intake_evidence/intake-20260606-omniflow-regression-readme.json`; post-BUG-0009 Y/Z DONE; post-BUG-0010 AA/AB DONE; post-US-0015 release S0016; [R-0076](docs/engineering/research.md#r-0076--omniflow-analytics-regression-hypotheses-post-us-0015)
+
+#### Sub-defect hypothesis table (intake — validate in discovery)
+
+| Symptom | Prior art | Discovery hypothesis |
+|---------|-----------|---------------------|
+| Failed to fetch | BUG-0001/0003 | Grafana proxy, auth middleware, `DATABASE_HOST`, container not recreated post-deploy |
+| Forecast 0 € | BUG-0010 L3 | `starting_balance` NULL → 0; needs re-smoke after US-0015 deploy + recompute |
+| Crypto €0 | BUG-0005 O | Futures vs spot; exchange sync phase skipped or pricing gap |
+| FX incomplete | wealth/FX service | Missing FX rates for crypto asset codes |
+| Budget MTD −150K | budgets dashboard SQL | Plan vs actual join bug, wrong currency, or MTD window |
+| Cashflow empty | BUG-0009 Y1 | Default `$account_id` regression or zero-balance account default |
+
+#### Discovery notes (2026-06-08 — `discovery-20260608-bug0013`)
+
+**Probe environment:** `https://financegnome.omniflow.cc` public curl (no secrets). Post-US-0015 release (`0.16.0-us0015`, S0016); latest sync **success** `2026-06-06T18:29:40Z` (`manual_exchanges`); prior Full run **success** `2026-06-06T18:16:31Z` (forecast recompute `18:16:58Z`, baseline). 922+ transactions; 3 asset accounts (114 Giro **−3395.75**, 115/116 **0.00**). Research: [R-0076](docs/engineering/research.md#r-0076--omniflow-analytics-regression-hypotheses-post-us-0015).
+
+| Sub-defect | Verdict | Root cause (confirmed / refuted) | Live evidence |
+|------------|---------|----------------------------------|---------------|
+| **AI** | **REFUTED (ops/stale)** | **Not a post-US-0015 code regression on baseline panels.** BUG-0009 **Y1** fix live: `$account_id` default **114** (max ABS balance). Account **114** `forecast_balance_daily` cnt=**731**, min=**−141733.35**, max=**−3395.75**; scarcity series non-zero (e.g. **−3395.75** today). Account **116** still flat **0** if manually selected. ML panels empty by design (no `ml_enhanced` computation). Operator zeros likely **pre-recompute** or **ML-only panels** — not missing starting_balance. | `POST /analytics/grafana/api/ds/query` **200**; variable query → 114 first; acct **114** tomorrow stat **−3563.93**; acct **116** all **0**; latest baseline computation `2026-06-06T18:16:58Z` |
+| **AJ** | **REFUTED (expected empty)** | Panel SQL correct. **0** `price_increase`/`price_decrease` events in 90d; **54** `billing` events only. Confirmed subscriptions exist but no material price-change events per DEC-0017 thresholds. | price-change COUNT=**0**; patterns confirmed/pending present |
+| **AK** | **CONFIRMED (pricing pipeline)** | **7** Bitunix **linear** holdings synced (`INJUSDT`, `SOLUSDT`, …) but **`market_value_eur` NULL** on all rows → crypto stat **€0**. `fx.to_eur` keys on base asset; holdings store **full symbol** as `asset` → `Unpriced`. Snapshot `fx_incomplete=false` but `holdings_top` empty. **Performance %** NULL — only **3** snapshots, no return baseline. Mixed-currency panel shows single-currency OK. | `GET /api/v1/wealth` crypto subtotal **0**, holdings_count **7**; snapshot crypto **0**; `total_return_pct` **NULL** |
+| **AL** | **CONFIRMED (SQL semantics)** | **MTD planned sums entire future plan horizon**, not month-to-date. `budgets.json` panel id **5** filter `pdc.ts >= date_trunc('month', CURRENT_DATE)` lacks upper bound `<= CURRENT_DATE` → **730** days summed → **−150337.6**. Correct capped MTD **0** (plan starts **2026-06-07**, today **2026-06-06**; no plan days elapsed). Actual MTD **€0** correct (0 June non-transfer txs). | broken MTD **−150337.6** / actual **0** / deviation **150337.6**; broken day-count **730** vs correct **0** |
+| **AM** | **NOT REPRODUCED (deferred)** | **Not a transport regression via curl.** Grafana health **200**; `POST …/api/ds/query` **200**; `GET …/api/annotations` **200**; hashed JS/CSS assets **200**; `<base href="/analytics/grafana/">` present. Browser **Failed to fetch** may be intermittent **WebSocket live**, embed session, or operator-side network — needs authenticated browser repro. MetaMask contentscript **out of scope**. | ds/query + annotations **200**; `app.*.js` **200**; ws without upgrade **400** (expected) |
+| **AN** | **CONFIRMED (same as AK)** | Exchange sync **succeeds** (Bitunix **connected**, 7 positions) but **pricing/valuation phase** does not populate EUR columns. `upsert_holdings` stores qty+payload only; `recompute_pnl` skips unpriced symbols. **Not** missing sync — **parse/price gap** for linear futures symbols (BUG-0005 residual on omniflow). | holdings: 7 rows, all `product_type=linear`, all `market_value_eur` **NULL**; last sync `18:29:40Z` |
+
+**Isolation vs US-0015:** Forecast monthly API non-zero buckets post-deploy (`/api/v1/forecast/monthly?account_id=114` income/fixed populated; `ai_mapped=true`). Cluster is **multi-factor**: one **confirmed SQL bug (AL)**, one **confirmed crypto pricing gap (AK/AN)**, remainder **ops/expected-empty/not-reproduced** — **not** a single US-0015 regression.
+
+**Operator gates (before code sprint):**
+
+1. **Full Firefly sync** (not exchanges-only) if operator has not run since US-0015 deploy — confirms forecast/subscription mirror freshness.
+2. **Forecast recompute** — baseline panels already non-zero post `18:16:58Z` Full run; re-smoke cashflow/forecast-horizons with `$account_id=114`.
+3. **Exchanges-only sync insufficient** for wealth snapshot refresh when no prior forecast_id path — prefer **Full sync** after deploy.
+
+#### Fix tasks (discovery decomposition)
+
+| ID | Sub-defect | Task | Primary files / surface |
+|----|------------|------|-------------------------|
+| **AL1** | AL | MTD summary SQL: add `AND pdc.ts::date <= CURRENT_DATE` (and mirror in deviation joins if needed); add panel footnote when plan horizon starts mid-month | `grafana/provisioning/dashboards/analytics/budgets.json` |
+| **AN1** | AN/AK | Linear futures valuation: map symbol→base asset for FX **or** persist exchange notional/`unrealized_pnl` from Bitunix payload on upsert; ensure `recompute_pnl` updates `market_value_eur` | `backend/src/exchanges/bitunix.rs`, `backend/src/portfolio/pnl.rs`, `backend/src/exchanges/repository.rs` |
+| **AK2** | AK | Portfolio performance panel: document min snapshot count empty-state; optional seed from first priced crypto sync | `grafana/provisioning/dashboards/analytics/portfolio.json`, wealth snapshot job |
+| **AJ1** | AJ | Subscriptions price-changes empty-state copy when 0 events (optional UX — not defect if no changes) | `grafana/provisioning/dashboards/analytics/subscriptions.json` |
+| **AM1** | AM | Research: browser repro for annotation/live WS failures on embed shell; compare Traefik vs same-origin paths | `/research` phase — defer execute |
+| **V1** | all | verify-work omniflow smoke post AL1+AN1 deploy + Full sync | acceptance AI–AN |
+
+**Architecture:** [docs/engineering/architecture.md § BUG-0013](../engineering/architecture.md#bug-0013--omniflow-analytics-regression-cluster-budgets-mtd-crypto-pricing) — **DEC-0079** (AL1 MTD SQL), **DEC-0080** (AN1 wallet parse + linear unrealized EUR); execute **AL1**, **AN1**, **V1**; AM waived per R-0077
+
+#### Sprint plan (2026-06-08 — `sprint-plan-20260608-q0020-bug0013`)
+
+**Quick sprint:** **Q0020** — 5 tasks (~8h); 3 mandatory + 2 optional P2; no split (< `SPRINT_MAX_TASKS` 12).  
+**quick_task_id:** Q0020  
+**sprint_id:** Q0020
+
+| Order | Task | Acceptance hook | Priority |
+|-------|------|-----------------|----------|
+| 1 | **AL1** — MTD planned `<= CURRENT_DATE` + optional footnote | **AL** | P0 |
+| 2 | **AN1** — Wallet parse + linear unrealized EUR + tests | **AN**, **AK** | P0 |
+| 3 | **AJ1** — Price-changes empty-state copy | **AJ** | P2 optional |
+| 4 | **AK2** — Performance % min-snapshot footnote | **AK** | P2 optional |
+| 5 | **V1** — verify-work omniflow smoke | **AI**–**AN** | P0 |
+
+**Sequencing:** AL1 ∥ AN1 parallel; operator gates (deploy, Grafana reload, Full sync) before V1.  
+**Artifacts:** `sprints/quick/Q0020/*`, `handoffs/tl_to_dev.md` (`sprint-plan-20260608-q0020-bug0013`)
+
+**Recommended next phase:** `/plan-verify`
+
+#### Out of scope
+
+- MetaMask / browser extension `contentscript.js` console warnings
+- US-0013 ML overlay production enablement (honest ML-unavailable banner acceptable when ML off)
+- Greenfield README creation (**US-0016** DONE)
+
+#### Intake evidence (BUG-0013)
+
+- `intake_run_id`: `intake-20260606-omniflow-regression-readme`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug` (paired with **US-0017** story in same intake run)
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: `(none)`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260606-omniflow-regression-readme.json`
+- Research: [R-0076](docs/engineering/research.md#r-0076--omniflow-analytics-regression-hypotheses-post-us-0015)
+
+#### Intake decomposition (2026-06-06)
+
+| Evaluator | Result |
+|-----------|--------|
+| Feature/workflow count | 6 sub-defects (AI–AN) + operator crypto call-out |
+| Cross-cutting | Grafana SQL, wealth/FX, exchange sync, forecast engine, budgets SQL, analytics proxy |
+| Acceptance breadth | 6 sub-rows AI–AN |
+| Risk | Post-US-0015 deploy smoke gap; possible multi-factor regression vs single root cause |
+
+**Alternatives considered:** reopen BUG-0009 — rejected (DONE Q0016; no closure-evidence); reopen BUG-0010 — rejected (DONE Q0013; distinct post-release cluster); merge into US-0017 — rejected (independent user value).
+
+**Related work:** BUG-0009 DONE (panel defaults); BUG-0010 DONE (baseline balances); BUG-0005 DONE (futures ingest); US-0015 DONE (bucket mapping — may need sync+recompute); US-0013 OPEN (ML overlay).
+
+**Recommended next phase:** `/sprint-plan`
+
+---
+
+### BUG-0014 — Post-rebuild omniflow cluster (ML sidecar, crypto display, Grafana zeros, planning delete)
+
+Status: DONE
+Priority: P0
+
+**environment:** US-0010 external Compose profile on `financegnome.omniflow.cc`; operator rebuilt `flow-finance-ai` + `grafana` 2026-06-07; operator `.env` sets `FORECAST_ML_ENABLED=true`, `STATS_FORECAST_URL=http://stats-forecast:8090`, `BITUNIX_ENABLED_FUTURES=true`, Grafana embed vars per DEC-0057. Post-**BUG-0013** Q0020 / **US-0013** Q0014 releases. Do not read `.env` / `.env_prod` secrets.
+
+**steps_to_reproduce:**
+
+1. **Defect AO (ML still disabled):** Set `FORECAST_ML_ENABLED=true` and `STATS_FORECAST_URL=http://stats-forecast:8090` in operator env; rebuild external profile. Open Forecast UI or `/analytics/forecast-horizons`. Banner: **"ML forecast not enabled on this deployment… Enable ML-enhanced projections via US-0013"** or equivalent skip copy. `GET /api/v1/forecast/meta` → `ml_status: skipped`, `ml_skipped_reason: sidecar_unavailable`, `ml_computation_id: null`.
+2. **Defect AP (crypto portfolio €0):** With Bitunix connected and exchange sync success, Wealth **Crypto** tab and portfolio Grafana panels show **€0** crypto subtotal while exchange summary shows **holdings count 7** (operator: *"exchange bitunix 7 don't know what it means"*). `GET /api/v1/wealth` → `crypto.subtotal_eur: 0`, `holdings_top: []` despite `pnl.unrealized_eur` non-zero when linear positions priced.
+3. **Defect AQ (FX incomplete / native currency):** Crypto surfaces show **"FX incomplete: one or more crypto assets could not be priced in EUR"** (Wealth tab and/or portfolio forecast warning) while operator expects **native asset amounts** displayed with **EUR valuation at sync/display time** via public FX or connected CEX (USDT→fiat) pricing — not empty portfolio cards.
+4. **Defect AR (Grafana cashflow zeros):** Open `/analytics/cashflow`. **Balance forecast with scarcity threshold** flat at **0**; **Recent daily forecast balances** table shows **balance 0** for current dates; monthly decomposition may show income without costs — operator reports *"Grafana is still missing data"* (screenshot 2026-06-07).
+5. **Defect AS (planning delete / limited targets):** Open `/planning`. Operator cannot **delete** unwanted plans from UI (only adjustment delete exists); adjustment **target type** limited to **household / subscription / account** feels unintuitive; flows remain confusing post-**US-0014** — operator reports *"can't delete set up plans"* and *"why only 3 categories?"*.
+6. **Defect AT (operator gate gap):** Rebuild command recreates `flow-finance-ai` + `grafana` only — **`stats-forecast` container not started** even though external overlay defines `stats-forecast` with `profiles: [external]` per **US-0013** / **DEC-0076**.
+
+**expected:**
+
+- **AO:** When `FORECAST_ML_ENABLED=true` and sidecar healthy on external profile, ML overlay runs after Full sync + recompute (`ml_computation_id` set) or UI shows accurate **sidecar unreachable** ops guidance with compose service name — not permanent **US-0013 not enabled** copy when env opts in.
+- **AP:** Wealth crypto subtotal, exchange cards, and `holdings_top` reflect Bitunix futures wallet equity + priced exposure per **DEC-0080** / **DEC-0064** — not **€0** with **7** holdings when unrealized/wallet equity exists.
+- **AQ:** Operator sees **native quantities** (USDT, contract symbols) where applicable and **EUR equivalents** from CEX or public FX at valuation time; **FX incomplete** banner only when assets truly lack price — with listed `unpriced_assets` or documented partial totals.
+- **AR:** Cashflow Grafana panels show **non-zero signed balances** for funded account **114** (default `$account_id`) after Full sync + forecast recompute — not persistent flat **0** when API forecast series non-zero.
+- **AS:** Operator can **delete** a plan from `/planning` (or documented archive flow); target-type UX documented or expanded beyond three enums if product requires; no silent failures on plan mutations.
+- **AT:** External profile `docker compose up` documentation/runbook includes **`stats-forecast`** alongside app + Grafana when ML enabled; operator rebuild smoke starts all three services.
+
+**actual:**
+
+- **AO:** `FORECAST_ML_ENABLED=true` in running container; **no** `stats-forecast` container (`docker ps` empty); `forecast/meta` → `ml_skipped_reason: sidecar_unavailable`; UI shows ML-not-enabled banner.
+- **AP:** `GET /api/v1/wealth` → `crypto.subtotal_eur: 0`, Bitunix `holdings_count: 7`, `holdings_top: []`, `pnl.unrealized_eur: 411.74` (live probe 2026-06-07).
+- **AQ:** Operator sees FX incomplete copy on crypto surfaces; native-currency + point-in-time EUR display not met for futures/linear symbols.
+- **AR:** Screenshot: cashflow chart and daily balance table **0** for June 2028 window; monthly income **3266** without aligned costs/balances — operator perceives missing data.
+- **AS:** `DELETE /api/v1/plans/:id` exists in backend; **no** delete-plan control in `PlanningPage.tsx`; adjustment form offers only **household / subscription / account**.
+- **AT:** Prior rebuild recreated **two** services only; sidecar never brought up despite **US-0013** external overlay.
+
+**evidence_refs:** operator report 2026-06-07; screenshot cashflow zeros; `handoffs/intake_evidence/intake-20260607-post-rebuild-omniflow.json`; live probes `forecast/meta`, `GET /api/v1/wealth`; [R-0079](docs/engineering/research.md#r-0079--bug-0014-post-rebuild-omniflow-ml-sidecar-crypto-display-grafana-planning); post-**BUG-0013** Q0020; post-**US-0013** S0014; post-**US-0014** S0015
+
+#### Sub-defect hypothesis table (discovery verdicts — 2026-06-09)
+
+| ID | Intake hypothesis | Discovery verdict | Root cause | Boundary | Next |
+|----|-------------------|-------------------|------------|----------|------|
+| **AO** | Sidecar not in compose set | **CONFIRMED (ops)** | `FORECAST_ML_ENABLED=true` but `stats-forecast` container absent → `ml_skipped_reason: sidecar_unavailable` | Ops gate — not US-0013 code gap | Start sidecar + Full sync; improve Grafana static ML banner copy (research) |
+| **AT** | Operator `up` omits third service | **CONFIRMED (ops)** | Rebuild scoped to `flow-finance-ai` + `grafana` only; `docker-compose.external.yml` defines `stats-forecast` `profiles: [external]` | Ops/runbook — [US-0013](docs/user-guides/US-0013.md) documents three services | Runbook/README rebuild smoke (research) |
+| **AP** | Wallet/subtotal gap post-DEC-0080 | **CONFIRMED (code residual)** | `crypto.subtotal_eur` sums `market_value_eur` only; linear rows excluded per **DEC-0064**/**DEC-0080**; live probe: `unrealized_eur: 411.74` but `subtotal_eur: 0`, `holdings_top: []`, `holdings_count: 7` — wallet row not surfacing in wealth aggregation or Q0020 image not on rebuilt host | Code — wealth `build_breakdown` + wallet `market_value_eur` persistence | **AP1** research: verify deploy tag + DB wallet row; subtotal vs unrealized display contract |
+| **AQ** | FX + native currency | **CONFIRMED (product gap)** | `wealth/service.rs` never populates `unpriced_assets` (always `[]`) → wealth `fx_incomplete: false` while crypto tab `portfolioForecast.fx_incomplete_warning` may still fire; holdings table driven by `holdings_top` (priced rows only) — operator sees count **7** but empty table, no native+EUR pairs | Code + UX — separate from ops | **AQ1** research: wire unpriced list; native qty + EUR column for all holdings; banner gating |
+| **AR** | Grafana cashflow zeros | **LIKELY (ops/stale)** — code regression **not confirmed** | `cashflow.json` SQL unchanged; **BUG-0013 AI** refuted for acct **114** after Full sync + recompute; operator screenshot (June 2028 window) suggests wrong time range or unfunded `$account_id` — monthly income **3266** without aligned balances points to stale/mismatched account not panel SQL | Data/account — re-verify before code | Operator smoke acct **114** + Full sync + recompute; **AR1** only if API non-zero but Grafana zero |
+| **AS** | Plan delete UI missing | **CONFIRMED (UI gap)** | `DELETE /api/v1/plans/:id` wired in backend; `PlanningPage.tsx` has adjustment delete only — no plan delete mutation/control | Code — React UX; out of **US-0014** scope | **AS1** delete plan with confirmation; **AS2** target-type help copy (enum frozen unless DEC) |
+
+**Discovery boundary split (mandatory):**
+
+| Class | Sub-defects | Action |
+|-------|-------------|--------|
+| **Ops gate** | AO, AT | `compose up` includes `stats-forecast`; Full sync + forecast recompute before attributing ML/crypto/Grafana symptoms to code |
+| **Code gaps** | AP, AQ, AS | Execute after research contracts; AP may need deploy verification gate first |
+| **Data/account** | AR | Operator re-smoke acct **114**; defer code unless API/Grafana divergence proven |
+
+**Operator gates (mandatory before sprint):**
+
+1. **BACKEND_FRONTEND_DEPLOY** — confirm Q0020 (`DEC-0080`) image on host rebuilt 2026-06-07.
+2. **Start `stats-forecast`** on external profile when `FORECAST_ML_ENABLED=true`.
+3. **Full Firefly sync** — not exchanges-only.
+4. **Forecast recompute** — baseline panels on acct **114**.
+
+**Quick sprint:** **Q0022** — 8 tasks (~14h); 5 mandatory P0 + AS2 P1 optional + AP2/AR1 conditional; no split (< `SPRINT_MAX_TASKS` 12).  
+**quick_task_id:** Q0022  
+**sprint_id:** Q0022
+
+| Order | Task | Acceptance hook | Priority |
+|-------|------|-----------------|----------|
+| 1 | **AO1** — Grafana panel 13 dual-scenario ML copy | **AO** | P0 |
+| 2 | **AQ1** — holdings_all + unpriced_assets / fx_incomplete | **AQ** | P0 |
+| 3 | **AQ2** — WealthPage native+EUR + unified FX banner | **AQ** | P0 |
+| 4 | **AS1** — Delete plan UI + active 409 guard | **AS** | P0 |
+| 5 | **AS2** — target_type select + help copy | **AS** | P1 optional |
+| 6 | **AP2** — Defensive subtotal + count annotation | **AP** | P0 conditional (AP1 gate) |
+| 7 | **AR1** — Cashflow Grafana variable fix | **AR** | P2 conditional (V1 AR gate) |
+| 8 | **V1** — verify-work omniflow smoke | **AO**–**AT** | P0 |
+
+**Recommended next phase:** `/plan-verify`
+
+#### Discovery evidence (2026-06-09)
+
+- `orchestrator_run_id`: `auto-20260607-bug0014-001`
+- `phase_id`: discovery
+- Code audit: `docker-compose.external.yml`, `backend/src/wealth/service.rs`, `backend/src/portfolio/pnl.rs`, `backend/src/exchanges/bitunix.rs`, `frontend/src/pages/PlanningPage.tsx`, `grafana/provisioning/dashboards/analytics/cashflow.json`, `grafana/provisioning/dashboards/analytics/forecast-horizons.json`
+- Intake probes: `handoffs/intake_evidence/intake-20260607-post-rebuild-omniflow.json`
+- Prior art: **BUG-0013** discovery (AI refuted), **DEC-0080**, **US-0013**/**DEC-0076**, **US-0014**
+
+#### Intake decomposition (2026-06-07)
+
+| Evaluator | Result |
+|-----------|--------|
+| Feature/workflow count | 6 sub-defects (AO–AT) |
+| Cross-cutting | Compose external profile, ML sidecar, wealth/FX pricing, Grafana cashflow SQL, planning React UX |
+| Acceptance breadth | 6 sub-rows AO–AT |
+| Risk | Mix of ops gate (AO/AT) and residual code gaps (AP/AQ/AR/AS) |
+
+**Alternatives considered:** reopen **BUG-0013** — rejected (DONE Q0020; operator post-rebuild residual); merge into **US-0013** — rejected (epic DONE; runtime deployment gap); single story for native currency — deferred to discovery under **AQ**.
+
+**Related work:** **BUG-0013** DONE (DEC-0079/0080); **US-0013** DONE (DEC-0076 sidecar on external); **US-0014** DONE (planning UX — delete plan out of scope); **BUG-0011** DONE.
+
+#### Intake evidence (BUG-0014)
+
+- `intake_run_id`: `intake-20260607-post-rebuild-omniflow`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: `(none)`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260607-post-rebuild-omniflow.json`
+- Research: [R-0079](docs/engineering/research.md#r-0079--bug-0014-post-rebuild-omniflow-ml-sidecar-crypto-display-grafana-planning)
+
+---
+
+### BUG-0015 — Confirmed subscriptions reappear as pending after rebuild
+
+Status: DONE
+Priority: P1
+
+**environment:** US-0010 external Compose profile on `financegnome.omniflow.cc`; operator rebuilt containers 2026-06-07 (related to **BUG-0014** work); postgres expected to persist on external volume across app/grafana rebuild. Operator previously confirmed subscriptions including **CURSOR, AI POWERED IDE, CURSOR.COM** (95%, Monthly · €17.18) and **APPLE.COM/BILL, ITUNES.COM** (60%, Monthly · €9.99). Do not read `.env` / `.env_prod` secrets.
+
+**steps_to_reproduce:**
+
+1. On omniflow external profile, confirm subscription patterns for recurring merchants (e.g. Cursor, Apple) via `/subscriptions` Confirm action.
+2. Rebuild application containers (`flow-finance-ai` and/or related services per operator rebuild scope from **BUG-0014**).
+3. Start stack; allow or trigger **Full Firefly sync** and subscription detection phase.
+4. Open `/subscriptions` → **Pending review** tab (or **All**).
+
+**expected:**
+
+- Previously **confirmed** patterns remain `status=confirmed` in API and UI — no Confirm/Reject cards for Cursor or Apple.
+- Post-sync detection **skips** groups whose fingerprint is in the confirmed set (`load_confirmed_fingerprints` / `upsert_pending_pattern` status preservation).
+- Subscription-scoped alert unread count reconciles with visible pending list — no orphan `new_detection` alerts forcing re-review of confirmed merchants.
+
+**actual:**
+
+- Operator reports confirmed subscriptions **reappearing** with **Confirm/Reject** buttons after rebuild and container start.
+- Examples: **CURSOR, AI POWERED IDE, CURSOR.COM** — 95%, Monthly · €17.18; **APPLE.COM/BILL, ITUNES.COM** — 60%, Monthly · €9.99.
+- Symptom surfaced post-rebuild on `financegnome.omniflow.cc` external profile.
+
+**evidence_refs:** operator report 2026-06-07; `handoffs/intake_evidence/intake-20260607-subscription-reconfirm.json`; code context `backend/src/subscriptions/repository.rs`, `detection.rs`; prior **BUG-0004** (empty subscriptions), **BUG-0008** (alert vs list mismatch); post-**BUG-0014** rebuild; [R-0081](docs/engineering/research.md#r-0081--bug-0015-confirmed-subscription-reconfirm-after-rebuild)
+
+#### Sub-defect hypothesis table (discovery verdicts — 2026-06-07)
+
+| ID | Intake hypothesis | Maps to AC | Discovery verdict | Root cause | Boundary | Next |
+|----|-------------------|------------|-------------------|------------|----------|------|
+| **H1** | **Fingerprint drift** | AU, AV | **LIKELY PRIMARY (code-confirmed)** | `compute_fingerprint(payee_key, interval_days, median_amount)` hashes all three (`detect.rs` L45–49). `upsert_pending_pattern` preserves `confirmed`/`rejected` **only on same fingerprint** (`repository.rs` L144–147). Post-rebuild Full sync re-groups txs via `extract_payee_source` → `payee_key` (`group.rs` L30–43) and recomputes `median_amount` from recent 6 txs (`detect.rs` L95–97) — any drift yields **new** pending INSERT while prior confirmed row remains on **old** fingerprint. Cursor/Apple long display names are consistent with payee-normalization variance, not DB wipe. | **Code** — fingerprint / merchant-identity contract | **Research:** payee-level confirm inheritance vs stable fingerprint (exclude amount from hash); operator SQL probe to confirm duplicate rows |
+| **H2** | **DB ephemeral (ops)** | AU | **UNLIKELY sole cause** | US-0010 external profile binds `DATABASE_HOST=postgres` on traefik network (`docker-compose.external.yml`); **BUG-0014** rebuild scoped app/grafana — postgres not in compose set. Total volume loss would wipe **all** confirms, not merchant-specific re-prompts. Cannot fully refute without operator DB probe. | **Ops gate** — verify persistence | Operator SQL: `SELECT status, COUNT(*) FROM subscription_patterns GROUP BY status` immediately after rebuild **before** Full sync |
+| **H3** | **Alert/UI desync** | AW | **REFUTED as primary** | `/subscriptions` Confirm/Reject cards render only for `GET /api/v1/subscriptions?status=pending` rows (`SubscriptionsPage.tsx` L240–261) — not alert-driven. Symptom requires `status=pending` in DB. Post-**BUG-0008** `upsert_alert` dedupes unread by alert fingerprint (`repository.rs` L286–290) but **new** `pattern_id` from H1 drift still emits `new_detection`. H3 may contribute as **secondary** (banner noise) only. | Secondary — alert lifecycle if H1 fixed | AW satisfied when H1 fix prevents duplicate pending rows |
+| **H4** | **Detection re-run post-sync** | AV | **CONFIRMED mechanism, subsumed by H1** | Pipeline trace: `sync/mod.rs` L261–264 → `SubscriptionService::run_detection` loads `confirmed_fps` **before** emit (`service.rs` L40–44); `detection.rs` L43–44 skips exact fingerprint match. Re-run is **expected** after rebuild; skip logic works when fingerprint stable. Failure mode is fingerprint **change** on re-group (H1), not missing skip. | **Code** (same as H1) | No separate fix — address via H1 research |
+
+**Discovery verdict (summary):** H1 **LIKELY PRIMARY**; H2 **UNLIKELY sole** (ops verify gate); H3 **REFUTED primary**; H4 **subsumed by H1**. Recommended fix boundary: **code** (fingerprint stability or payee-level confirm propagation); **ops** pre-fix gate to rule out H2.
+
+**Discovery notes (2026-06-07 — `discovery-20260607-bug0015`, orchestrator `auto-20260607-bug0015-001`):**
+
+**Probe environment:** Code-path audit in isolated PO context; no `.env` / `.env_prod` secrets; operator omniflow report + intake evidence. Runtime DB probe **deferred to research** (operator gate).
+
+**Code anchors:**
+
+- Fingerprint: `backend/src/recurrence/detect.rs` `compute_fingerprint` — `payee_key:interval_days:rounded_amount`
+- Grouping: `backend/src/recurrence/group.rs` `extract_payee_source` — description priority (counterparty for transfer-shaped memos)
+- Normalize: `backend/src/recurrence/normalize.rs` `payee_key` — SEPA strip, trailing reference codes, legal suffix collapse
+- Preserve: `backend/src/subscriptions/repository.rs` `upsert_pending_pattern` ON CONFLICT status CASE
+- Skip: `backend/src/subscriptions/detection.rs` L42–44 `confirmed_fps.contains`
+- Orchestration: `backend/src/sync/mod.rs` subscriptions phase after successful Firefly sync
+
+**Recommended next phase:** `/research`
+
+#### Intake decomposition (2026-06-07)
+
+| Evaluator | Result |
+|-----------|--------|
+| Feature/workflow count | 1 operator workflow (rebuild → subscriptions review) |
+| Cross-cutting | Postgres persistence, fingerprint contract, detection pipeline, subscriptions UI, alert dedup |
+| Acceptance breadth | 3 AC rows (AU–AW) + 4 intake hypotheses (H1–H4) for discovery |
+| Risk | Data integrity + operator trust; may be ops (volume) or code (fingerprint drift) |
+
+**Alternatives considered:** reopen **BUG-0008** — rejected (DONE; distinct confirm-persistence-after-rebuild symptom); merge into **BUG-0014** — rejected (BUG-0014 DONE; independent US-0003 contract); split fingerprint vs DB into separate BUG ids — rejected (jointly testable on same rebuild smoke).
+
+**Related work:** **US-0003** (subscription confirm contract); **BUG-0008** DONE (alert vs list — coordinate AW hypothesis); **BUG-0014** DONE (operator rebuild context); **BUG-0004** DONE (detection baseline).
+
+#### Intake evidence (BUG-0015)
+
+- `intake_run_id`: `intake-20260607-subscription-reconfirm`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: `(none)`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260607-subscription-reconfirm.json`
+- Research: [R-0081](docs/engineering/research.md#r-0081--bug-0015-confirmed-subscription-reconfirm-after-rebuild)
+
+**Quick sprint:** **Q0023** — 5 tasks (~13h); all P0 mandatory; no split (< `SPRINT_MAX_TASKS` 12).  
+**quick_task_id:** Q0023  
+**sprint_id:** Q0023
+
+| Order | Task | Acceptance hook | Priority |
+|-------|------|-----------------|----------|
+| 1 | **AU1** — Card billing `payee_key` normalization | **AU**, **AV** | P0 |
+| 2 | **AU2** — Payee+interval maps + merge upsert + index | **AU**, **AV** | P0 |
+| 3 | **AU3** — Detection skip + merge path | **AU**, **AV**, **AW** | P0 |
+| 4 | **AU4** — Stale inactive by payee+interval | **AV** | P0 |
+| 5 | **V1** — verify-work rebuild smoke | **AU**–**AW** | P0 |
+
+**Operator gates (before V1):**
+
+1. **BACKEND_FRONTEND_DEPLOY** — ship Q0023 backend on omniflow.
+2. **POSTGRES_PERSISTENCE_PROBE** — H2 SQL on `subscription_patterns` after rebuild, before Full sync.
+3. **FULL_FIREFLY_SYNC** — Full sync + subscription detection phase.
+
+**Recommended next phase:** `/plan-verify`
+
+#### Sprint-plan evidence (2026-06-07)
+
+- `orchestrator_run_id`: `auto-20260607-bug0015-001`
+- `phase_id`: sprint-plan
+- Architecture: DEC-0084, DEC-0085, DEC-0086
+- Sprint artifacts: `sprints/quick/Q0023/`
+- Handoff: `handoffs/tl_to_dev.md` (`sprint-plan-20260607-q0023-bug0015`)
 
 ---
 
@@ -1887,50 +2390,101 @@ So that I do not run manual `CREATE DATABASE` SQL before `docker compose up`.
 
 ### US-0013 — Production ML forecast & wealth analytics hardening
 
-Status: OPEN
+Status: DONE
 Priority: P0
+**sprint_id:** S0014
+**released:** 2026-06-08 (`0.14.0-us0013`, S0014)
 
 As an operator on the omniflow production profile,
 I want ML-enhanced forecasting and wealth analytics to run reliably end-to-end,
-So that Forecast and Wealth pages deliver the full US-0009 capability—not baseline-only fallback with wrong numbers.
+So that Forecast and Wealth pages deliver the full US-0009 capability—not baseline-only fallback after BUG-0010 baseline fixes.
 
 #### Scope
 
-- In: StatsForecast/ML sidecar connectivity on US-0010 external profile (`docker-compose.external.yml` merge — not `full` profile only); `FORECAST_ML_ENABLED=true` on omniflow; sync ML phase gates; ML vs baseline compare in UI; wealth snapshot integration with ML overlay; operator-visible health/degraded-mode messaging (`sidecar_disabled` → healthy ML path); runbook for omniflow ML deps
-- Out: New model research beyond US-0009; raw transaction ML training on operator ledger
+- In: `stats-forecast` sidecar on US-0010 **external** profile (`docker-compose.external.yml` merge — today `profiles: [full]` only); `FORECAST_ML_ENABLED=true` + `[forecast_ml] enabled` on omniflow; sync `forecast_ml` phase gates (DEC-0052); `model_kind=ml_enhanced` overlay persistence (DEC-0050); React Compare + wealth ML overlay; Grafana `$forecast_variant=ml_enhanced` panels with data; operator runbook (health, min history, degraded-mode); CI sidecar fixture
+- Out: New model research beyond US-0009 (R-0043 ladder); raw transaction ML training; monthly bucket attribution (**BUG-0012** / **US-0015**); Grafana empty-state-only work (**BUG-0009** DONE — banner remains when ML off)
 
 #### Constraints
 
-- Defect fixes for wrong numbers and empty data remain **BUG-0010** (AA/AB/AC) — **DONE** Q0013; this story covers epic/production hardening
-- DEC-0007 baseline remains fallback when ML unavailable — must not produce misleading balances
-- Privacy and aggregate-only defaults unchanged
-- Monthly Income/Fixed bucket defects remain **BUG-0012** — separate from ML overlay
+- **BUG-0010** AA/AB/AC **DONE** Q0013 — baseline numbers prerequisite satisfied; US-0013 closes AC3 ML production path deferred from bug
+- DEC-0049 default-off preserved until operator explicitly enables — no silent ML on minimal/external without config
+- DEC-0052: ML failure must not fail sync; skip metadata per DEC-0066 when disabled
+- DEC-0007 baseline authoritative when ML unavailable — no misleading balances
+- `STATS_FORECAST_PORT=8091` on omniflow (host 8090 clash per US-0010 intake)
+- No host secrets read during intake/execute
 
-#### Operator confirmation (2026-06-05 intake bug)
+#### Intake decomposition (2026-06-08 re-intake)
 
-- Operator expects ML forecast on **external Compose profile** (`financegnome.omniflow.cc`), not baseline-only with `sidecar_disabled`
-- **Overlap decision:** no new BUG — AC3 already deferred here from BUG-0010; priority raised **P1→P0** per operator report
-- Current gap: `stats-forecast` service `profiles: [full]` only; `[forecast_ml] enabled = false` on external merge (DEC-0049)
-
-#### Intake decomposition
-
-- Split decision: **deferred epic from BUG-0010** (operator "implement fully" ML forecast)
-- Rationale: BUG-0010 captures production defects; US-0013 captures full ML pipeline + ops hardening if root cause is infra/feature-completion sized
-- Boundaries: BUG-0010 closes wrong -25365.78 and empty wealth; US-0013 closes ML production parity with US-0009 acceptance on omniflow
+- **Evaluator:** high breadth — compose + backend sync + API + React + Grafana + runbook + CI (5+ workflow steps, 4+ component surfaces)
+- **Split decision:** **single epic retained**; defer vertical slices to **`/sprint-plan`** (SPRINT_AUTO_SPLIT=1, SPRINT_MAX_TASKS=12)
+- **Recommended slices (sprint-plan, not new US IDs):**
+  - **US-0013-S1** — External compose + ML config enablement
+  - **US-0013-S2** — Sync ML pipeline + API persistence
+  - **US-0013-S3** — UI + Grafana ML parity
+  - **US-0013-S4** — Runbook + CI sidecar fixture
+- **Alternatives rejected:** split into US-0017..0020 now (breaks epic continuity); undifferentiated mega-sprint (exceeds task budget)
+- **Boundaries:** BUG-0010 closed baseline defects; US-0013 closes ML production parity with US-0009 on omniflow external profile
 
 #### Intake evidence
 
-- `intake_run_id`: `intake-20260605-forecast-wealth-ml`
-- `parent_bug`: BUG-0010
-- `operator_reconfirm_run_id`: `intake-20260605-forecast-monthly-buckets` (overlap note — ML issue 1 confirmed via BUG-0012 intake decomposition)
-- Evidence bundle: `handoffs/intake_evidence/intake-20260605-forecast-wealth-ml.json`
+- `intake_run_id`: `intake-20260608-us0013`
+- `orchestrator_run_id`: `auto-20260608-us0013-001`
+- `selected_pack`: `small-intake-pack`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: (none)
+- `assumptions_confirmed`: (none)
+- `prior_intake_ref`: `intake-20260605-forecast-wealth-ml` (BUG-0010 deferral origin)
+- Evidence bundle: `handoffs/intake_evidence/intake-20260608-us0013.json`
+- Research: [R-0071](docs/engineering/research.md#r-0071--us-0013-production-ml-enablement-on-omniflow-external-profile)
+
+#### Discovery notes (2026-06-08)
+
+- **Root cause confirmed:** feature-complete US-0009 ML stack + **missing external sidecar wiring** — not projection/UI defect (BUG-0010 baseline **DONE**)
+- **Compose audit:** `stats-forecast` `profiles: [full]` only; `docker-compose.external.yml` has no sidecar service; `flow-finance-ai` on external uses **traefik network only** — sidecar must attach same network for `http://stats-forecast:8090`
+- **Config audit:** `[forecast_ml] enabled=false` default (DEC-0049); `FORECAST_ML_ENABLED` / `STATS_FORECAST_URL` env merge in `backend/src/config/mod.rs` — **ready**; `.env.example` documents `STATS_FORECAST_PORT=8091` only (gap: ML enable vars)
+- **Backend audit:** sync `forecast_ml` phase + `record_skip_on_baseline` + sidecar `health_ok()` gate — **implemented** (`backend/src/sync/mod.rs`, `backend/src/forecast_ml/`)
+- **Frontend audit:** ForecastPage Compare + `sidecar_disabled` copy; WealthPage `portfolio-forecast` horizons + FX warning — **implemented**; needs data post-enablement
+- **Grafana audit:** forecast-horizons ML panels query `ml_enhanced` — **implemented**; 0 computations on omniflow today
+- **Runbook gap:** no omniflow external-profile ML enablement section (compose union, env, health probe, min history)
+- **CI partial:** `forecast_ml_integration` + wiremock; AC row wants external-profile compose or CI fixture extension
+- **Slice boundaries unchanged:** US-0013-S1 compose/config → S2 sync/API → S3 UI/Grafana verify → S4 runbook/CI
+- **Acceptance:** 10 rows unchanged (9 open + BUG-0010 prerequisite checked)
+- **Research resolved (2026-06-08):** overlay profile-merge, traefik-only network, runtime health SLO, min-history gate unchanged, dual CI guard — see [R-0071](docs/engineering/research.md#r-0071--us-0013-production-ml-enablement-on-omniflow-external-profile); **DEC-0076** formalized
+
+#### Sprint plan (2026-06-08 — `sprint-plan-20260608-s0014-us0013`)
+
+**Standard sprint:** **S0014** — 11 tasks; no split (11 < `SPRINT_MAX_TASKS` 12).  
+**sprint_id:** S0014  
+**orchestrator_run_id:** `auto-20260608-us0013-001`
+
+| Order | Task | Slice | Acceptance hook |
+|-------|------|-------|-----------------|
+| 1 | **T-0144** — External overlay stats-forecast sidecar | S1 | AC-1 |
+| 2 | **T-0145** — flow-finance-ai ML env passthrough | S1 | AC-1 |
+| 3 | **T-0146** — .env.example omniflow ML block | S1 | AC-1 |
+| 4 | **T-0147** — Compose config CI guard update | S1 | AC-1 |
+| 5 | **T-0148** — Sync ML phase + health gate verify | S2 | AC-2, AC-3 |
+| 6 | **T-0149** — ml_enhanced API persistence verify | S2 | AC-3, AC-4 |
+| 7 | **T-0150** — ForecastPage Compare + degraded UX verify | S3 | AC-5 |
+| 8 | **T-0151** — WealthPage portfolio-forecast verify | S3 | AC-6 |
+| 9 | **T-0152** — Grafana forecast-horizons ML panels verify | S3 | AC-7 |
+| 10 | **T-0153** — Runbook Omniflow ML enablement | S4 | AC-8 |
+| 11 | **T-0154** — CI dual guard — wiremock + compose assert | S4 | AC-9 |
+
+**Sequencing:** S1 → S2 → S3; S4 after S1 (runbook/CI may parallel S3).  
+**Operator gates:** deploy S1 overlay + env → **BACKEND_COMPOSE_DEPLOY** → Full Firefly sync → UAT omniflow smoke.
+
+**Artifacts:** `sprints/S0014/*`, `handoffs/tl_to_dev.md` (`sprint-plan-20260608-s0014-us0013`)
+
+**Recommended next phase:** `/plan-verify` on **S0014** → `/execute`
 
 ---
 
 ### US-0015 — AI-assisted forecast category bucket mapping
 
-Status: OPEN
+Status: DONE
 Priority: P2
+**sprint_id:** S0016
 
 As an operator reviewing forecast monthly breakdown,
 I want AI to help classify transactions and merchants into income/fixed/variable buckets when Firefly categories are missing or ambiguous,
@@ -1938,33 +2492,149 @@ So that forecast decomposition reflects real spending patterns—not hardcoded m
 
 #### Scope
 
-- In: AI-assisted inference layer for forecast bucket assignment (merchant/description/category fusion); integration with forecast projection after BUG-0012 config-path fix; operator-visible confidence or "AI-mapped" badge on monthly buckets; audit trail under existing AI privacy constraints
-- Out: Firefly write-back or in-app category editing; duplicate BUG-0007 chat enumeration scope; new ML forecast models (US-0013)
+- In: AI-assisted inference layer for forecast bucket assignment (merchant/description/category fusion); projection fallback chain after DEC-0007 config map miss; operator-visible confidence or **AI-mapped** badge on monthly buckets; audit trail under existing AI privacy constraints (US-0006 / DEC-0032)
+- Out: Firefly write-back or in-app category editing; duplicate BUG-0007 chat enumeration scope; new ML forecast models (US-0013); RAG/vector index (deferred per R-0074)
 
 #### Constraints
 
-- **BUG-0012** must close config-driven category→bucket projection (AG/AH) before or in parallel — AI layer extends, does not replace, DEC-0007 baseline map
+- **BUG-0012 DONE** (Q0014) — DEC-0007 config-driven category→bucket projection (AG/AH) is prerequisite baseline; AI layer **extends**, does not replace, config map
 - Reuse US-0006 tool/privacy patterns; `allow_raw_transactions=false` default preserved unless operator opts in
-- Coordinate with **BUG-0007** (chat merchant discovery) — shared category intelligence, different surfaces
+- Coordinate with **BUG-0007 DONE** (DEC-0069) — shared category intelligence patterns; forecast projection surface only (no chat tool registry changes)
+- No host `.env` / operator secrets read
 
-#### Intake decomposition
+#### Intake decomposition (2026-06-06 re-intake)
 
-- Split decision: **deferred epic from BUG-0012 intake** (operator "AI should be used for detection/categorization")
-- Rationale: Immediate defect is broken projection path (`map_category(None)`); AI-assisted mapping is feature-completion sized
-- Boundaries: BUG-0012 closes hardcoded/config bucket split; US-0015 closes AI enrichment when categories ambiguous
+| Evaluator | Result |
+|-----------|--------|
+| Feature/workflow count | 4 surfaces (AI inference, projection integration, monthly API/UI badge, audit trail) |
+| Cross-cutting | `forecast/project.rs`, new AI bucket module, monthly API, React ForecastPage Monthly tab |
+| Acceptance breadth | 8 rows (1 prerequisite checked + AC-1–AC-7) |
+| Risk | Medium-high — privacy defaults, projection correctness, operator trust in AI-mapped buckets |
+
+**Split decision:** **single epic** — deferred to sprint-plan vertical slices **US-0015-S1..S3**
+
+**Rationale:** BUG-0012 released config baseline; four surfaces share projection engine but are independently testable; sprint-plan owns slice IDs (mirrors US-0014 pattern).
+
+**Recommended slices:**
+
+| Slice | Title | Boundary |
+|-------|-------|----------|
+| **US-0015-S1** | AI bucket inference service | Merchant/description/category fusion; confidence scoring; privacy-safe feature extraction under DEC-0032 defaults |
+| **US-0015-S2** | Projection integration | Fallback chain: DEC-0007 config map → AI proposal → Variable default; recurring pattern labels; no silent Variable-only absorption |
+| **US-0015-S3** | Operator visibility + audit | Monthly API `bucket_source` fields; UI AI-mapped badge/tooltip; audit log; user guide; OIDC smoke |
+
+**Alternatives considered:**
+
+- Split into US-0017..0019 backlog stories now — **rejected** (operator epic continuity from BUG-0012 deferral)
+- Merge into BUG-0007 — **rejected** (chat discovery vs forecast projection)
+- RAG embedding index — **rejected for MVP** (R-0074; rule+LLM cascade sufficient)
 
 #### Intake evidence
 
-- `intake_run_id`: `intake-20260605-forecast-monthly-buckets`
-- `parent_bug`: BUG-0012
-- Evidence bundle: `handoffs/intake_evidence/intake-20260605-forecast-monthly-buckets.json`
+- `intake_run_id`: `intake-20260606-us0015`
+- `selected_pack`: `small-intake-pack`
+- `orchestrator_run_id`: `auto-20260606-us0015-001`
+- `writer_id`: `po`
+- `parent_bug`: BUG-0012 (DONE Q0014)
+- `prior_intake_ref`: `handoffs/intake_evidence/intake-20260605-forecast-monthly-buckets.json`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: `(none)`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260606-us0015.json`
+
+#### Discovery findings (2026-06-06 — `discovery-20260606-us0015`, orchestrator `auto-20260606-us0015-001`)
+
+**Probe environment:** Code audit of `backend/src/forecast/{categories,project,service}.rs`, `backend/src/api/forecast.rs`, `frontend/src/pages/ForecastPage.tsx`, `backend/config/default.toml` (no `.env` / host secrets; no live omniflow probe this phase).
+
+| AC | Verdict | Execute note |
+|----|---------|--------------|
+| Prerequisite BUG-0012 | **Shipped** | DEC-0007 config map + category_id resolution in projection — verify only |
+| AC-1 Baseline precedence | **Partial** | Config path wired; AI override guard + tests missing (S2) |
+| AC-2 AI inference | **Gap** | No inference module; uncategorized → Variable silent (S1) |
+| AC-3 Privacy defaults | **Gap** | `PrivacyLayer` chat-only; forecast feature allowlist unwired (S1) |
+| AC-4 API visibility | **Gap** | `MonthlyPointResponse` lacks `bucket_source` (S3) |
+| AC-5 UI badge | **Gap** | Monthly cards present; no AI-mapped badge/tooltip (S3) |
+| AC-6 Audit trail | **Gap** | No forecast-bucket audit rows (S3) |
+| AC-7 Regression | **Verify** | OIDC smoke post-deploy; BUG-0007 / US-0013 surfaces unchanged |
+
+**Critical discovery finding:** BUG-0012 shipped config-driven bucketing for **recurring** flows; **rolling residual** (`variable_residual` daily rate) is **hardcoded Variable** with no AI hook — primary enrichment surface alongside uncategorized recurring patterns.
+
+**Partial implementation matrix:**
+
+| Surface | Status |
+|---------|--------|
+| `categories.rs` `resolve_bucket` | **Done** |
+| `project.rs` recurring bucket assignment | **Done** |
+| `project.rs` rolling → Variable only | **Gap** (AI target) |
+| AI inference service | **Missing** (S1) |
+| Monthly API `bucket_source` | **Missing** (S3) |
+| ForecastPage AI-mapped badge | **Missing** (S3) |
+| AI audit for bucket assignments | **Missing** (S3) |
+
+**Slice boundaries (confirmed):**
+
+| Slice | Primary AC | Discovery note |
+|-------|------------|----------------|
+| US-0015-S1 | AC-2, AC-3 | New inference module; privacy-safe features; US-0008 provider reuse |
+| US-0015-S2 | AC-1 | Fallback chain in `project_account`; guard config precedence; rolling + recurring paths |
+| US-0015-S3 | AC-4, AC-5, AC-6, AC-7 | API provenance, badge (seasonal callout pattern), audit, user guide, OIDC smoke |
+
+- **Acceptance:** 8 rows unchanged (1 prerequisite checked + AC-1–AC-7 open until execute)
+- **Research:** [R-0074](docs/engineering/research.md#r-0074--us-0015-ai-forecast-bucket-mapping-rulellm-cascade-privacy) fulfilled + [R-0075](docs/engineering/research.md#r-0075--us-0015-forecast-bucket-privacy-feature-allowlist) — 6/6 questions resolved; **DEC-0078** accepted at architecture
+- **UX references:** Finanzguru four-card monthly layout (retain); seasonal badge pattern in `ForecastPage.tsx` as AI-mapped chrome template; R-0074 rule+LLM cascade
+- **Decision gates:** none blocking — rolling-residual aggregate AI split deferred stage-2; merchant aliases TOML post-MVP
+
+#### Architecture notes (2026-06-06 — `architecture-20260606-us0015`, orchestrator `auto-20260606-us0015-001`)
+
+**Formalized:** **DEC-0078** — config→rule→LLM→Variable cascade; `ai_bucket_min_confidence=0.75`; `PrivacyLayer::prepare_bucket_features` (R-0075); `bucket_sources` + `ai_mapped` on `MonthlyPointResponse`; US-0008 `build_provider()` reuse; `ai_tool_audit` forecast rows.
+
+| Slice | Architecture contract | Primary files |
+|-------|----------------------|---------------|
+| **US-0015-S1** | `BucketInferenceService`; privacy allowlist; batch cap 100 | `forecast/bucket_inference.rs`, `ai/privacy.rs` |
+| **US-0015-S2** | `resolve_bucket_with_ai`; AC-1 config guard; provenance aggregation | `forecast/project.rs`, `forecast/categories.rs` |
+| **US-0015-S3** | API provenance; AI-mapped badge; audit; user guide; OIDC smoke | `api/forecast.rs`, `ForecastPage.tsx` |
+
+**MVP limitation (documented):** `variable_residual` daily rate stays Variable — AI enriches recurring dues only.
+
+**Recommended sprint:** S0016 — S1+S2 before S3.
+
+#### Sprint plan (2026-06-06 — `sprint-plan-20260606-s0016-us0015`)
+
+**Standard sprint:** **S0016** — 12 tasks (~32h); no split (12 = `SPRINT_MAX_TASKS` 12).  
+**sprint_id:** S0016  
+**orchestrator_run_id:** `auto-20260606-us0015-001`
+
+| Order | Task | Slice | Est. | Acceptance hook |
+|-------|------|-------|------|-----------------|
+| 1 | **T-0163** — BucketInferenceService module (rule→LLM cascade) | S1 | 4h | AC-2 |
+| 2 | **T-0164** — PrivacyLayer::prepare_bucket_features + BucketFeatureRow | S1 | 3h | AC-3 |
+| 3 | **T-0165** — Structured LLM I/O + ai_bucket_min_confidence TOML | S1 | 3h | AC-2 |
+| 4 | **T-0166** — S1 unit tests: privacy, threshold, provider_unavailable | S1 | 2h | AC-2, AC-3 |
+| 5 | **T-0167** — resolve_bucket_with_ai + config precedence guard | S2 | 3h | AC-1 |
+| 6 | **T-0168** — Recurring dues AI on config-map miss | S2 | 4h | AC-1, AC-2 |
+| 7 | **T-0169** — Provenance tracking per monthly accumulation | S2 | 3h | AC-4 |
+| 8 | **T-0170** — S2 integration tests: config never overridden | S2 | 3h | AC-1 |
+| 9 | **T-0171** — MonthlyPointResponse bucket_sources + ai_mapped | S3 | 2h | AC-4 |
+| 10 | **T-0172** — ForecastPage AI-mapped badge | S3 | 2h | AC-5 |
+| 11 | **T-0173** — ai_tool_audit forecast_bucket_assignment persistence | S3 | 2h | AC-6 |
+| 12 | **T-0174** — User guide US-0015 + UAT OIDC smoke template | S3 | 2h | AC-7 |
+
+**Sequencing:** S1 (T-0163→T-0166) → S2 (T-0167→T-0170) → S3 (T-0171→T-0174). S1+S2 before S3 API/UI.  
+**Operator gates:** deploy S1–S3 backend+frontend → **BACKEND_FRONTEND_DEPLOY** → UAT omniflow `/forecast` Monthly OIDC smoke.
+
+**Artifacts:** `sprints/S0016/*`, `handoffs/tl_to_dev.md` (`sprint-plan-20260606-s0016-us0015`)
+
+**Recommended next phase:** `/plan-verify` on **S0016** → `/execute`
 
 ---
 
 ### US-0014 — Planning mode intuitive UX completion
 
-Status: OPEN
+Status: DONE
 Priority: P2
+**sprint_id:** S0015
+**release_version:** 0.15.0-us0014
+**released_at:** 2026-06-08
 
 As a household budgeter using Flow Finance AI,
 I want planning mode to be fully functional and intuitive from first visit,
@@ -1972,26 +2642,358 @@ So that I can create scenarios, compare versions, and track plan-vs-actual witho
 
 #### Scope
 
-- In: First-run planning onboarding; empty-plan → add-lines flow polish; Compare tab empty-state and sum guards; plan-vs-actual guided UX when no active plan; template discoverability; error surfaces instead of silent failures
-- Out: AI-driven plan simulation chat (US-0006); crypto allocation scenarios (US-0007)
+- In: First-run planning onboarding (template grid + Create empty plan); empty-plan → add-lines flow polish; Compare tab contextual help (overlay-only delta); plan-vs-actual guided UX polish (DEC-0074); template discoverability; Set-active guidance banner; operator-visible error surfaces
+- Out: AI-driven plan simulation chat (US-0006); crypto allocation scenarios (US-0007); compare metric formula changes (frozen DEC-0073); PVA API contract changes (frozen DEC-0074); auto-activate first plan
 
 #### Constraints
 
-- Defect fixes (click no-op, illogical sums, 404) remain **BUG-0011** (AD/AE/AF)
-- US-0004 acceptance remains baseline; this story extends UX when discovery shows gap beyond defect fixes
-- Firefly data read-only unchanged
+- **BUG-0011 DONE** (Q0019 released 2026-06-08) — AD/AE/AF functional gates satisfied; prerequisite acceptance row checked
+- **DEC-0073** / **DEC-0074** frozen — US-0014 is frontend/guided UX polish only unless discovery finds contract gap
+- US-0004 acceptance remains baseline; Firefly data read-only unchanged
+- No host `.env` / operator secrets read
 
-#### Intake decomposition
+#### Intake decomposition (2026-06-08 re-intake)
 
-- Split decision: **deferred epic from BUG-0011** (operator "fully implemented and intuitive")
-- Rationale: BUG-0011 gates broken behavior; US-0014 captures holistic UX if fixes alone insufficient
-- Boundaries: BUG-0011 makes planning functional; US-0014 makes it intuitive for first-time operators
+| Evaluator | Result |
+|-----------|--------|
+| Feature/workflow count | 6 UX surfaces (onboarding, add-lines, Compare copy, PVA guidance, templates, errors) |
+| Cross-cutting | React `PlanningPage.tsx` primary; plans API contracts frozen |
+| Acceptance breadth | 9 rows (1 prerequisite checked + 8 open AC-1–AC-8) |
+| Risk | Medium — functional fixes shipped; epic is guided UX and discoverability |
+
+**Split decision:** **single epic** — deferred to sprint-plan vertical slices **US-0014-S1..S3**
+
+**Rationale:** BUG-0011 released functional gates; six UX surfaces share PlanningPage but are independently testable slices; sprint-plan owns slice IDs (mirrors US-0013 pattern).
+
+**Recommended slices:**
+
+| Slice | Title | Boundary |
+|-------|-------|----------|
+| US-0014-S1 | First-run onboarding + template discoverability | Empty-state template grid, Create empty plan CTA, Set-active banner |
+| US-0014-S2 | Add-lines polish + error surfaces | Inline add form visibility, mutation toasts, API error surfacing |
+| US-0014-S3 | Compare + PVA contextual UX | Compare help copy; PVA guided card polish; user guide |
+
+**Alternatives considered:** split into US-0017..0019 now — rejected (epic continuity from BUG-0011 deferral); merge into BUG-0011 — rejected (BUG-0011 DONE).
 
 #### Intake evidence
 
-- `intake_run_id`: `intake-20260605-planning-mode-broken`
-- `parent_bug`: BUG-0011
-- Evidence bundle: `handoffs/intake_evidence/intake-20260605-planning-mode-broken.json`
+- `intake_run_id`: `intake-20260608-us0014`
+- `orchestrator_run_id`: `auto-20260608-us0014-001`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `story`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: `(none)`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260608-us0014.json`
+- `prior_intake_ref`: `handoffs/intake_evidence/intake-20260605-planning-mode-broken.json`
+- `parent_bug`: BUG-0011 (DONE)
+- Research: [R-0070](docs/engineering/research.md#r-0070--bug-0011-planning-mode-compare-delta-empty-state-api-first-run-ux) (fulfilled), [R-0072](docs/engineering/research.md#r-0072--us-0014-planning-ux-epic-gap-beyond-bug-0011)
+- `next_phase`: `/research`
+
+#### Discovery notes (2026-06-08 — `discovery-20260608-us0014`, orchestrator `auto-20260608-us0014-001`)
+
+**Probe environment:** Code audit of `frontend/src/pages/PlanningPage.tsx` post-Q0019 (no `.env` / host secrets; no live omniflow probe this phase).
+
+| AC | Verdict | Execute note |
+|----|---------|--------------|
+| AC-1 Onboarding | **Shipped** | Empty-state template grid + primary **Create empty plan** — verify only |
+| AC-2 Add-lines | **Partial** | Form wired; add success/error feedback + PVA/detail invalidation gap |
+| AC-3 Compare UX | **Shipped** | Overlay footnote present (L600–603); verify DEC-0073 **0.00** display |
+| AC-4 PVA guided | **Shipped** | `no_active_plan` guided card with Scenarios + Set active — verify only |
+| AC-5 Templates | **Partial** | Discoverability done; add confirmation toast on empty-state **Create from** / create mutations |
+| AC-6 Set-active | **Partial** | Banner after create; extend copy for **Grafana Dashboard 3** active-plan requirement |
+| AC-7 Errors | **Gap** | No mutation `onError` surfaces — primary S2 execute work |
+| AC-8 OIDC | **Verify** | Omniflow `/planning` three-tab smoke; pass-with-prerequisites **BACKEND_FRONTEND_DEPLOY** |
+
+**Critical discovery finding:** Q0019 (BUG-0011) shipped **5 of 8** epic AC rows in code; intake gap table overstated remaining work. US-0014 is **polish + error surfaces + operator smoke**, not first-run greenfield.
+
+**Slice boundaries (adjusted):**
+
+| Slice | Primary AC | Discovery note |
+|-------|------------|----------------|
+| US-0014-S1 | AC-1, AC-5, AC-6 | Mostly verify; banner Dashboard 3 text + create confirmation toasts |
+| US-0014-S2 | AC-2, AC-7 | **Primary gap** — shared error helper, add-line success feedback, query invalidation |
+| US-0014-S3 | AC-3, AC-4, AC-8 | Verify shipped help/guided UX; OIDC smoke; user guide US-0014 |
+
+- **Acceptance:** 9 rows unchanged (prerequisite checked + AC-1–AC-8 open until execute)
+- **Research:** [R-0072](docs/engineering/research.md#r-0072--us-0014-planning-ux-epic-gap-beyond-bug-0011) discovery matrix confirmed; close open item #1 (Q0019 overlap)
+- **Architecture (2026-06-08):** **DEC-0077** formalized — page-local mutation feedback; spec-pack trio + user guide created; see `docs/engineering/architecture.md` § US-0014
+
+#### Sprint plan (2026-06-08 — `sprint-plan-20260608-s0015-us0014`)
+
+**Standard sprint:** **S0015** — 8 tasks; no split (8 < `SPRINT_MAX_TASKS` 12).  
+**sprint_id:** S0015  
+**orchestrator_run_id:** `auto-20260608-us0014-001`
+
+| Order | Task | Slice | Acceptance hook |
+|-------|------|-------|-----------------|
+| 1 | **T-0158** — planningFeedback helper module | S2 | AC-7 |
+| 2 | **T-0159** — onError on all 7 planning mutations | S2 | AC-7 |
+| 3 | **T-0160** — addAdjustment success + plan-vs-actual invalidation | S2 | AC-2 |
+| 4 | **T-0155** — AC-1 empty-state onboarding regression verify | S1 | AC-1 |
+| 5 | **T-0156** — Set-active banner Dashboard 3 copy | S1 | AC-6 |
+| 6 | **T-0157** — Create/template success confirmations | S1 | AC-5 |
+| 7 | **T-0161** — Compare/PVA shipped UX verify | S3 | AC-3, AC-4 |
+| 8 | **T-0162** — User guide US-0014 finalize + UAT OIDC template | S3 | AC-8 |
+
+**Sequencing:** S2 foundation (T-0158 → T-0159 → T-0160); S1 after T-0158 for toasts; S3 after S2. S2-weighted (AC-7 primary).  
+**Operator gates:** deploy S1–S2 frontend → **BACKEND_FRONTEND_DEPLOY** → UAT omniflow `/planning` OIDC smoke.
+
+**Artifacts:** `sprints/S0015/*`, `handoffs/tl_to_dev.md` (`sprint-plan-20260608-s0015-us0014`)
+
+**Recommended next phase:** `/plan-verify` on **S0015** → `/execute`
+
+---
+
+### US-0016 — Root README for operators and contributors (living documentation)
+
+Status: DONE
+Priority: P2
+**sprint_id:** S0013
+**closure_note:** verify-work PASS S0013 + release PASS, 2026-06-08
+
+As a new operator or contributor cloning Flow Finance AI,
+I want a root `README.md` that explains what the product is, how to run it, and where deeper docs live,
+So that I do not hunt through `docs/` folders or fail `validate_doc_profile` on first clone.
+
+#### Scope
+
+- In: Create and populate root `README.md` per **DEC-0059** split layout (`DOC_AUDIENCE_PROFILE=both`, `DOC_DETAIL_LEVEL=balanced`): user-channel H2 sections (Purpose, Quickstart, Examples, Limitations, Related documentation) with **Flow Finance AI**-specific content; `## Contributing` pointer to `docs/developer/README.md`; cross-links to `docs/user-guides/`, `docs/engineering/runbook.md`, and compose profiles (minimal / bundled-firefly / external omniflow)
+- In: Align `docs/developer/README.md` only where gaps remain (workflow pointer to release/refresh-context README maintenance)
+- In: **Living-doc maintenance contract** — when a **US** or **BUG** closes in release or refresh-context, update root README **Product status** (or equivalent) subsection with the closed id + one-line outcome; run `python scripts/validate_doc_profile.py --repo .` at release gate
+- In: `template/README.md` parity when `template/` tree exists; document maintenance in runbook § documentation profile
+- Out: Replacing per-story `docs/user-guides/US-xxxx.md` (US-0032); full its-magic framework manual (see `its_magic/README.md`); auto-generated README from backlog on every commit (manual curated updates at phase boundaries only)
+
+#### Constraints
+
+- **US-0077** / **DEC-0059**: no `DEV_*` H2 titles in root README; developer depth stays in `docs/developer/README.md`
+- `USER_GUIDE_MODE=1` and `SPEC_PACK_MODE=1`: root README must mention `docs/user-guides` and engineering/spec paths in Related documentation
+- Incremental updates — avoid full README rewrites each sprint; cap root H2 count per profile budget
+
+#### Intake decomposition
+
+- Split decision: **single story** (documentation surface + maintenance process are one deliverable)
+- Rationale: Missing root README blocks `validate_doc_profile`; upkeep cadence is part of the same operator/contributor outcome
+- Boundaries: Feature how-tos remain in user guides; engineering contracts remain in architecture/decisions
+
+#### Intake evidence
+
+- `intake_run_id`: `intake-20260607-root-readme`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `story`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: `(none)`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260607-root-readme.json`
+- Research: [R-0066](docs/engineering/research.md#r-0066--root-readme-split-layout-and-living-doc-maintenance)
+
+#### Discovery notes (2026-06-08)
+
+- **Split-layout target (DEC-0059, profile `both`/`balanced`):** root README required user H2s = `Purpose`, `Quickstart`, `Examples`, `Limitations`, `Related documentation`; single `## Contributing` pointer; **no `DEV_*` H2 titles** in root; profile-scoped root H2 budget ≤ **8** (5 user H2s fit) — resolved from `scripts/doc_profile_lib.py`.
+- **Developer keys (live in `docs/developer/README.md`, not root):** `DEV_PREREQS`, `DEV_WORKFLOW`, `DEV_QUALITY_GATES`, `DEV_ARCHITECTURE` — validator already enforces shard presence; align only where gaps remain.
+- **Optional-mode crosslinks (validator-checked):** `USER_GUIDE_MODE=1` → mention `docs/user-guides`; `SPEC_PACK_MODE=1` → mention engineering/spec paths in Related documentation.
+- **Template parity (`template/` absent today):** AC-6 is conditional; discovery defers stub-vs-`--no-template-parity` decision to `/research`/`/architecture`.
+- **Living-doc placement:** discovery leans a budget-safe `###` Product status subsection (vs a new `## Product status` H2 that consumes H2 budget); confirm in research.
+- Acceptance rows unchanged (6 in `docs/product/acceptance.md` § US-0016); validator PASS is release gate.
+- `next_phase`: `/research`
+
+---
+
+### US-0017 — README living-doc expansion and troubleshooting (post-US-0016)
+
+Status: DONE
+Priority: P2
+**sprint_id:** Q0021
+**release_version:** `0.17.0-us0017`
+**released:** 2026-06-09
+
+As an operator or contributor using Flow Finance AI,
+I want the root README expanded with troubleshooting guidance and a enforced upkeep hook when stories and bugs close,
+So that onboarding and production smoke paths stay accurate without hunting runbook fragments.
+
+#### Scope
+
+- In: Expand root `README.md` **Examples** with omniflow smoke paths (sync trigger, recompute, analytics route table, exchange sync sanity)
+- In: Expand **Limitations** or add budget-safe **Troubleshooting** subsection (empty Grafana panels, BACKEND_FRONTEND_DEPLOY cadence, ML-unavailable vs data-missing distinction) per `DOC_DETAIL_LEVEL=balanced`
+- In: Strengthen **living-doc maintenance contract** — release and refresh-context checklists in `docs/developer/README.md` and runbook § documentation profile require Product status bullet for each closed US/BUG in the release segment
+- In: Update **Product status** to include **US-0015** and other post-US-0016 closures when this story ships
+- Out: Replacing per-story user guides; auto-generated README on every commit; analytics defect fixes (**BUG-0013**)
+
+#### Constraints
+
+- **US-0016** / **DEC-0059** split layout preserved — no `DEV_*` H2 in root; H2 budget ≤ 8
+- `python scripts/validate_doc_profile.py --repo .` must remain PASS
+- Incremental edits only — no full README rewrite
+
+#### Intake decomposition
+
+- Split decision: **dual work item** with **BUG-0013** (operator bundled concerns)
+- Rationale: Documentation upkeep is independently valuable from analytics regression remediation
+- Boundaries: US-0017 = README/runbook/checklist only; BUG-0013 = data pipeline correctness
+
+#### Intake evidence
+
+- `intake_run_id`: `intake-20260606-omniflow-regression-readme`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `story` (paired with **BUG-0013** in same intake run)
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: `(none)`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260606-omniflow-regression-readme.json`
+- Research: [R-0066](docs/engineering/research.md#r-0066--root-readme-split-layout-and-living-doc-maintenance) (living-doc patterns; no new research required)
+
+#### Discovery notes (2026-06-09)
+
+- **Orchestrator run:** `auto-20260609-us0017-001`
+- **Baseline audit:** US-0016 shipped root README (S0013); `validate_doc_profile.py --no-template-parity` **PASS** today; 6 root H2s (5 user + Contributing); H2 budget headroom **2** per DEC-0059.
+- **Product status:** refresh-context post-Q0020 already lists **US-0015**, **BUG-0013**, and other post-US-0016 closures — AC row satisfied at execute verification only (no further ids expected unless segment closes more work).
+- **Examples gap:** localhost-only `curl` samples (`:8080`); analytics route **table** present but no omniflow base URL or Traefik basic-auth pattern; sync trigger lacks external-profile variant; **forecast recompute** and **exchange sync sanity** (`GET /api/v1/wealth` crypto probe) deferred entirely to runbook §23.
+- **Troubleshooting gap:** `## Limitations` has ML-unavailable bullet but lacks: (1) **empty Grafana panels vs ML-unavailable banner** distinction (BUG-0013 **AI** refuted on acct **114** after Full sync; zeros on **116** or stale deploy ≠ ML-off); (2) **`BACKEND_FRONTEND_DEPLOY`** + **`GRAFANA_PROVISIONING_RELOAD`** + **`FULL_FIREFLY_SYNC`** gate sequence from Q0020; (3) sync+recompute prerequisite before attributing non-zero analytics failures to code.
+- **Maintenance contract gap:** runbook § README maintenance (US-0016) and `docs/developer/README.md` Quality gates mention Product status updates but do not yet say **each closed US/BUG in the release segment** — US-0017 execute should tighten wording in both surfaces.
+- **Recommended doc placement (discovery):** budget-safe **`### Omniflow smoke (external profile)`** under `## Examples`; **`### Troubleshooting`** under `## Limitations` (not a new H2 — preserves DEC-0059 layout; aligns R-0067 Product-status placement precedent).
+
+#### Architecture notes (2026-06-09)
+
+- **Orchestrator run:** `auto-20260609-us0017-001`
+- **Decision:** **DEC-0070** extension (no DEC-0081) — H3 layout + per-segment maintenance frozen in `docs/engineering/architecture.md` § US-0017
+- **Research:** [R-0078](docs/engineering/research.md#r-0078--us-0017-readme-omniflow-smoke-templates-h3-layout-validate_doc_profile-gates)
+- **Execute slices:** E1 README Examples H3; E2 README Troubleshooting H3; E3 Product status verify; E4 `docs/developer/README.md`; E5 runbook § README maintenance; E6 `validate_doc_profile --no-template-parity`; UG1 user guide (`USER_GUIDE_MODE=1`)
+- **Sprint:** **Q0021** (`/quick`, 7 tasks, PLANNED 2026-06-09)
+- `next_phase`: `/plan-verify`
+- **Troubleshooting topic map (from BUG-0013 / Q0020):**
+
+| Symptom | Likely cause | Operator action |
+|---------|--------------|-----------------|
+| All analytics panels flat **0 €** after deploy | Stale image / gates skipped | **BACKEND_FRONTEND_DEPLOY** → **GRAFANA_PROVISIONING_RELOAD** → **FULL_FIREFLY_SYNC** + recompute |
+| Budgets MTD **−€150K** planned, **€0** actual | Pre-AL1 MTD SQL artifact | Deploy **DEC-0079** build + Grafana reload; see runbook §23 Row AL |
+| Crypto **€0** in wealth/portfolio | Pre-AN1 pricing gap or exchanges-only sync | Deploy **DEC-0080** build + Full sync + manual exchange sync; `crypto.subtotal_eur` probe |
+| Forecast **0 €** on default panels | Wrong `$account_id` or exchanges-only sync | Full sync + recompute; verify acct **114** (not **116**); see BUG-0013 **AI** verdict |
+| **ML unavailable** banner on forecast-horizons | ML overlay off (US-0013) | Expected — baseline statistical forecast still applies; not a data-missing defect |
+| Grafana **Failed to fetch** (browser) | Embed/WS edge case | curl ds/query **200** per R-0077 — check Traefik session + do not Save dashboard overrides |
+
+- **Out of scope unchanged:** analytics code; MetaMask console noise; new research entry (R-0066/R-0067 sufficient).
+- **Decomposition:** single story retained — doc surfaces + maintenance hooks are one deliverable.
+- `next_phase`: `/research` (lightweight: omniflow curl template + Troubleshooting H3 contract; no web research required)
+
+**Recommended next phase:** `/research`
+
+---
+
+### US-0018 — Category filters & expense trend analytics
+
+Status: OPEN
+Priority: P1
+
+As a household budgeter using Firefly categories,
+I want to filter by category across product views and see how each category's spending changes month over month,
+So that I can spot where I save or overspend and use categories in forecasts and planning what-ifs.
+
+#### Scope
+
+- In: Shared **category filter** contract (API + React) on forecast monthly/long-term views, planning compare context, wealth/firefly breakdown, and Grafana dashboards where category breakdown applies
+- In: **Per-category monthly expense series** API (rolling 12–24 months) from mirror `transactions` + `categories`
+- In: React **category trend chart** (line/bar) with EUR totals per month; multi-category compare optional in discovery
+- In: Category performance summary (month-over-month delta, optional rank) for selected period
+- In: Grafana panel or `$category` variable wiring on at least cashflow/budgets analytics dashboards
+- Out: Firefly category editing; ML category auto-labeling (US-0015 bucket mapping unchanged); tax reporting
+
+#### Constraints
+
+- Firefly read-only — categories sourced from mirror sync (post-BUG-0006 `category_id` ingest)
+- Reporting currency EUR with native Firefly account currency noted where mixed
+- Privacy: aggregate category series only in APIs exposed to AI tools unless scope expands in architecture
+
+#### Intake decomposition
+
+- Split decision: **multi-story** (3 stories — see intake evidence)
+- Boundaries: US-0018 = category analytics foundation; US-0019 = planning/goals; US-0020 = subscriptions/tags
+- Recommended sequence: **US-0018** first (enables category what-ifs in US-0019)
+
+#### Intake evidence
+
+- `intake_run_id`: `intake-20260607-category-planning-subscriptions`
+- `selected_pack`: `first-intake-pack`
+- `plan_area_id`: `category-analytics`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260607-category-planning-subscriptions.json`
+- Research: [R-0080](docs/engineering/research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake)
+
+**Recommended next phase:** `/discovery`
+
+---
+
+### US-0019 — Goal-driven planning with per-plan stats & AI savings suggestions
+
+Status: OPEN
+Priority: P1
+
+As a household planner,
+I want goal-based plans (e.g. **€10k balance in 5 months**) with per-plan statistics and AI-assisted savings ideas by category,
+So that I see monthly/yearly deltas and projected balance at my target date—not only whole-household aggregates.
+
+#### Scope
+
+- In: **Target balance + target date** plan type (extends US-0004 plan engine)
+- In: **Per-plan statistics** view: monthly cash delta vs baseline, yearly rollup, projected balance at target date
+- In: **Category-scoped adjustments** in plan builder (e.g. reduce spend in category "crypto") — builds on US-0018 filter contract when available
+- In: **AI savings suggestions**: propose reducible expenses/categories; operator selects suggestions to materialize plan adjustment lines (US-0006 tool layer, `allow_raw_transactions=false`)
+- In: Per-plan compare/PVA scoped to selected plan version — not mixed with other plans' stats
+- Out: Firefly write-back; automatic plan execution; replacing US-0014 template onboarding (extends it)
+
+#### Constraints
+
+- Read-only Firefly; plan mutations in product DB only
+- AI suggestions must cite aggregate/category signals per DEC-0032; operator confirms each adopted line
+- US-0014 / BUG-0011 functional gates remain baseline
+
+#### Intake decomposition
+
+- `plan_area_id`: `goal-planning`
+- Depends on US-0018 for richest category what-if UX; MVP may ship with category picker from mirror catalog
+
+#### Intake evidence
+
+- Same bundle as US-0018 (`intake-20260607-category-planning-subscriptions`)
+- Research: [R-0080](docs/engineering/research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake)
+
+**Recommended next phase:** `/discovery` (after or parallel with US-0018 architecture)
+
+---
+
+### US-0020 — Subscription manual discovery, majority category & operator tags
+
+Status: OPEN
+Priority: P2
+
+As a subscription manager,
+I want to search for potential subscriptions myself, assign majority categories from transaction history, and tag subscriptions with my own labels,
+So that detection automation plus manual control both work and I can group services (e.g. luxus, important).
+
+#### Scope
+
+- In: **Search/filter UI** for subscription candidates: account, title/payee substring, repeating interval (months), amount band (discovery refines)
+- In: Operator **confirm/reject** candidate without relying solely on auto-detection pipeline (US-0003)
+- In: On confirm, set subscription **display category** = **majority category** of linked transactions (mode on tie — document in architecture)
+- In: Operator-defined **tags** (create/rename/delete) attachable to confirmed subscriptions; filter list by tag
+- In: Tags stored in product DB; API for list/filter; optional Grafana subscriptions dashboard tag variable (discovery)
+- Out: Firefly tag write-back; changing Firefly category on source transactions
+
+#### Constraints
+
+- Read-only Firefly; tags are Flow Finance AI overlay metadata
+- Majority-category rule must handle miscategorized single transactions (operator example: 1 of 12 wrong)
+- US-0008 detection/dedup contracts preserved
+
+#### Intake decomposition
+
+- `plan_area_id`: `subscription-ops`
+- Independent delivery slice — can parallel US-0018
+
+#### Intake evidence
+
+- Same bundle as US-0018 (`intake-20260607-category-planning-subscriptions`)
+- Research: [R-0080](docs/engineering/research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake)
+
+**Recommended next phase:** `/discovery`
 
 ---
 

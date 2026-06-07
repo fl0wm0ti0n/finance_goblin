@@ -1,0 +1,76 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260607-post-rebuild-omniflow",
+  "intake_work_item_kind": "bug",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "After rebuild on omniflow: ML forecast must run when FORECAST_ML_ENABLED=true; crypto portfolio must show Bitunix values (not €0 with only holdings count 7); Grafana cashflow/forecast panels must show non-zero balances; planning must allow deleting plans and feel intuitive; native currency display with EUR conversion at valuation time.",
+      "intake_run_id": "intake-20260607-post-rebuild-omniflow",
+      "turn_index": 0,
+      "ref": "ie:intake-20260607-post-rebuild-omniflow:0:19139d4caba12610"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "stats-forecast sidecar compose profile; forecast/meta ML path; wealth/crypto EUR pricing and FX banners; Bitunix futures holdings; Grafana cashflow dashboard SQL; PlanningPage plan delete UX and adjustment target types; public or CEX price feeds for FX.",
+      "intake_run_id": "intake-20260607-post-rebuild-omniflow",
+      "turn_index": 1,
+      "ref": "ie:intake-20260607-post-rebuild-omniflow:1:cfa61523df7e81f7"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator set BITUNIX_ENABLED_FUTURES=true, FORECAST_ML_ENABLED=true, STATS_FORECAST_URL=http://stats-forecast:8090, GF_SERVER_ROOT_URL embed path; rebuild may have recreated flow-finance-ai+grafana only; DEC-0049 opt-in ML and DEC-0080 crypto subtotal rules must not regress; US-0014 planning UX already DONE — treat delete-plan gap as new defect.",
+      "intake_run_id": "intake-20260607-post-rebuild-omniflow",
+      "turn_index": 2,
+      "ref": "ie:intake-20260607-post-rebuild-omniflow:2:94cf04d4a687cffd"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "GET /api/v1/forecast/meta shows ml_status available not sidecar_unavailable when ML enabled; GET /api/v1/wealth crypto.subtotal_eur and exchange cards non-zero when Bitunix connected with 7 holdings; Grafana cashflow balance forecast non-zero for funded account 114; DELETE /api/v1/plans/{id} reachable from UI; FX banner only when assets truly unpriced.",
+      "intake_run_id": "intake-20260607-post-rebuild-omniflow",
+      "turn_index": 3,
+      "ref": "ie:intake-20260607-post-rebuild-omniflow:3:851f6bafc638ca5c"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator confirms ML banner gone and ML overlay available after sidecar healthy + Full sync; crypto tab shows portfolio values and understandable Bitunix summary; Grafana cashflow matches API forecast; can delete unwanted plans from /planning; OIDC/external profile regression pass.",
+      "intake_run_id": "intake-20260607-post-rebuild-omniflow",
+      "turn_index": 4,
+      "ref": "ie:intake-20260607-post-rebuild-omniflow:4:ee92eede7c531449"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug-cluster",
+    "work_items": ["BUG-0014"],
+    "rationale": "Operator bundled post-rebuild omniflow symptoms into one production smoke failure cluster (ML, crypto, Grafana, planning). Vertical split deferred — shared operator gate (deploy all external services + Full sync) and overlapping wealth/forecast surfaces.",
+    "split_axis": "none — cluster bug with sub-defects AO–AT",
+    "boundaries": {
+      "BUG-0014": "ML sidecar deployment gap, crypto EUR display, FX/native currency contract, Grafana cashflow zeros, planning delete UX — omniflow external profile post-Q0020"
+    },
+    "alternatives_considered": [
+      "Reopen BUG-0013 — rejected (DONE Q0020; operator reports residual symptoms after rebuild, not unreleased fix)",
+      "New story for native-currency display — rejected for intake; fold pricing/display gap into AP/AQ sub-defects pending discovery",
+      "Split ML into US-0013 follow-up — rejected (US-0013 DONE; defect is sidecar not started on operator compose up)"
+    ],
+    "live_probes": {
+      "forecast_meta": "ml_status=skipped ml_skipped_reason=sidecar_unavailable ml_computation_id=null",
+      "stats_forecast_container": "not running (docker ps empty for stats-forecast)",
+      "wealth_api": "crypto.subtotal_eur=0 holdings_count=7 unrealized_eur=411.74 fx_incomplete=false",
+      "container_env": "FORECAST_ML_ENABLED=true STATS_FORECAST_URL=http://stats-forecast:8090"
+    }
+  }
+}

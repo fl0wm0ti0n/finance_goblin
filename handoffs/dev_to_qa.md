@@ -1,76 +1,73 @@
-# Dev -> QA Handoff
+# Dev → QA Handoff
 
-## execute-20260607-q0017-bug0007-s-privacy — BUG-0007 Q0017 S privacy fix (verify-work loop)
-
-**From:** Dev  
+**From:** Dev (`/execute`)  
 **To:** QA (`/qa`)  
 **Date:** 2026-06-07  
-**Bug:** BUG-0007  
-**Sprint:** Q0017  
-**Orchestrator:** `auto-20260607-bug0007-001`  
-**Verify-work:** FAIL on row **(S)** — fix applied
+**Bug:** BUG-0015  
+**Sprint:** Q0023 (`/quick`)  
+**Orchestrator:** `auto-20260607-bug0015-001`
 
 ### Summary
 
-Verify-work loop fix for **(S)** — exempt subscription `display_name` and `merchant_names[]` from `PrivacyLayer` counterparty hashing in `get_subscriptions` tool output. Transaction payee/description redaction unchanged.
+Implemented AU1–AU4 for BUG-0015 confirm persistence after rebuild: **DEC-0084** card billing `payee_key` normalization, **DEC-0085/0086** payee+interval confirm inheritance (load maps, merge upsert, ±3d tolerance), detection skip+merge path, and stale inactive by payee+interval wired into `run_detection`. **V1** open — blocked on operator deploy + gates.
 
-### Fix applied
+### Tasks completed
 
-| Finding | Fix | File |
-|---------|-----|------|
-| S-1/S-2 — LLM sees Counterparty-* instead of merchant names | Tool-aware walk preserves `display_name` / `merchant_names` for `get_subscriptions`; other strings still hashed | `backend/src/ai/privacy.rs` |
+| ID | Status | Acceptance row |
+|----|--------|----------------|
+| AU1 | done | AU, AV |
+| AU2 | done | AU, AV |
+| AU3 | done | AU, AV, AW |
+| AU4 | done | AV |
+| V1 | open | AU–AW — operator smoke after deploy |
 
-**Mechanism:** `walk_value_for_tool` sets `preserve_label_strings` when processing subscription label keys; strings under those keys skip counterparty hashing (IBAN redaction still applies).
+### Acceptance mapping (verify)
 
-### Tests run
+| Row | Tasks | Verify focus |
+|-----|-------|--------------|
+| **AU** | AU1, AU2, AU3, V1 | Confirmed Cursor/Apple after rebuild + Full sync — not pending |
+| **AV** | AU1–AU4, V1 | No duplicate pending; merge/skip on payee+interval |
+| **AW** | AU3, V1 | Unread alerts reconcile; no spurious new_detection on merge |
 
-| Check | Result |
-|-------|--------|
-| `cargo test --lib` | **PASS** (150/150) — includes 2 new privacy tests |
-| `cargo test --test bug0007_ai_discovery` | **PASS** (8/8) |
+### Test evidence
 
-**New unit tests:**
-- `get_subscriptions_preserves_display_name_and_merchant_names`
-- `get_subscriptions_still_redacts_other_long_strings`
+| Command | Result |
+|---------|--------|
+| `cargo test --lib` | 187/187 PASS |
+| `npm test -- --run` | 6/6 PASS |
 
-### Deploy status
+### Key contracts
 
-| Step | Result |
-|------|--------|
-| `docker build -f backend/Dockerfile -t flow-finance-ai:bug0007-s-fix .` | **PASS** |
-| `docker compose --profile external build flow-finance-ai` | **BLOCKED** — `AUTHENTIK_SECRET_KEY` missing in env (compose validates oidc services) |
+- **DEC-0084:** `payee_key()` asterisk split, comma left-segment, Apple billing roots → `apple`, domain `.com`/`/bill` tail strip
+- **DEC-0085:** `load_confirmed_payee_intervals`, `load_rejected_payee_intervals`, `merge_confirmed_pattern` in-place refresh; index `idx_subscription_patterns_payee_status`
+- **DEC-0086:** `interval_matches` ±3d; fingerprint rotation on merge; UNIQUE conflict fail-safe to pending path
+- **AU3:** merge before pending upsert; no `new_detection` on confirmed merge
+- **AU4:** `mark_stale_inactive` uses `build_active_payee_intervals`; gap > 2× `interval_days`
 
-**Operator:** Re-deploy with omniflow compose command (same as verify-work) after merge; image builds cleanly via direct `docker build`.
+### Files changed
 
-### Acceptance impact
+- `backend/src/recurrence/normalize.rs` — AU1
+- `backend/src/subscriptions/repository.rs` — AU2
+- `backend/src/subscriptions/types.rs` — `ConfirmedPayeeInterval`
+- `backend/src/subscriptions/detection.rs` — AU3, AU4
+- `backend/src/subscriptions/service.rs` — wire maps + stale pass
+- `backend/migrations/012_subscription_patterns_payee_status.sql` — AU2 index
 
-| Row | Prior | Expected after deploy + verify-work |
-|-----|-------|-------------------------------------|
-| **(S)** | FAIL | PASS — named merchants in LLM enumeration |
-| **(T)** | PARTIAL | PARTIAL — undated 2023 window advisory (non-blocking) |
-| **(U)** | PARTIAL | PASS expected when S unblocked |
-| Regression | PASS | PASS — counterparty redaction preserved elsewhere |
+### Operator prerequisites for V1
 
-### QA focus
+1. **BACKEND_FRONTEND_DEPLOY** — Q0023 backend bundle on financegnome.omniflow.cc
+2. **POSTGRES_PERSISTENCE_PROBE** — H2 SQL before Full sync
+3. **FULL_FIREFLY_SYNC** — Full sync + detection phase
 
-1. Confirm privacy unit tests pass (`get_subscriptions_preserves_*`, `get_subscriptions_still_redacts_*`).
-2. Confirm `cargo test --lib` 150/150 and `bug0007_ai_discovery` 8/8.
-3. Confirm `get_transactions` payee/description still hashes to Counterparty-*.
-4. **V1:** After operator BACKEND_DEPLOY, re-run verify-work S-1/S-2 probes per `sprints/quick/Q0017/uat.md`.
+### QA instructions
 
-### Frozen boundaries (unchanged)
+Run `/qa` per `sprints/quick/Q0023/uat.md`. Code review AU1–AU4 contracts; V1 runtime probes deferred to verify-work after operator gates.
 
-- Six-tool registry — no seventh tool
-- `allow_raw_transactions=false` default
-- BUG-0008 — additive AI JSON only
-- RAG (V) — out of scope
-- No frontend changes
+### Gaps / advisories
 
-### Artifacts
+- V1 omniflow smoke not run in dev — operator gates required
+- Pre-fix orphan pending cleanup deferred per frozen boundaries
 
-- `backend/src/ai/privacy.rs` — S fix
-- `sprints/quick/Q0017/summary.md`
-- `docs/engineering/state.md` — execute S-fix checkpoint
-- `handoffs/resume_brief.md` — qa readiness
+### Next phase
 
-**Next phase:** `/qa` in new subagent/chat
+`/qa` in fresh subagent context.

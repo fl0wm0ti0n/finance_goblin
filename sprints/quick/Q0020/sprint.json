@@ -1,0 +1,90 @@
+{
+  "id": "Q0020",
+  "type": "quick",
+  "bug_ids": ["BUG-0013"],
+  "status": "PLANNED",
+  "created": "2026-06-08",
+  "goal": "Close BUG-0013 confirmed defects: DEC-0079 AL1 budgets MTD upper date bound + DEC-0080 AN1 Bitunix wallet parse and linear unrealized EUR; operator verify AL/AK/AN on financegnome.omniflow.cc after deploy + Full sync.",
+  "scope": [
+    "AL1: budgets.json panel 5 MTD planned CTE <= CURRENT_DATE + optional mid-month footnote",
+    "AN1: bitunix.rs wallet array parse + unrealizedPNL keys; pnl.rs futures USDT equity + linear unrealized→EUR; unit tests",
+    "AJ1: subscriptions price-changes empty-state copy (optional P2)",
+    "AK2: portfolio performance % min-snapshot footnote (optional P2)",
+    "V1: verify-work omniflow smoke rows AL/AK/AN + AI/AJ/AM regression"
+  ],
+  "risks": [
+    "UTC CURRENT_DATE vs operator TZ on budgets MTD — consistent with existing deviation chart",
+    "Linear notional must not enter market_value_eur — DEC-0064 double-count risk",
+    "USDT→EUR stable path depends on FxService rates — document fx_incomplete posture",
+    "Performance % may remain NULL until ≥2 snapshots — AK2 docs only",
+    "AI/AJ/AM waived or ops-only — V1 re-smoke not code fixes",
+    "Grafana provisioning reload required for AL1 before V1 budgets probe"
+  ],
+  "task_count": 5,
+  "mandatory_task_count": 3,
+  "optional_task_ids": ["AJ1", "AK2"],
+  "estimate_total_hours": 8,
+  "decisions": ["DEC-0079", "DEC-0080", "DEC-0064", "DEC-0038", "DEC-0039"],
+  "research": ["R-0076", "R-0077"],
+  "acceptance_rows": ["AI", "AJ", "AK", "AL", "AM", "AN"],
+  "execute_order": ["AL1", "AN1", "AJ1", "AK2", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Deploy AL1 Grafana JSON + AN1 backend on omniflow before V1 runtime probes"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "description": "Full Firefly sync (not exchanges-only) + forecast recompute before V1 wealth/portfolio/crypto probes"
+    },
+    {
+      "id": "GRAFANA_PROVISIONING_RELOAD",
+      "before_tasks": ["V1"],
+      "description": "Reload Grafana provisioning after AL1 deploy before budgets MTD smoke"
+    }
+  ],
+  "acceptance_mapping": {
+    "AI": {
+      "tasks": ["V1"],
+      "verify": "Re-smoke cashflow scarcity + forecast-horizons baseline on acct 114 — discovery refuted code regression; non-empty signed balances post Full sync + recompute"
+    },
+    "AJ": {
+      "tasks": ["AJ1", "V1"],
+      "verify": "Price changes (90d) documented empty-state when 0 events; optional AJ1 copy"
+    },
+    "AK": {
+      "tasks": ["AN1", "AK2", "V1"],
+      "verify": "crypto.subtotal_eur > 0 when Bitunix wallet priced; FX warning only with documented gaps; performance % footnote when <2 snapshots"
+    },
+    "AL": {
+      "tasks": ["AL1", "V1"],
+      "verify": "Budgets MTD planned/actual/deviation plausible — not −€150K planned with €0 actual from 730-day sum"
+    },
+    "AM": {
+      "tasks": ["V1"],
+      "verify": "ds/query + annotations 200 regression — waived per R-0077 unless HAR non-200"
+    },
+    "AN": {
+      "tasks": ["AN1", "V1"],
+      "verify": "Exchange crypto balances in wealth/portfolio totals after sync — not permanently €0 with configured keys"
+    }
+  },
+  "waived_sub_defects": {
+    "AM": "R-0077 — curl 200; no AM1 execute unless operator HAR non-200",
+    "AI": "discovery refuted — ops re-smoke only",
+    "AJ": "discovery refuted expected empty — optional AJ1 UX"
+  },
+  "deploy_order": [
+    "AL1 + AN1 single release (Grafana JSON + backend)",
+    "Operator: BACKEND_FRONTEND_DEPLOY + GRAFANA_PROVISIONING_RELOAD",
+    "Operator: Full Firefly sync + forecast recompute",
+    "Optional: AJ1 + AK2 provisioning copy",
+    "V1 verify-work omniflow smoke"
+  ],
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260608-q0020-bug0013",
+  "architecture_ref": "architecture-20260608-bug0013"
+}

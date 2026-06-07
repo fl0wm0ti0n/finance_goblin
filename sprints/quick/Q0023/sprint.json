@@ -1,0 +1,80 @@
+{
+  "id": "Q0023",
+  "type": "quick",
+  "bug_ids": ["BUG-0015"],
+  "status": "PLANNED",
+  "created": "2026-06-07",
+  "goal": "Close BUG-0015 confirm persistence after rebuild: DEC-0084 AU1 card payee_key normalization, DEC-0085/0086 AU2–AU4 payee+interval skip+merge with ±3d tolerance and fingerprint rotation, operator verify V1 on financegnome.omniflow.cc after deploy + H2 SQL probe + Full sync.",
+  "scope": [
+    "AU1: card billing descriptor rules in recurrence/normalize.rs (DEC-0084)",
+    "AU2: load_confirmed/rejected payee+interval maps; merge_confirmed_pattern; index migration (DEC-0085, DEC-0086)",
+    "AU3: detection skip + merge path before pending upsert (DEC-0085)",
+    "AU4: mark_stale_inactive by payee+interval; wire into run_detection (DEC-0085)",
+    "V1: verify-work confirm → rebuild → H2 probe → Full sync → AU/AV/AW smoke"
+  ],
+  "risks": [
+    "Over-merge distinct products under same biller — mitigated by payee+interval composite (DEC-0086)",
+    "Fingerprint UNIQUE violation on rotate — UPDATE same row by id in transaction",
+    "Layer 1 normalization affects forecast grouping (DEC-0013 shared module) — conservative rules + tests",
+    "H2 false negative — mandatory POSTGRES_PERSISTENCE_PROBE before Full sync in V1",
+    "Pre-fix orphan pending rows — skip+merge stops new alerts; cleanup deferred"
+  ],
+  "task_count": 5,
+  "mandatory_task_count": 5,
+  "conditional_task_ids": [],
+  "optional_task_ids": [],
+  "estimate_total_hours": 13,
+  "decisions": ["DEC-0084", "DEC-0085", "DEC-0086", "DEC-0071", "DEC-0072", "DEC-0013", "DEC-0015"],
+  "research": ["R-0081", "R-0082"],
+  "acceptance_rows": ["AU", "AV", "AW"],
+  "execute_order": ["AU1", "AU2", "AU3", "AU4", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Ship Q0023 backend image on omniflow before rebuild smoke"
+    },
+    {
+      "id": "POSTGRES_PERSISTENCE_PROBE",
+      "before_tasks": ["V1"],
+      "description": "H2 SQL: subscription_patterns status counts + Cursor/Apple rows immediately after app rebuild, before Full sync"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "description": "Full Firefly sync (not exchanges-only); allow subscription detection phase to complete"
+    }
+  ],
+  "acceptance_mapping": {
+    "AU": {
+      "tasks": ["AU1", "AU2", "AU3", "V1"],
+      "verify": "Confirmed Cursor + Apple remain confirmed in GET /api/v1/subscriptions and /subscriptions UI after rebuild + Full sync — not pending with Confirm/Reject"
+    },
+    "AV": {
+      "tasks": ["AU1", "AU2", "AU3", "AU4", "V1"],
+      "verify": "No duplicate pending rows for same merchant identity; confirmed merge path or stable fingerprint skip; detection does not INSERT fresh pending for confirmed payee+interval"
+    },
+    "AW": {
+      "tasks": ["AU3", "V1"],
+      "verify": "Subscription unread alerts reconcile with list tabs — no spurious new_detection for confirmed merchants"
+    }
+  },
+  "waived_ops_only": {
+    "H2_runtime": "Postgres persistence SQL probe — operator gate in V1, not sprint execute task",
+    "rebuild": "Operator rebuilds flow-finance-ai only — verify in V1 only"
+  },
+  "deploy_order": [
+    "AU1 → AU2 → (AU3 ∥ AU4) single backend release",
+    "Operator: BACKEND_FRONTEND_DEPLOY",
+    "Operator: confirm Cursor + Apple on omniflow (AU baseline)",
+    "Operator: rebuild flow-finance-ai (+ grafana if scope) — postgres untouched",
+    "Operator: POSTGRES_PERSISTENCE_PROBE before Full sync",
+    "Operator: FULL_FIREFLY_SYNC + detection",
+    "V1 verify-work rebuild smoke AU–AW"
+  ],
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260607-q0023-bug0015",
+  "architecture_ref": "architecture-20260607-bug0015",
+  "orchestrator_run_id": "auto-20260607-bug0015-001"
+}

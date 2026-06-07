@@ -1,0 +1,125 @@
+{
+  "sprint": "S0013",
+  "story_id": "US-0016",
+  "orchestrator_run_id": "auto-20260606-us0016-001",
+  "verified_at": "2026-06-08T04:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0016",
+  "tasks_source": "sprints/S0013/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#US-0016",
+  "decision_alignment": {
+    "decision_id": "DEC-0070",
+    "aligned": true,
+    "research_basis": ["R-0066", "R-0067"],
+    "contract_elements_covered": [
+      "DEC-0059 split layout: 5 user H2s + ## Contributing (T-0137)",
+      "Flow Finance AI-specific content in Purpose/Quickstart/Examples/Limitations (T-0138, T-0139, T-0140)",
+      "### Product status under ## Purpose; 8-bullet cap; backlog link (T-0138)",
+      "Related docs: docs/user-guides/, runbook, spec paths when SPEC_PACK_MODE=1 (T-0140)",
+      "Compose profiles: minimal / bundled-firefly / external omniflow (T-0139, T-0140)",
+      "validate_doc_profile --no-template-parity in CI/local test path (T-0141)",
+      "Runbook § README maintenance: release + refresh-context hooks + template flip gate (T-0142)",
+      "Developer shard maintenance pointer (T-0143)"
+    ],
+    "frozen_boundaries_respected": [
+      "No partial template/README.md stub",
+      "--no-template-parity retained until full template/ tree (AC-6 deferred)",
+      "No dedicated ## Product status H2",
+      "No DEV_* H2 titles in root README",
+      "No per-commit README automation",
+      "No application code changes",
+      "No per-story docs/user-guides/US-0016.md (root cross-link only)"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "T-0137 → (T-0138 + T-0139 + T-0140) → T-0141; T-0142 → T-0143",
+    "notes": "Content tasks parallel after skeleton; validator gate after README content; dev pointer after runbook hooks"
+  },
+  "test_coverage": {
+    "validator_gate": "T-0141 — validate_doc_profile.py --repo . --no-template-parity exit 0 via tests/run-tests.sh",
+    "content_review": "T-0137–T-0140 — split layout, non-stub Flow Finance AI prose, compose commands, cross-links",
+    "maintenance_docs": "T-0142, T-0143 — runbook hooks + developer shard pointer",
+    "uat_mapping": "sprints/S0013/uat.md UAT rows aligned to AC-1..AC-6 (AC-6 deferred)",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Root README.md exists with all DEC-0059 user-channel H2 sections for DOC_AUDIENCE_PROFILE=both and DOC_DETAIL_LEVEL=balanced (Purpose, Quickstart, Examples, Limitations, Related documentation) populated with Flow Finance AI-specific content—not placeholder stubs",
+      "tasks": ["T-0137", "T-0138", "T-0139", "T-0140"],
+      "covered": true,
+      "notes": "T-0137 establishes split-layout skeleton with non-empty paragraphs; T-0138 Purpose + Product status; T-0139 Quickstart/Examples/Limitations; T-0140 Related documentation"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "Root README includes ## Contributing pointing to docs/developer/README.md; no forbidden DEV_* H2 titles in root per split layout",
+      "tasks": ["T-0137"],
+      "covered": true,
+      "notes": "T-0137 explicit done-when: Contributing pointer and zero DEV_* H2 titles"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Related documentation section links docs/user-guides/, docs/engineering/runbook.md, and documents minimal / bundled-firefly / external omniflow compose entry commands",
+      "tasks": ["T-0140"],
+      "covered": true,
+      "notes": "T-0140 primary owner; T-0139 Quickstart also documents three compose profiles for operator copy-paste (cross-reference allowed per task)"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "python scripts/validate_doc_profile.py --repo . exits 0 on CI and locally with current scratchpad profile flags",
+      "tasks": ["T-0141"],
+      "covered": true,
+      "notes": "DEC-0070 effective command adds --no-template-parity while template/ absent; T-0141 wires into tests/run-tests.sh and runbook TEST_COMMAND; local exit 0 after content tasks"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Runbook documents README maintenance cadence: release or refresh-context updates Product status (or equivalent) when a US or BUG closes; validator run at release gate",
+      "tasks": ["T-0142", "T-0143"],
+      "covered": true,
+      "notes": "T-0142 runbook § README maintenance with release/refresh-context checklists and fail-closed validator; T-0143 developer shard pointer to runbook section"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "template/README.md present and profile H2 parity matches active root when template/ tree exists",
+      "tasks": [],
+      "covered": true,
+      "deferred": true,
+      "notes": "Vacuous until template/ tree lands per DEC-0070 T1 flip gate; T-0142 documents flip-gate procedure; not a plan-verify blocker"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Acceptance AC-4 cites default validator without --no-template-parity; DEC-0070 and T-0141 correctly use --no-template-parity while template/ absent — reconciled at execute/QA."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Compose commands appear in both Quickstart (T-0139) and Related documentation (T-0140); task allows cross-reference to avoid duplication."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "T-0138 Product status seed supports living-doc contract but AC-5 verification is runbook-hook focused at QA/UAT — T-0142 is authoritative for maintenance cadence."
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_count": 6,
+    "covered_count": 6,
+    "blocking_covered_count": 5,
+    "deferred_count": 1,
+    "gap_count": 0,
+    "task_count": 7,
+    "tasks_without_acceptance_ref": [],
+    "tasks_without_acceptance_ref_note": "All tasks T-0137–T-0143 map to at least one AC in tasks.md acceptance refs and coverage map",
+    "dec_0070_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true
+  },
+  "notes": "QA plan-verify 2026-06-08: sprints/S0013/tasks.md acceptance coverage map aligns with docs/product/acceptance.md § US-0016 and architecture § US-0016 / DEC-0070; 7/7 tasks mapped; 6/6 AC covered (AC-6 deferred vacuous); no gaps or orphans. Approved for /execute."
+}

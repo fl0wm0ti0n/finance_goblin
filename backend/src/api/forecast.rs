@@ -84,12 +84,27 @@ pub struct SeasonalMeta {
 }
 
 #[derive(Serialize)]
+pub struct BucketSources {
+    pub income: String,
+    pub fixed_costs: String,
+    pub variable_costs: String,
+}
+
+#[derive(Serialize)]
 pub struct MonthlyPointResponse {
     pub month: String,
     pub income: String,
     pub fixed_costs: String,
     pub variable_costs: String,
     pub free_cashflow: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bucket_sources: Option<BucketSources>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub ai_mapped: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
 }
 
 #[derive(Serialize)]
@@ -343,6 +358,12 @@ pub async fn monthly(
                 fixed_costs: fmt_amount(m.fixed_costs),
                 variable_costs: fmt_amount(m.variable_costs),
                 free_cashflow: fmt_amount(m.free_cashflow),
+                bucket_sources: m.bucket_sources.map(|s| BucketSources {
+                    income: s.income,
+                    fixed_costs: s.fixed_costs,
+                    variable_costs: s.variable_costs,
+                }),
+                ai_mapped: m.ai_mapped,
             })
             .collect(),
         seasonal,

@@ -17,9 +17,23 @@ fn first_split_field(payload: &Value, field: &str) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Payee source per DEC-0061: description → counterparty_name → destination_name.
+fn is_transfer_shaped_description(desc: &str) -> bool {
+    let upper = desc.to_uppercase();
+    upper.contains("SVWZ")
+        || upper.contains("UEBERWEISUNG")
+        || upper.contains("LASTSCHRIFT")
+}
+
+/// Payee source per DEC-0061 with DEC-0072 transfer guard:
+/// description → counterparty_name → destination_name, except transfer-shaped
+/// memos prefer counterparty_name first.
 pub fn extract_payee_source(tx: &TransactionRow) -> Option<String> {
     if let Some(desc) = tx.description.as_deref().filter(|s| !s.trim().is_empty()) {
+        if is_transfer_shaped_description(desc) {
+            if let Some(name) = first_split_field(&tx.payload, "counterparty_name") {
+                return Some(name);
+            }
+        }
         return Some(desc.to_string());
     }
     if let Some(name) = first_split_field(&tx.payload, "counterparty_name") {
@@ -134,7 +148,7 @@ mod tests {
         });
         let tx = expense_tx(Some(""), payload);
         let source = extract_payee_source(&tx).unwrap();
-        assert_eq!(payee_key(&source), "spotify ab");
+        assert_eq!(payee_key(&source), "spotify");
     }
 
     #[test]
@@ -154,5 +168,45 @@ mod tests {
         let groups = by_payee(&txs);
         assert!(groups.contains_key("netflix"));
         assert!(!groups.contains_key("ignored merchant"));
+    }
+
+    #[test]
+    fn transfer_shaped_description_prefers_counterparty() {
+        let payload = json!({
+            "attributes": {
+                "type": "withdrawal",
+                "transactions": [{
+                    "counterparty_name": "Netflix",
+                    "amount": "-12.99",
+                    "type": "withdrawal"
+                }]
+            }
+        });
+        let tx = expense_tx(
+            Some("SVWZ+REF123456 UEBERWEISUNG Netflix Streaming Monat"),
+            payload,
+        );
+        let source = extract_payee_source(&tx).unwrap();
+        assert_eq!(payee_key(&source), "netflix");
+        let txs = [tx];
+        let groups = by_payee(&txs);
+        assert!(groups.contains_key("netflix"));
+    }
+
+    #[test]
+    fn non_transfer_description_unchanged_priority() {
+        let payload = json!({
+            "attributes": {
+                "type": "withdrawal",
+                "transactions": [{
+                    "counterparty_name": "Ignored",
+                    "amount": "-9.99",
+                    "type": "withdrawal"
+                }]
+            }
+        });
+        let tx = expense_tx(Some("Amazon Prime Video"), payload);
+        let source = extract_payee_source(&tx).unwrap();
+        assert_eq!(source, "Amazon Prime Video");
     }
 }

@@ -256,6 +256,22 @@ export function ForecastPage() {
 
           {tab === "monthly" && (
             <>
+              {monthlyQuery.data?.series?.[0]?.ai_mapped && (
+                <div className="card" style={{ marginBottom: "1rem", borderColor: "#a855f7" }}>
+                  <span
+                    className="badge"
+                    style={{ background: "#f3e8ff", color: "#7e22ce" }}
+                    title="Some recurring forecast rows were bucket-mapped by AI after the config category map. Config-mapped categories are never overridden. Inference uses privacy-safe hashed merchant tokens and amount bands (not raw descriptions) unless allow_raw_transactions=true. Rolling discretionary residual stays Variable in MVP."
+                  >
+                    AI-mapped
+                  </span>
+                  <p style={{ margin: "0.5rem 0 0" }}>
+                    AI assisted bucket mapping for ambiguous recurring patterns this month. Your{" "}
+                    <code>[forecast.category_buckets]</code> config map still takes precedence;
+                    rolling discretionary spend remains Variable.
+                  </p>
+                </div>
+              )}
               {seasonalCallout && (
                 <div className="card" style={{ marginBottom: "1rem", borderColor: "#3b82f6" }}>
                   <span className="badge" style={{ background: "#dbeafe", color: "#1d4ed8" }}>

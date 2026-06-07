@@ -125,6 +125,56 @@ after template upgrades if needed.
 
 Normative H2 titles and matrix: `docs/engineering/architecture.md` (`# US-0077`).
 
+### README maintenance (US-0016)
+
+Living-doc updates for root `README.md` **`### Product status`** bind to phase boundaries
+only — not per-commit. Normative contract: **DEC-0070** and `docs/engineering/architecture.md`
+§ **US-0016** / § **US-0017** (per-segment hooks).
+
+#### Release segment (definition)
+
+The **release segment** is the scope of work reconciled in the current `/release` or
+`/refresh-context` pass:
+
+- a standard sprint id (`Sxxxx`),
+- a quick task id (`Qxxxx`), or
+- a paired intake batch (multiple US/BUG ids closed together in one release artifact).
+
+Each US or BUG that reaches **DONE** / **CLOSED** within that segment must receive exactly one
+Product status bullet before the phase completes.
+
+#### Validator commands (when to use each)
+
+| Repo state | Command | Use when |
+|------------|---------|----------|
+| `template/` **absent** (current) | `python scripts/validate_doc_profile.py --repo . --no-template-parity` | CI, release gate, local edits before push |
+| `template/` **present** | `python scripts/validate_doc_profile.py --repo .` | After full `template/README.md` + `template/docs/developer/README.md` mirror lands |
+
+**Template flip gate:** drop `--no-template-parity` only in the **same change set** that adds
+the complete `template/` tree. Do not ship a partial `template/README.md` stub.
+
+#### Release (`/release`)
+
+After backlog reconciliation (≈ step 10), before runbook readiness (≈ step 14):
+
+1. For **each** **US** or **BUG** in the **current release segment** (see definition above) that
+   transitions to **DONE** / **CLOSED**, append one bullet to root `README.md` **`### Product
+   status`** under **`## Purpose`** in the form `{US-xxxx|BUG-xxxx} — {one-line outcome}`
+   (newest first).
+2. Trim to the **8** most recent entries; drop oldest.
+3. Run `python scripts/validate_doc_profile.py --repo . --no-template-parity` — non-zero exit
+   → fail closed; remediation → this subsection.
+
+#### Refresh-context (`/refresh-context`)
+
+After backlog status reconciliation:
+
+1. When the **release segment** or sprint artifacts closed **one or more** US/BUG ids since the
+   prior refresh, verify **each** closed id appears in root `README.md` **`### Product status`**;
+   update missing bullets before completing refresh.
+2. When README or doc-profile surfaces were touched, run
+   `python scripts/validate_doc_profile.py --repo . --no-template-parity`.
+
 ## User-visible internal metadata guard (US-0071 / DEC-0053)
 
 **Goal:** keep planning-shaped identifiers out of **operator-visible software
@@ -1375,14 +1425,14 @@ byte-literal even at `CAVEMAN_LEVEL=ultra`.
 
 Optional **input-side** file compression. **Default off.** Operator-initiated,
 script-invoked only. Never fires autonomously. Full contract:
-**DEC-0073** + `docs/engineering/architecture.md` `# US-0090` +
+**DEC-0075** + `docs/engineering/architecture.md` `# US-0090` +
 `scripts/caveman_compress_input.py`.
 
 Non-substitution with `TOKEN_PROFILE` and `CAVEMAN_MODE`:
 
 `TOKEN_PROFILE` controls context breadth. `CAVEMAN_MODE` controls reply voice. `CAVEMAN_COMPRESS_INPUT` controls input-side file compression. All three axes are orthogonal: setting one does not change the others, and none substitutes for another.
 
-#### Activation gate (DEC-0073 §2)
+#### Activation gate (DEC-0075 §2)
 
 All three conditions must hold before any mutation occurs:
 
@@ -1393,7 +1443,7 @@ All three conditions must hold before any mutation occurs:
 Any failing condition short-circuits with a reason code from §7 and exit `2`.
 Default / unset / partial state = no-op.
 
-#### Sidecar originals (DEC-0073 §3)
+#### Sidecar originals (DEC-0075 §3)
 
 Before mutating any file, the script writes the pre-mutation bytes to
 `docs/.caveman-originals/<relative/path>/<filename>`. Atomic order: sidecar
@@ -1401,7 +1451,7 @@ first (temp + replace), then target (temp + replace). The tree is anchored
 by `docs/.caveman-originals/.gitkeep` and excluded from VCS by the repo-root
 `.gitignore` anchor for US-0090.
 
-#### Deny-list policy (DEC-0073 §4)
+#### Deny-list policy (DEC-0075 §4)
 
 Layered, read in this order (**deny always wins**):
 
@@ -1414,7 +1464,7 @@ Layered, read in this order (**deny always wins**):
 Deny-list baseline is versioned via `deny_list_version` (SHA-256 of sorted
 canonical JSON) and reported by `--report`.
 
-#### Allow-list grammar (DEC-0073 §5)
+#### Allow-list grammar (DEC-0075 §5)
 
 Three forms in `CAVEMAN_FILE_SCOPE`:
 
@@ -1424,7 +1474,7 @@ Three forms in `CAVEMAN_FILE_SCOPE`:
 | Raw CSV globs | `docs/user-guides/**/*.md,handoffs/archive/*.md` | Forward slashes only. |
 | Hybrid | `profile:docs-prose-only;globs:handoffs/archive/*.md` | One profile per scope; unknown tokens fail closed. |
 
-#### Safe-mode minifier (DEC-0073 §6)
+#### Safe-mode minifier (DEC-0075 §6)
 
 Four-step, strictly idempotent pipeline:
 
@@ -1438,7 +1488,7 @@ Aggressive mode is **deferred**; v1 ships safe-mode only. All safe-mode
 transformations keep the 9 DEC-0072 §4 literal regions byte-identical; any
 drift is fail-closed with `CAVEMAN_COMPRESS_LITERAL_REGION_DAMAGED`.
 
-#### Reason-code vocabulary (DEC-0073 §7)
+#### Reason-code vocabulary (DEC-0075 §7)
 
 Nine codes in three families. No post-write codes.
 
@@ -1456,7 +1506,7 @@ Nine codes in three families. No post-write codes.
 
 Additions require a subsequent DEC amending §7.
 
-#### CLI contract (DEC-0073 §8)
+#### CLI contract (DEC-0075 §8)
 
 | Flag | Semantics |
 |------|-----------|
@@ -1469,11 +1519,11 @@ Additions require a subsequent DEC amending §7.
 
 | Key | Values | Default | Notes |
 |-----|--------|---------|-------|
-| `CAVEMAN_COMPRESS_INPUT` | `0` \| `1` | `0` | Activation gate bit (DEC-0073 §2). |
+| `CAVEMAN_COMPRESS_INPUT` | `0` \| `1` | `0` | Activation gate bit (DEC-0075 §2). |
 | `CAVEMAN_FILE_SCOPE` | string | empty | Profile name, CSV globs, or hybrid (§5). |
 | `CAVEMAN_COMPRESS_INGEST_CURSORIGNORE` | `0` \| `1` | `0` | Optional overlay (§4). |
 
-#### Template parity (DEC-0073 §10)
+#### Template parity (DEC-0075 §10)
 
 The following pairs are byte-identical between active and template copies and
 installer-owned (BUG-0003 / DEC-0066): `scripts/caveman_compress_input.py`,
@@ -2080,10 +2130,70 @@ export DATABASE_PASSWORD=ci FIREFLY_APP_KEY=base64:32RandomCharactersMinimumRequ
        FIREFLY_DB_PASSWORD=ci AUTHENTIK_SECRET_KEY=ci
 docker compose -f docker-compose.yml -f docker-compose.external.yml \
   --profile external config --services | sort
-# expect: flow-finance-ai, grafana
+# expect: flow-finance-ai, grafana, stats-forecast
 ```
 
 See `scripts/compose-config-check.sh` (invoked by `bash tests/run-tests.sh`).
+
+#### 7a. Omniflow ML enablement (US-0013 / DEC-0076)
+
+**Release (S0014):** `0.14.0-us0013` — operator notes `handoffs/releases/S0014-release-notes.md` and `docs/user-guides/US-0013.md`. Enables StatsForecast sidecar on the external profile with opt-in ML overlay (DEC-0049 default-off preserved).
+
+**Compose profile union:** Base `docker-compose.yml` defines `stats-forecast` with `profiles: [full]`. Overlay `docker-compose.external.yml` additively merges `profiles: [external]` and traefik network attachment — one container when either profile is active. Do **not** combine `external` with `minimal`, `standard`, `full`, or `bundled-firefly`.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai stats-forecast
+```
+
+**Env (names only — set in operator `.env`):**
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `FORECAST_ML_ENABLED` | `false` | Opt-in ML overlay; set `true` after sidecar healthy |
+| `STATS_FORECAST_URL` | `http://stats-forecast:8090` | Internal sidecar URL (container port, not host remap) |
+| `STATS_FORECAST_PORT` | `8091` | Host debug port for health probe (8090 clash on omniflow) |
+
+After changing ML env vars, recreate `flow-finance-ai`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+**Health probe (runtime gate):**
+
+```bash
+curl -sf "http://localhost:${STATS_FORECAST_PORT:-8091}/health"
+```
+
+Backend `health_ok()` GET `/health` runs before the sync `forecast_ml` phase (60s HTTP timeout). Compose healthcheck (`start_period: 30s`) is advisory only — first sync after cold start may skip ML if sidecar is still warming (DEC-0052 acceptable).
+
+**Min history:** `[forecast_ml] min_monthly_points = 12` unchanged. Requires **Full Firefly sync** with ≥12 monthly net-cashflow points per asset account before ML overlay persists.
+
+**Full sync + recompute steps:**
+
+1. Deploy overlay + set `FORECAST_ML_ENABLED=true` in operator `.env`
+2. Restart `stats-forecast` and `flow-finance-ai`
+3. Confirm sidecar health (`curl` above or from traefik network: `curl -sf http://stats-forecast:8090/health`)
+4. Trigger **Full sync** from Settings → Sync
+5. Verify `GET /api/v1/forecast/meta` → `ml_status: success` or documented skip reason
+6. Verify React `/forecast` Compare tab and Grafana `$forecast_variant=ml_enhanced`
+
+**Degraded mode troubleshooting:**
+
+| `ml_skipped_reason` | Meaning | Remediation |
+|---------------------|---------|-------------|
+| `sidecar_disabled` | `FORECAST_ML_ENABLED=false` or unset | Set `FORECAST_ML_ENABLED=true`; recreate backend |
+| `sidecar_unavailable` | Health probe failed | Check `stats-forecast` logs; wait for healthcheck; re-sync |
+| `insufficient_history` | &lt;12 monthly points | Run Full sync after more Firefly history accumulates |
+| `sidecar_error` | Sidecar HTTP/forecast error | Check sidecar logs; verify mirror data |
+
+**Cold start:** First sync after deploy may record `sidecar_unavailable` — re-sync after `/health` returns OK.
+
+**Memory:** StatsForecast sidecar RSS ~200–400 MB under load (R-0044); monitor on shared omniflow host.
+
+**Cross-link:** `docs/user-guides/US-0013.md`
 
 **Optional bootstrap integration CI (US-0012 / AC-6):** Set `DATABASE_BOOTSTRAP_TEST_URL` to a superuser maintenance URL (`postgres://…/postgres`) and run `cargo test --test database_bootstrap_integration`. Suggested fixtures: `postgres:16` for create-if-missing path; `timescale/timescaledb` image for extension path. Skipped gracefully when env unset.
 
@@ -2631,6 +2741,379 @@ cd backend && cargo test --test bug0007_ai_discovery
 **Advisory (non-blocking):** LLM may pass `group_by: month` inflating category totals — operator note only.
 
 **Boundaries:** RAG deferred (V); payee aggregates deferred (B); BUG-0008 coordinate-only; no Traefik router changes; OIDC/browser regression deferred to operator smoke.
+
+#### 19. BUG-0008 hotfix — Subscription alerts & detection recall (Q0018 / released 2026-06-08)
+
+**Release:** BUG-0008 **DONE** — operator notes `handoffs/releases/Q0018-release-notes.md`. Fixes omniflow subscription alert/list mismatch and under-detection on US-0010 external profile: **(W)** alert fingerprint dedup, reconciled unread-count API, orphan lifecycle, frontend banner/toast; **(X)** payee normalization, transfer counterparty guard, 730-day detection window without resync spam. Per **DEC-0071**, **DEC-0072 Phase 1**.
+
+**Deploy (explicit — backend + embedded frontend):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before V1 smoke):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+**Migration:** `010_subscription_alert_fingerprint.sql` runs on backend startup — confirm DB healthy after deploy.
+
+**Env (names only — operator `.env`):**
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_HOST` | **`postgres`** on external profile (prerequisite from §11) |
+| `FIREFLY_BASE_URL` / `FIREFLY_PERSONAL_ACCESS_TOKEN` | Mirror data gate (922+ txs) |
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 156/156 |
+| BUG-0008 suite | `cd backend && cargo test --test bug0008_subscription_alerts` | 8/8 |
+| App health | `curl -sf https://financegnome.omniflow.cc/health` | HTTP 200 |
+| Row W | `GET /api/v1/subscriptions/alerts/unread-count` | `reconciled: true`; count ≤ pending patterns |
+| Row W | `/subscriptions` banner + toast | Count from `unread_new_detection`; toast on delta only |
+| Row W | Confirm/reject pattern | Orphan alerts marked read |
+| Row X | Pattern count after optional sync | > 12 patterns (recall improvement) |
+| Row X | Post-resync spam guard | `unread_new_detection` not >> `pending_patterns` |
+| Regression | Subscription routes + OIDC/external profile | **PASS** |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+cd backend && cargo test --test bug0008_subscription_alerts
+```
+
+**Boundaries:** X Phase 2 category gate deferred; AI-in-pipeline deferred; US-0005 unified bell unchanged; BUG-0007 coordinate-only; OIDC/browser regression deferred to operator smoke.
+
+#### 20. BUG-0011 hotfix — Planning mode fixes (Q0019 / released 2026-06-08)
+
+**Release:** BUG-0011 **DONE** — operator notes `handoffs/releases/Q0019-release-notes.md`. Fixes omniflow planning mode on US-0010 external profile: **(AD)** first-run Create empty plan + inline add/edit adjustments; **(AE)** overlay-only compare `monthly_delta_sum` (zero adjustments → **0.00**); **(AF)** plan-vs-actual HTTP **200** `no_active_plan` guided UX. Per **DEC-0073**, **DEC-0074**.
+
+**Deploy (explicit — backend + embedded frontend):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before V1 smoke):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+**Env (names only — operator `.env`):**
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_HOST` | **`postgres`** on external profile (prerequisite from §11) |
+| `FIREFLY_BASE_URL` / `FIREFLY_PERSONAL_ACCESS_TOKEN` | Mirror data for forecast baseline |
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 160/160 |
+| Plans integration | `cd backend && cargo test --test plans_integration` | 5/5 |
+| App health | `curl -sf https://financegnome.omniflow.cc/health` | HTTP 200 |
+| Row AD | `/planning` Create empty plan + add adjustment | Editable plan; POST/PATCH succeed |
+| Row AD | Custom Apply toast | "Custom plan ready — add lines below" |
+| Row AE | Compare — zero-adjustment plan | `monthly_delta_sum` ≈ **0.00** |
+| Row AE | Compare — Leasing template | Overlay delta ~ **-300** |
+| Row AF | `GET /api/v1/plans/active/plan-vs-actual` (no active) | HTTP **200** `{ status: "no_active_plan" }` |
+| Row AF | Plan vs Actual tab (no active) | Guided card — not blank/404 |
+| Regression | OIDC `/planning` three tabs | Scenarios + Compare + PVA load without console errors |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+cd backend && cargo test --test plans_integration
+```
+
+**Boundaries:** Grafana Dashboard 3 unchanged (R-0020); BUG-0008 coordinate-only; no auto-activate on create (US-0004 preserved).
+
+#### 21. US-0014 — Planning mode intuitive UX (S0015 / released 2026-06-08)
+
+**Release:** US-0014 **DONE** — operator notes `handoffs/releases/S0015-release-notes.md`. Polishes planning mode on US-0010 external profile per **DEC-0077**: **(AC-1)** first-run template grid + Create empty plan; **(AC-2/AC-5)** success confirmations + add-lines invalidation; **(AC-3/AC-4)** Compare/PVA contextual UX verify; **(AC-6)** set-active banner Dashboard 3 copy; **(AC-7)** operator-visible mutation error cards; **(AC-8)** OIDC three-tab smoke template.
+
+**Deploy (explicit — backend + embedded frontend):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before AC-8 OIDC smoke):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Frontend unit | `cd frontend && npm test` | 5/5 |
+| Plans integration | `cd backend && cargo test --test plans_integration` | 5/5 |
+| App health | `curl -sf https://financegnome.omniflow.cc/health` | HTTP 200 |
+| AC-1 | Empty state template grid + Create empty plan | 6 templates; inline add form visible |
+| AC-2/AC-5 | Create empty / from template | Green success confirmation; add line updates Compare/PVA |
+| AC-3 | Compare — zero-adjustment plan | `monthly_delta_sum` ≈ **0.00**; overlay footnote |
+| AC-4 | Plan vs Actual (no active) | Guided card — not blank/404 |
+| AC-6 | Set-active banner | Mentions Plan vs Actual + Grafana Dashboard 3 (Budgets) |
+| AC-7 | Force mutation failure | Red error card with Dismiss |
+| AC-8 | OIDC `/planning` three tabs | Scenarios + Compare + PVA load without console errors |
+
+**Automated regression:**
+
+```bash
+cd frontend && npm test
+cd backend && cargo test --test plans_integration
+```
+
+**Boundaries:** DEC-0073/DEC-0074 compare/PVA contracts frozen; no auto-activate on create (US-0004 preserved); user guide `docs/user-guides/US-0014.md`.
+
+#### 22. US-0015 — AI-assisted forecast category bucket mapping (S0016 / released 2026-06-06)
+
+**Release:** US-0015 **DONE** — operator notes `handoffs/releases/S0016-release-notes.md`. AI bucket cascade on US-0010 external profile per **DEC-0078**: **(AC-1)** config precedence guard; **(AC-2)** rule→LLM→Variable cascade with 0.75 threshold; **(AC-3)** privacy allowlist `prepare_bucket_features`; **(AC-4)** monthly API `bucket_sources` + `ai_mapped`; **(AC-5)** ForecastPage AI-mapped badge; **(AC-6)** `forecast_bucket_assignment` audit; **(AC-7)** OIDC `/forecast` Monthly smoke template (pass-with-prerequisites at release).
+
+**Deploy (explicit — backend + embedded frontend):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before AC-7 OIDC smoke):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+After deploy: Full Firefly sync + forecast recompute before Monthly tab smoke.
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 169/169 |
+| Frontend unit | `cd frontend && npm test` | 5/5 |
+| App health | `curl -sf https://financegnome.omniflow.cc/health` | HTTP 200 |
+| Sync + recompute | Full Firefly sync + forecast recompute | `GET /api/v1/forecast/meta` shows `computation_id` |
+| AC-4 | `GET /api/v1/forecast/monthly` | `bucket_sources` + `ai_mapped` when provenance present |
+| AC-5 | `/forecast` Monthly tab | AI-mapped badge when `ai_mapped=true`; no badge on config-only months |
+| AC-7 | OIDC `/forecast` Monthly smoke | Steps 1–8 per `sprints/S0016/uat.md` |
+| Regression | AI Chat six tools | Unchanged (BUG-0007) |
+| Regression | Forecast Compare / ML tabs | US-0013 ML overlay unchanged |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+cd frontend && npm test
+```
+
+**Boundaries:** Config-mapped buckets never AI-overridden; rolling residual → Variable only (MVP); chat tool registry unchanged; user guide `docs/user-guides/US-0015.md`.
+
+#### 23. BUG-0013 hotfix — Omniflow analytics regression (Q0020 / released 2026-06-09)
+
+**Release:** BUG-0013 **DONE** — operator notes `handoffs/releases/Q0020-release-notes.md`. Fixes omniflow analytics on US-0010 external profile per **DEC-0079** and **DEC-0080**: **(AL)** budgets MTD planned `<= CURRENT_DATE` cap + footnote; **(AN/AK)** Bitunix futures wallet array parse + linear unrealized USDT→EUR; **(AJ)** subscriptions price-changes empty-state copy; **(AK2)** portfolio performance % min-snapshot footnote; **(AM)** waived per R-0077; **(AI)** ops regression smoke after Full sync.
+
+**Deploy (backend + Grafana provisioning):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai grafana
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before AN/AK wealth probes):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+**Operator gate — GRAFANA_PROVISIONING_RELOAD (required before AL/AJ/AK live panels):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate grafana
+```
+
+**Operator gate — FULL_FIREFLY_SYNC:** Settings → Sync → **Full sync** (not exchanges-only) + forecast recompute before AI/AN/AK wealth probes.
+
+**Grafana UI warning:** Do **not** click **Save** on analytics dashboards after variable changes — persisted `current` blocks override provisioning JSON (see §17).
+
+**Operator smoke (post-deploy + all three gates):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 174/174 |
+| App health | `curl -sf https://financegnome.omniflow.cc/health` | HTTP 200 |
+| Row AL | `/analytics/budgets` MTD summary | Planned/actual/deviation plausible — not −€150K artifact |
+| Row AN | `GET /api/v1/wealth` | `crypto.subtotal_eur` > 0 when Bitunix equity > 0 |
+| Row AK | `/analytics/portfolio` crypto stat | Non-zero after sync + recompute |
+| Row AK | Performance % panel | "Needs ≥2 snapshots" or data when history exists |
+| Row AJ | `/analytics/subscriptions` price changes | Event rows or documented empty-state |
+| Row AI | `/analytics/cashflow` + `/analytics/forecast-horizons` acct 114 | Non-empty signed baseline balances |
+| Regression | Six `/analytics/{slug}` routes + `POST …/ds/query` | **200** embed without transport errors |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+```
+
+**Boundaries:** US-0015 AI buckets unchanged; BUG-0011 planning unchanged; DEC-0064 crypto subtotal rules preserved; MetaMask extension console noise out of scope.
+
+#### 24. BUG-0014 hotfix — Post-rebuild omniflow cluster (Q0022 / released 2026-06-07)
+
+**Release:** BUG-0014 **DONE** — operator notes `handoffs/releases/Q0022-release-notes.md`. Fixes post-rebuild omniflow cluster on US-0010 external profile per **DEC-0081**, **DEC-0082**, **DEC-0083**: **(AO)** forecast-horizons panel 13 dual-scenario ML copy; **(AQ)** wealth holdings cap 50 + unified `fx_incomplete` + native qty/EUR table; **(AS)** plan delete UI + active 409 guard + five `target_type` options; **(AP)** AP2 conditional skipped pending AP1_SQL_PROBE; **(AR)** AR1 conditional skipped pending AR partial probe; **(AT)** ops-only three-service compose.
+
+**Deploy (backend + Grafana + stats-forecast when ML enabled):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai grafana stats-forecast
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before wealth/planning probes):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+**Operator gate — THREE_SERVICE_COMPOSE (required before AO-1 / AT-1):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d stats-forecast
+```
+
+**Operator gate — GRAFANA_PROVISIONING_RELOAD (required before AO live panel):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate grafana
+```
+
+**Operator gate — FULL_FIREFLY_SYNC:** Settings → Sync → **Full sync** (not exchanges-only) + forecast recompute acct 114 before AR probes.
+
+**Operator gate — AP1_SQL_PROBE:** Run on `exchange_holdings` before AP2 evaluation:
+
+```sql
+SELECT product_type, asset, quantity, market_value_eur, unrealized_pnl_eur
+FROM exchange_holdings WHERE exchange_id='bitunix'
+ORDER BY product_type, asset;
+```
+
+**Grafana UI warning:** Do **not** click **Save** on analytics dashboards after variable changes — persisted `current` blocks override provisioning JSON (see §17).
+
+**Operator smoke (post-deploy + all gates):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 177/177 |
+| App health | `curl -sf https://financegnome.omniflow.cc/health` | HTTP 200 |
+| Row AO | `/analytics/forecast-horizons` panel 13 | Dual-scenario ML copy |
+| Row AO-1 | `GET /api/v1/forecast/meta` | `ml_computation_id` set or sidecar-down copy |
+| Row AP | AP1 SQL + `GET /api/v1/wealth` | `crypto.subtotal_eur` > 0 when priced |
+| Row AQ | Wealth crypto tab | Native qty + EUR + FX banner when applicable |
+| Row AR | API acct 114 + `/analytics/cashflow` | Non-zero balances; reopen AR1 if API≠Grafana |
+| Row AS | `/planning` | Delete non-active; 409 active; five target_type options |
+| Row AT | `docker ps \| grep stats-forecast` | Container running when ML enabled |
+| Regression | Six `/analytics/{slug}` routes | Embed without transport errors |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+cd backend && cargo test --test grafana_provisioning_bug0009
+cd frontend && npm test -- --run
+```
+
+**Boundaries:** BUG-0013 DEC-0080 Bitunix pricing unchanged; US-0014 planning semantics preserved; DEC-0064 crypto subtotal rules preserved.
+
+#### 25. BUG-0015 hotfix — Subscription confirm persistence after rebuild (Q0023 / released 2026-06-07)
+
+**Release:** BUG-0015 **DONE** — operator notes `handoffs/releases/Q0023-release-notes.md`. Fixes confirm-once trust on US-0010 external profile per **DEC-0084**, **DEC-0085**, **DEC-0086**: **(AU)** card billing `payee_key` normalization + payee+interval merge before pending upsert; **(AV)** detection skip/merge by payee+interval + stale inactive; **(AW)** merge path suppresses spurious `new_detection` alerts.
+
+**Deploy (backend only — postgres volume untouched):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before runtime probes):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+**Operator gate — POSTGRES_PERSISTENCE_PROBE (H2 SQL after app rebuild, before Full sync):**
+
+```sql
+SELECT status, COUNT(*) FROM subscription_patterns GROUP BY status;
+SELECT fingerprint, status, payee_key, interval_days, current_amount
+FROM subscription_patterns
+WHERE payee_key ILIKE '%cursor%' OR payee_key ILIKE '%apple%'
+ORDER BY updated_at DESC;
+```
+
+| Outcome | Action |
+|---------|--------|
+| Zero `confirmed` rows after rebuild (no operator action) | **Ops** — volume/DB target (H2); do not run V1 until resolved |
+| `confirmed` rows present; drift after Full sync | AU1–AU4 path validated |
+| Single confirmed per merchant; still pending in UI | Reopen discovery — unlikely per H3 refutation |
+
+**Operator gate — FULL_FIREFLY_SYNC:** Settings → Sync → **Full sync** (not exchanges-only) + subscription detection phase.
+
+**Rebuild scope:** Recreate `flow-finance-ai` only — do not recreate postgres.
+
+**Operator smoke (post-deploy + all gates):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 187/187 |
+| App health | `curl -sf https://financegnome.omniflow.cc/health` | HTTP 200 |
+| AU baseline | Confirm Cursor + Apple on `/subscriptions` before rebuild | Confirmed in UI |
+| H2-1 | H2 SQL after rebuild, before Full sync | `confirmed` rows present |
+| Row AU | `GET /api/v1/subscriptions?status=confirmed` + `/subscriptions` UI | Cursor/Apple confirmed; no Confirm/Reject for confirmed merchants |
+| Row AV | API + optional SQL | No duplicate `status=pending` for same payee+interval |
+| Row AW | `GET /api/v1/subscriptions/alerts/unread-count` + pending tab | Unread reconciles; no spurious `new_detection` |
+| OIDC-1 | OIDC-enabled deploy regression | Auth + `/subscriptions` load without transport errors |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+cd backend && cargo test --lib card_billing
+cd backend && cargo test --lib interval_matches
+cd frontend && npm test -- --run
+```
+
+**Boundaries:** BUG-0008 alert dedup unchanged; US-0003 confirm/reject UX preserved; DEC-0072 SEPA paths unchanged for non-card payees.
 
 ### Tests
 

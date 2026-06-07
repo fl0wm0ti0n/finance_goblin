@@ -1,0 +1,181 @@
+{
+  "id": "Q0023",
+  "title": "BUG-0015 confirm persistence after rebuild (normalization + payee+interval merge)",
+  "status": "PLANNED",
+  "bug_id": "BUG-0015",
+  "architecture_ref": "architecture-20260607-bug0015",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["AU", "AV", "AW"],
+  "acceptance_mapping": {
+    "AU": {
+      "tasks": ["AU1", "AU2", "AU3", "V1"],
+      "primary_verify": "Cursor + Apple confirmed in API/UI after rebuild + Full sync — not re-prompted pending"
+    },
+    "AV": {
+      "tasks": ["AU1", "AU2", "AU3", "AU4", "V1"],
+      "primary_verify": "No duplicate pending for same merchant identity; merge or skip on confirmed payee+interval"
+    },
+    "AW": {
+      "tasks": ["AU3", "V1"],
+      "primary_verify": "Unread subscription alerts reconcile — no spurious new_detection for confirmed merchants"
+    }
+  },
+  "task_count": 5,
+  "mandatory_task_count": 5,
+  "conditional_task_ids": [],
+  "optional_task_ids": [],
+  "estimate_total_hours": 13,
+  "tasks": [
+    {
+      "id": "AU1",
+      "title": "Card billing payee_key normalization",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0015 (AU, AV) — DEC-0084 Layer 1",
+      "files": ["backend/src/recurrence/normalize.rs"],
+      "decisions": ["DEC-0084", "DEC-0072", "DEC-0013"],
+      "research": ["R-0082", "R-0081"],
+      "tests": [
+        "Asterisk split: DBA*Plan → dba",
+        "Comma memo: leftmost segment before comma",
+        "Billing roots: apple.com/bill, itunes.com → apple",
+        "Domain tail: strip .com, /bill for known SaaS",
+        "cargo test recurrence::normalize paths PASS"
+      ]
+    },
+    {
+      "id": "AU2",
+      "title": "Repository payee+interval maps and merge upsert",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 4,
+      "depends_on": ["AU1"],
+      "acceptance_hook": "BUG-0015 (AU, AV) — DEC-0085, DEC-0086",
+      "files": [
+        "backend/src/subscriptions/repository.rs",
+        "backend/migrations/"
+      ],
+      "decisions": ["DEC-0085", "DEC-0086", "DEC-0071"],
+      "research": ["R-0081"],
+      "tests": [
+        "load_confirmed_payee_intervals / load_rejected_payee_intervals",
+        "interval_matches ±3 day tolerance",
+        "merge_confirmed_pattern rotates fingerprint in-place; preserves confirmed_at",
+        "Migration idx_subscription_patterns_payee_status",
+        "cargo test subscriptions::repository paths PASS"
+      ]
+    },
+    {
+      "id": "AU3",
+      "title": "Detection skip + merge path",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 3,
+      "depends_on": ["AU2"],
+      "acceptance_hook": "BUG-0015 (AU, AV, AW) — DEC-0085",
+      "files": [
+        "backend/src/subscriptions/detection.rs",
+        "backend/src/subscriptions/service.rs"
+      ],
+      "decisions": ["DEC-0085", "DEC-0086", "DEC-0071"],
+      "research": ["R-0081"],
+      "tests": [
+        "Confirmed payee+interval match → merge_confirmed_pattern; no pending INSERT",
+        "Rejected payee+interval → skip emit",
+        "Exact fingerprint fast path retained",
+        "No new_detection alert on confirmed merge",
+        "cargo test detection paths PASS"
+      ]
+    },
+    {
+      "id": "AU4",
+      "title": "Stale inactive by payee+interval",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["AU2"],
+      "acceptance_hook": "BUG-0015 (AV) — DEC-0085",
+      "files": [
+        "backend/src/subscriptions/detection.rs",
+        "backend/src/subscriptions/service.rs"
+      ],
+      "decisions": ["DEC-0085", "DEC-0086"],
+      "research": ["R-0081"],
+      "tests": [
+        "active_payee_intervals from current detection groups",
+        "mark_stale_inactive uses payee+interval not fingerprint-only",
+        "mark_stale_inactive wired into run_detection after candidates",
+        "Gap > 2× interval_days before inactive"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work rebuild smoke AU–AW",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["AU1", "AU2", "AU3", "AU4"],
+      "operator_gate": "BACKEND_FRONTEND_DEPLOY + POSTGRES_PERSISTENCE_PROBE + FULL_FIREFLY_SYNC",
+      "acceptance_hook": "BUG-0015 (AU)–(AW) — financegnome.omniflow.cc rebuild smoke",
+      "files": [
+        "sprints/quick/Q0023/uat.md",
+        "docs/engineering/runbook.md"
+      ],
+      "tests": [
+        "Confirm Cursor + Apple baseline on omniflow",
+        "Rebuild flow-finance-ai only — postgres untouched",
+        "H2 SQL probe before Full sync",
+        "GET /api/v1/subscriptions?status=confirmed includes merchants",
+        "No duplicate pending for Cursor/Apple after Full sync",
+        "Unread subscription alert count reconciles with pending tab",
+        "OIDC regression per acceptance AW footnote"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "AU1 → AU2 → (AU3 ∥ AU4) single backend release",
+    "Operator: BACKEND_FRONTEND_DEPLOY",
+    "Operator: rebuild app containers + H2 SQL probe",
+    "Operator: FULL_FIREFLY_SYNC",
+    "V1 verify-work smoke"
+  ],
+  "execute_order": ["AU1", "AU2", "AU3", "AU4", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "Deploy Q0023 backend bundle on financegnome.omniflow.cc",
+      "rationale": "AU1–AU4 code must be live before rebuild smoke"
+    },
+    {
+      "id": "POSTGRES_PERSISTENCE_PROBE",
+      "before_tasks": ["V1"],
+      "action": "SELECT status, COUNT(*) FROM subscription_patterns GROUP BY status; SELECT fingerprint, status, payee_key, interval_days, current_amount FROM subscription_patterns WHERE payee_key ILIKE '%cursor%' OR payee_key ILIKE '%apple%' ORDER BY updated_at DESC",
+      "rationale": "H2 ops gate — rule out ephemeral DB before attributing to code fix"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "action": "Full Firefly sync (not exchanges-only); allow subscription detection phase",
+      "rationale": "AV requires post-rebuild detection rerun with fresh grouping"
+    }
+  ],
+  "frozen_boundaries": [
+    "Single release bundle AU1–AU4 — no partial deploy",
+    "H2 SQL probe ops-only — not sprint execute task",
+    "No reopen BUG-0008; extends DEC-0071/0072 without amend",
+    "No alert-only dedup as primary fix (option E rejected)",
+    "No merchant identity table (option F)",
+    "No drop amount from fingerprint globally (option B rejected)",
+    "No UI changes — H3 refuted primary",
+    "Pre-fix orphan pending cleanup deferred — not blocking V1"
+  ],
+  "decisions": ["DEC-0084", "DEC-0085", "DEC-0086", "DEC-0071", "DEC-0072", "DEC-0013", "DEC-0015"],
+  "research": ["R-0081", "R-0082"],
+  "operator_next": "After bundle deploy: confirm Cursor+Apple → rebuild app only → H2 SQL before Full sync → V1 verify-work on financegnome.omniflow.cc",
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260607-q0023-bug0015",
+  "orchestrator_run_id": "auto-20260607-bug0015-001"
+}

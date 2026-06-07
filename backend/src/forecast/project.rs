@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use chrono::{Datelike, NaiveDate, Utc};
 
-use super::categories::{accumulate_bucket, resolve_bucket, Bucket};
+use super::bucket_inference::{BucketAssignment, BucketSource, collect_ambiguous_features};
+use super::categories::{
+    accumulate_bucket_with_source, resolve_bucket_with_ai, MonthlyProvenanceTracker, Bucket,
+};
 use super::recurring::detect_patterns;
 use super::rolling::variable_residual;
 use super::types::{
@@ -29,6 +32,7 @@ pub fn project_account(
     config: &ForecastConfig,
     subscription_context: Option<&DetectionResult>,
     household_income: Option<&HouseholdIncomeContext<'_>>,
+    bucket_assignments: &HashMap<String, BucketAssignment>,
 ) -> ProjectionResult {
     let non_transfer: Vec<TransactionRow> = transactions
         .iter()
@@ -58,6 +62,7 @@ pub fn project_account(
     });
 
     let mut monthly_map: HashMap<NaiveDate, MonthlyCashflow> = HashMap::new();
+    let mut monthly_provenance: HashMap<NaiveDate, MonthlyProvenanceTracker> = HashMap::new();
 
     for day_offset in 1..=HORIZON_DAYS {
         let date = today + chrono::Duration::days(day_offset);
@@ -81,12 +86,24 @@ pub fn project_account(
             fixed_costs: 0.0,
             variable_costs: 0.0,
             free_cashflow: 0.0,
+            bucket_sources: None,
+            ai_mapped: false,
         });
+        let prov = monthly_provenance
+            .entry(month_start)
+            .or_insert_with(MonthlyProvenanceTracker::default);
 
-        accumulate_bucket(entry, Bucket::Variable, rolling.daily_rate);
+        accumulate_bucket_with_source(
+            entry,
+            Bucket::Variable,
+            rolling.daily_rate,
+            BucketSource::Default,
+            prov,
+        );
         for pattern in recurring_dues {
-            let bucket = resolve_bucket(pattern.category_id.as_deref(), category_names, config);
-            accumulate_bucket(entry, bucket, pattern.amount);
+            let (bucket, source) =
+                resolve_bucket_with_ai(pattern, category_names, config, bucket_assignments);
+            accumulate_bucket_with_source(entry, bucket, pattern.amount, source, prov);
         }
         if let Some(ctx) = household_income {
             for pattern in ctx.patterns {
@@ -95,13 +112,20 @@ pub fn project_account(
                     ctx.reference_transactions,
                     date,
                 ) {
-                    let bucket =
-                        resolve_bucket(pattern.category_id.as_deref(), category_names, config);
-                    accumulate_bucket(entry, bucket, pattern.amount);
+                    let (bucket, source) =
+                        resolve_bucket_with_ai(pattern, category_names, config, bucket_assignments);
+                    accumulate_bucket_with_source(entry, bucket, pattern.amount, source, prov);
                 }
             }
         }
         entry.free_cashflow = entry.income - entry.fixed_costs - entry.variable_costs;
+    }
+
+    for (month, prov) in monthly_provenance {
+        if let Some(entry) = monthly_map.get_mut(&month) {
+            entry.bucket_sources = Some(prov.finalize());
+            entry.ai_mapped = prov.ai_mapped;
+        }
     }
 
     let mut monthly: Vec<MonthlyCashflow> = monthly_map.into_values().collect();
@@ -259,6 +283,33 @@ fn exclude_rejected(
         .collect()
 }
 
+/// Prepare recurring patterns the same way as `project_account` (for async AI batching).
+pub fn prepare_recurring_patterns(
+    transactions: &[TransactionRow],
+    config: &ForecastConfig,
+    subscription_context: Option<&DetectionResult>,
+) -> Vec<RecurringPattern> {
+    let non_transfer: Vec<TransactionRow> = transactions
+        .iter()
+        .filter(|t| !is_transfer(&t.payload))
+        .cloned()
+        .collect();
+    let mut recurring = detect_patterns(&non_transfer, config.recurring_amount_tolerance_pct);
+    if let Some(ctx) = subscription_context {
+        recurring = apply_subscription_override(recurring, &ctx.confirmed_recurring, &non_transfer);
+        recurring = exclude_rejected(recurring, &ctx.forecast_excluded_rejections);
+    }
+    recurring
+}
+
+pub fn ambiguous_bucket_features(
+    recurring: &[RecurringPattern],
+    category_names: &HashMap<String, String>,
+    config: &ForecastConfig,
+) -> Vec<crate::ai::privacy::RawBucketFeatureInput> {
+    collect_ambiguous_features(recurring, category_names, config)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,6 +325,7 @@ mod tests {
             retention_count: 5,
             recurring_amount_tolerance_pct: 5.0,
             category_buckets: default_category_buckets(),
+            ai_bucket_min_confidence: 0.75,
         }
     }
 
@@ -344,7 +396,7 @@ mod tests {
             payload: json!({"attributes": {"type": "transfer"}}),
             ..tx("2026-01-02", -500.0, "Transfer")
         });
-        let result = project_account(1000.0, &txs, &HashMap::new(), &config(), None, None);
+        let result = project_account(1000.0, &txs, &HashMap::new(), &config(), None, None, &HashMap::new());
         assert!(result.daily.len() > 1);
     }
 
@@ -368,7 +420,7 @@ mod tests {
             rejected_fingerprints: HashSet::new(),
             forecast_excluded_rejections: HashSet::new(),
         };
-        let result = project_account(5000.0, &txs, &HashMap::new(), &config(), Some(&ctx), None);
+        let result = project_account(5000.0, &txs, &HashMap::new(), &config(), Some(&ctx), None, &HashMap::new());
         assert!(result.daily.len() > 1);
     }
 
@@ -394,8 +446,8 @@ mod tests {
             rejected_fingerprints: rejected.clone(),
             forecast_excluded_rejections: rejected,
         };
-        let without = project_account(5000.0, &txs, &HashMap::new(), &config(), None, None);
-        let with_reject = project_account(5000.0, &txs, &HashMap::new(), &config(), Some(&ctx), None);
+        let without = project_account(5000.0, &txs, &HashMap::new(), &config(), None, None, &HashMap::new());
+        let with_reject = project_account(5000.0, &txs, &HashMap::new(), &config(), Some(&ctx), None, &HashMap::new());
         assert_ne!(
             without.daily.last().map(|p| p.balance),
             with_reject.daily.last().map(|p| p.balance)
@@ -405,7 +457,7 @@ mod tests {
     #[test]
     fn sparse_history_flags_low_confidence() {
         let txs = vec![tx("2026-05-01", -20.0, "Coffee")];
-        let result = project_account(100.0, &txs, &HashMap::new(), &config(), None, None);
+        let result = project_account(100.0, &txs, &HashMap::new(), &config(), None, None, &HashMap::new());
         assert!(result.low_confidence);
     }
 
@@ -425,7 +477,7 @@ mod tests {
             rejected_fingerprints: HashSet::new(),
             forecast_excluded_rejections: HashSet::new(),
         };
-        let result = project_account(1000.0, &txs, &category_names(), &config(), Some(&ctx), None);
+        let result = project_account(1000.0, &txs, &category_names(), &config(), Some(&ctx), None, &HashMap::new());
         let month = first_month(&result);
         assert!(month.income > 0.0, "expected income > 0, got {}", month.income);
     }
@@ -433,7 +485,7 @@ mod tests {
     #[test]
     fn rent_recurring_maps_to_fixed_bucket() {
         let txs = monthly_recurring_history("Rent Payment", -1000.0, Some("cat-rent"));
-        let result = project_account(5000.0, &txs, &category_names(), &config(), None, None);
+        let result = project_account(5000.0, &txs, &category_names(), &config(), None, None, &HashMap::new());
         let month = first_month(&result);
         assert!(
             month.fixed_costs > 0.0,
@@ -463,7 +515,7 @@ mod tests {
             rejected_fingerprints: HashSet::new(),
             forecast_excluded_rejections: HashSet::new(),
         };
-        let result = project_account(1000.0, &txs, &category_names(), &config(), Some(&ctx), None);
+        let result = project_account(1000.0, &txs, &category_names(), &config(), Some(&ctx), None, &HashMap::new());
         let month = first_month(&result);
         assert!(month.income > 0.0);
         assert!(month.fixed_costs > 0.0);
@@ -473,7 +525,7 @@ mod tests {
     #[test]
     fn discretionary_coffee_recurring_stays_variable() {
         let txs = monthly_recurring_history("Coffee Shop", -5.0, Some("cat-coffee"));
-        let result = project_account(100.0, &txs, &category_names(), &config(), None, None);
+        let result = project_account(100.0, &txs, &category_names(), &config(), None, None, &HashMap::new());
         let month = first_month(&result);
         assert_eq!(month.fixed_costs, 0.0);
         assert!(month.variable_costs > 0.0);
@@ -482,9 +534,9 @@ mod tests {
     #[test]
     fn rent_moves_from_variable_to_fixed_bucket() {
         let txs = monthly_recurring_history("Rent Payment", -1000.0, Some("cat-rent"));
-        let with_categories = project_account(5000.0, &txs, &category_names(), &config(), None, None);
+        let with_categories = project_account(5000.0, &txs, &category_names(), &config(), None, None, &HashMap::new());
         let without_categories =
-            project_account(5000.0, &txs, &HashMap::new(), &config(), None, None);
+            project_account(5000.0, &txs, &HashMap::new(), &config(), None, None, &HashMap::new());
         let fixed_month = first_month(&with_categories);
         let unmapped_month = first_month(&without_categories);
         assert!(fixed_month.fixed_costs > 0.0);
@@ -508,7 +560,15 @@ mod tests {
             rejected_fingerprints: HashSet::new(),
             forecast_excluded_rejections: HashSet::new(),
         };
-        let result = project_account(5000.0, &txs, &category_names(), &config(), Some(&ctx), None);
+        let result = project_account(
+            5000.0,
+            &txs,
+            &category_names(),
+            &config(),
+            Some(&ctx),
+            None,
+            &HashMap::new(),
+        );
         let month = first_month(&result);
         assert!(
             month.fixed_costs > 0.0,
@@ -528,13 +588,117 @@ mod tests {
             category_buckets: buckets,
             ..config()
         };
-        let result = project_account(5000.0, &txs, &names, &cfg, None, None);
+        let result = project_account(5000.0, &txs, &names, &cfg, None, None, &HashMap::new());
         let month = first_month(&result);
         assert!(
             month.fixed_costs > 100.0,
             "strom recurring should map to fixed, got {}",
             month.fixed_costs
         );
+    }
+
+    #[test]
+    fn config_mapped_salary_never_uses_ai_assignment() {
+        use std::collections::HashSet;
+        use std::collections::HashMap as Hm;
+        use crate::forecast::bucket_inference::{BucketAssignment, BucketSource, feature_id_for_pattern};
+        use crate::subscriptions::{ConfirmedRecurring, DetectionResult};
+
+        let txs = monthly_recurring_history("Employer Payroll", 5000.0, Some("cat-salary"));
+        let pattern = RecurringPattern {
+            description: "employer payroll".into(),
+            amount: 5000.0,
+            interval_days: 30,
+            category_id: Some("cat-salary".into()),
+        };
+        let fid = feature_id_for_pattern(&pattern);
+        let mut fake_ai = Hm::new();
+        fake_ai.insert(
+            fid.clone(),
+            BucketAssignment {
+                feature_id: fid,
+                bucket: Bucket::Variable,
+                confidence: 0.99,
+                source: BucketSource::Ai,
+                rationale_code: "should_not_apply".into(),
+            },
+        );
+        let ctx = DetectionResult {
+            confirmed_recurring: vec![ConfirmedRecurring {
+                payee_key: "employer payroll".into(),
+                amount: 5000.0,
+                interval_days: 30,
+                fingerprint: "salary".into(),
+            }],
+            rejected_fingerprints: HashSet::new(),
+            forecast_excluded_rejections: HashSet::new(),
+        };
+        let result = project_account(
+            1000.0,
+            &txs,
+            &category_names(),
+            &config(),
+            Some(&ctx),
+            None,
+            &fake_ai,
+        );
+        let month = first_month(&result);
+        assert!(month.income > 0.0);
+        assert_eq!(
+            month.bucket_sources.as_ref().map(|s| s.income.as_str()),
+            Some("config")
+        );
+        assert!(!month.ai_mapped);
+    }
+
+    #[test]
+    fn ai_assignment_applies_on_ambiguous_recurring() {
+        use std::collections::HashSet;
+        use std::collections::HashMap as Hm;
+        use crate::forecast::bucket_inference::{BucketAssignment, BucketSource, feature_id_for_pattern};
+        use crate::subscriptions::{ConfirmedRecurring, DetectionResult};
+
+        let txs = monthly_recurring_history("Unknown Merchant", -80.0, None);
+        let pattern = RecurringPattern {
+            description: "unknown merchant".into(),
+            amount: -80.0,
+            interval_days: 30,
+            category_id: None,
+        };
+        let fid = feature_id_for_pattern(&pattern);
+        let mut assignments = Hm::new();
+        assignments.insert(
+            fid.clone(),
+            BucketAssignment {
+                feature_id: fid,
+                bucket: Bucket::Fixed,
+                confidence: 0.9,
+                source: BucketSource::Ai,
+                rationale_code: "llm".into(),
+            },
+        );
+        let ctx = DetectionResult {
+            confirmed_recurring: vec![ConfirmedRecurring {
+                payee_key: "unknown merchant".into(),
+                amount: -80.0,
+                interval_days: 30,
+                fingerprint: "unk".into(),
+            }],
+            rejected_fingerprints: HashSet::new(),
+            forecast_excluded_rejections: HashSet::new(),
+        };
+        let result = project_account(
+            1000.0,
+            &txs,
+            &category_names(),
+            &config(),
+            Some(&ctx),
+            None,
+            &assignments,
+        );
+        let month = first_month(&result);
+        assert!(month.fixed_costs > 0.0);
+        assert!(month.ai_mapped);
     }
 
     #[test]
@@ -567,6 +731,7 @@ mod tests {
             &cfg,
             None,
             Some(&household),
+            &HashMap::new(),
         );
         let month = first_month(&result);
         assert!(month.income > 0.0, "household salary income expected");

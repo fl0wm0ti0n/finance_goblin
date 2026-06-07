@@ -5,6 +5,7 @@ import {
   apiFetch,
   SubscriptionAlert,
   SubscriptionPattern,
+  SubscriptionUnreadCount,
 } from "../lib/api";
 
 const PriceHistoryChart = lazy(() =>
@@ -56,6 +57,13 @@ export function SubscriptionsPage() {
     queryFn: () => apiFetch<SubscriptionPattern[]>("/api/v1/subscriptions?status=pending"),
   });
 
+  const unreadCountQuery = useQuery({
+    queryKey: ["subscription-unread-count"],
+    queryFn: () =>
+      apiFetch<SubscriptionUnreadCount>("/api/v1/subscriptions/alerts/unread-count"),
+    refetchInterval: 30000,
+  });
+
   const alertsQuery = useQuery({
     queryKey: ["subscription-alerts"],
     queryFn: () => apiFetch<SubscriptionAlert[]>("/api/v1/subscriptions/alerts?unread=true"),
@@ -78,13 +86,20 @@ export function SubscriptionsPage() {
   });
 
   useEffect(() => {
-    const prev = sessionStorage.getItem("subscription-alert-count");
-    const current = String(alertsQuery.data?.length ?? 0);
+    const prev = sessionStorage.getItem("subscription-unread-new-detection");
+    const current = String(unreadCountQuery.data?.unread_new_detection ?? 0);
     if (prev && Number(prev) < Number(current)) {
       setToast("New subscription alert — review pending patterns.");
     }
-    sessionStorage.setItem("subscription-alert-count", current);
-  }, [alertsQuery.data?.length]);
+    sessionStorage.setItem("subscription-unread-new-detection", current);
+  }, [unreadCountQuery.data?.unread_new_detection]);
+
+  const pendingCount = pendingQuery.data?.length ?? 0;
+  const unreadNewDetection = unreadCountQuery.data?.unread_new_detection ?? 0;
+  const pendingFromCount = unreadCountQuery.data?.pending_patterns ?? pendingCount;
+  const showReconciliationSubtitle =
+    unreadCountQuery.data != null &&
+    unreadCountQuery.data.unread_new_detection !== unreadCountQuery.data.pending_patterns;
 
   const confirmMutation = useMutation({
     mutationFn: ({ id, kind }: { id: string; kind?: string }) =>
@@ -94,6 +109,8 @@ export function SubscriptionsPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-unread-count"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-alerts"] });
       setConfirmId(null);
     },
   });
@@ -104,17 +121,23 @@ export function SubscriptionsPage() {
         method: "POST",
         body: JSON.stringify({}),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subscriptions"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-unread-count"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-alerts"] });
+    },
   });
 
   const markReadMutation = useMutation({
     mutationFn: (id: string) =>
       apiFetch<void>(`/api/v1/subscriptions/alerts/${id}/read`, { method: "PATCH" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["subscription-alerts"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["subscription-alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["subscription-unread-count"] });
+    },
   });
 
   const patterns = listQuery.data ?? [];
-  const pendingCount = pendingQuery.data?.length ?? 0;
   const pendingPatterns = useMemo(
     () => (tab === "pending" ? patterns : patterns.filter((p) => p.status === "pending")),
     [patterns, tab],
@@ -144,11 +167,19 @@ export function SubscriptionsPage() {
         </div>
       )}
 
-      {(alertsQuery.data?.length ?? 0) > 0 && (
+      {unreadNewDetection > 0 && (
         <div className="card alert-banner" style={{ marginBottom: "1rem" }}>
-          <strong>{alertsQuery.data!.length} unread alert(s)</strong>
+          <strong>
+            {unreadNewDetection} unread alert{unreadNewDetection === 1 ? "" : "s"}
+          </strong>
+          {showReconciliationSubtitle && (
+            <p style={{ margin: "0.5rem 0 0" }}>
+              {pendingFromCount} pattern{pendingFromCount === 1 ? "" : "s"} pending review — some
+              alerts may be informational or awaiting cleanup.
+            </p>
+          )}
           <ul style={{ margin: "0.5rem 0 0", paddingLeft: "1.25rem" }}>
-            {alertsQuery.data!.slice(0, 5).map((a) => (
+            {(alertsQuery.data ?? []).slice(0, 5).map((a) => (
               <li key={a.id} style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
                 <span>{a.title}</span>
                 <button className="btn" onClick={() => markReadMutation.mutate(a.id)}>

@@ -69,6 +69,7 @@ pub fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/v1/subscriptions", get(list_patterns))
         .route("/api/v1/subscriptions/alerts", get(list_alerts))
+        .route("/api/v1/subscriptions/alerts/unread-count", get(unread_alert_count))
         .route("/api/v1/subscriptions/alerts/:id/read", patch(mark_alert_read))
         .route("/api/v1/subscriptions/:id", get(get_pattern))
         .route("/api/v1/subscriptions/:id/confirm", post(confirm_pattern))
@@ -205,6 +206,17 @@ async fn list_alerts(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(rows))
+}
+
+async fn unread_alert_count(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<crate::subscriptions::types::UnreadAlertCountResponse>, StatusCode> {
+    let counts = state
+        .subscriptions
+        .unread_alert_counts()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(counts))
 }
 
 async fn mark_alert_read(

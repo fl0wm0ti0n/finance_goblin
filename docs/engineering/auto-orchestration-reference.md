@@ -793,7 +793,7 @@ fail-closed contract live in `.cursor/rules/caveman.mdc`. Default-off is
 enforced by the `test_caveman_default_off_*` subtests in
 `tests/auto_command_contract_test.py` (**DEC-0072** §6).
 
-### `TOKEN_PROFILE` × `CAVEMAN_MODE` × `CAVEMAN_COMPRESS_INPUT` non-substitution (US-0090 / DEC-0073 §1)
+### `TOKEN_PROFILE` × `CAVEMAN_MODE` × `CAVEMAN_COMPRESS_INPUT` non-substitution (US-0090 / DEC-0075 §1)
 
 `TOKEN_PROFILE` controls context breadth. `CAVEMAN_MODE` controls reply voice. `CAVEMAN_COMPRESS_INPUT` controls input-side file compression. All three axes are orthogonal: setting one does not change the others, and none substitutes for another.
 
@@ -802,9 +802,9 @@ enforced by the `test_caveman_default_off_*` subtests in
 `CAVEMAN_FILE_SCOPE=` empty). Activation also requires the operator to
 invoke `scripts/caveman_compress_input.py --write`; absent any of the three
 conditions the script is a no-op and the fail-closed reason codes from
-**DEC-0073** §7 apply. Default-off is enforced by the
+**DEC-0075** §7 apply. Default-off is enforced by the
 `test_caveman_compress_input_*` subtests in
-`tests/auto_command_contract_test.py` (**DEC-0073** §11).
+`tests/auto_command_contract_test.py` (**DEC-0075** §11).
 
 ## Steps
 1. Read automation flags from merged scratchpad and **materialize the resolved

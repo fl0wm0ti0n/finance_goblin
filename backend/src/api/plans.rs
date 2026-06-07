@@ -212,6 +212,13 @@ fn plan_error_status(err: PlanError) -> (StatusCode, Json<serde_json::Value>) {
             StatusCode::CONFLICT,
             Json(serde_json::json!({ "error": err.to_string() })),
         ),
+        PlanError::ActivePlanDeleteForbidden => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "error": "active_plan_delete_forbidden",
+                "message": "Cannot delete the active plan. Set another plan active first, then delete."
+            })),
+        ),
         PlanError::NoActivePlan => (
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({ "error": "no_active_plan" })),
@@ -302,12 +309,8 @@ async fn rename_plan(
 async fn delete_plan(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, StatusCode> {
-    state
-        .plans
-        .delete_plan(id)
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+) -> Result<StatusCode, (StatusCode, Json<serde_json::Value>)> {
+    state.plans.delete_plan(id).await.map_err(plan_error_status)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -498,7 +501,7 @@ async fn compare_plan(
 async fn plan_vs_actual(
     State(state): State<Arc<AppState>>,
     Query(query): Query<PlanVsActualQuery>,
-) -> Result<Json<crate::plan::types::PlanVsActualResponse>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<crate::plan::types::PlanVsActualApiResponse>, (StatusCode, Json<serde_json::Value>)> {
     let month = query
         .month
         .as_deref()
@@ -511,10 +514,22 @@ async fn plan_vs_actual(
             )
         })?;
 
+    let active = state
+        .plans
+        .active_plan()
+        .await
+        .map_err(|e| plan_error_status(e))?;
+    let Some(_active) = active else {
+        return Ok(Json(crate::plan::types::PlanVsActualApiResponse::NoActivePlan {
+            reason: "no_active_plan",
+        }));
+    };
+
     state
         .plans
         .plan_vs_actual(month)
         .await
+        .map(crate::plan::types::PlanVsActualApiResponse::from)
         .map(Json)
         .map_err(plan_error_status)
 }
@@ -571,6 +586,62 @@ async fn risk_score(
         None => Ok(Json(RiskScoreApiResponse::NoScore {
             reason: "not_computed",
         })),
+    }
+}
+
+#[cfg(test)]
+mod plan_delete_api_tests {
+    use super::plan_error_status;
+    use crate::plan::service::PlanError;
+    use axum::http::StatusCode;
+
+    #[test]
+    fn active_plan_delete_returns_409_with_code() {
+        let (status, body) = plan_error_status(PlanError::ActivePlanDeleteForbidden);
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(
+            body.0.get("error").and_then(|v| v.as_str()),
+            Some("active_plan_delete_forbidden")
+        );
+        assert!(body.0.get("message").and_then(|v| v.as_str()).is_some());
+    }
+}
+
+#[cfg(test)]
+mod plan_vs_actual_api_tests {
+    use crate::plan::types::PlanVsActualApiResponse;
+    use serde_json::json;
+
+    #[test]
+    fn no_active_plan_serializes_with_reason() {
+        let body = PlanVsActualApiResponse::NoActivePlan {
+            reason: "no_active_plan",
+        };
+        let v = serde_json::to_value(&body).unwrap();
+        assert_eq!(
+            v,
+            json!({
+                "status": "no_active_plan",
+                "reason": "no_active_plan"
+            })
+        );
+    }
+
+    #[test]
+    fn ok_plan_vs_actual_serializes_with_status_ok() {
+        let body = PlanVsActualApiResponse::Ok {
+            month: "2026-06".into(),
+            reporting_currency: "EUR".into(),
+            plan_stale: false,
+            actuals_stale: false,
+            rows: vec![],
+        };
+        let v = serde_json::to_value(&body).unwrap();
+        assert_eq!(v.get("status").and_then(|s| s.as_str()), Some("ok"));
+        assert_eq!(
+            v.get("reporting_currency").and_then(|s| s.as_str()),
+            Some("EUR")
+        );
     }
 }
 

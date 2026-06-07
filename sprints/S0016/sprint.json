@@ -1,0 +1,32 @@
+{
+  "id": "S0016",
+  "story_ids": ["US-0015"],
+  "status": "PLANNED",
+  "created": "2026-06-06",
+  "orchestrator_run_id": "auto-20260606-us0015-001",
+  "goal": "Deliver DEC-0078 AI-assisted forecast bucket mapping: BucketInferenceService rule→LLM cascade with privacy allowlist; resolve_bucket_with_ai projection merge with config precedence; monthly API bucket_sources + ai_mapped; ForecastPage AI-mapped badge; forecast_bucket_assignment audit; user guide US-0015.",
+  "scope": [
+    "backend/src/forecast/bucket_inference.rs — BucketInferenceService cascade (config→rule→LLM→Variable)",
+    "PrivacyLayer::prepare_bucket_features + BucketFeatureRow (R-0075)",
+    "ai_bucket_min_confidence=0.75 TOML + structured LLM I/O; batch cap 100",
+    "resolve_bucket_with_ai in project.rs with AC-1 config guard",
+    "Recurring dues AI on config-map miss; provenance aggregation per month",
+    "MonthlyPointResponse bucket_sources + ai_mapped (AC-4)",
+    "ForecastPage AI-mapped badge (seasonal callout pattern, AC-5)",
+    "ai_tool_audit forecast_bucket_assignment rows (AC-6)",
+    "docs/user-guides/US-0015.md publish + UAT OIDC /forecast Monthly smoke template (AC-7)"
+  ],
+  "risks": [
+    "Threshold calibration — monitor low_confidence audit rate in QA; TOML override documented",
+    "Rolling residual stays Variable — user guide must explain MVP scope",
+    "Provider cost — batch ambiguous rows only; cap 100/call",
+    "Privacy regression on forecast path — S1 code review + unit tests on allowlist",
+    "AC-7 operator gate — BACKEND_FRONTEND_DEPLOY prerequisite for omniflow smoke"
+  ],
+  "task_count": 12,
+  "estimate_total_hours": 32,
+  "decisions": ["DEC-0078"],
+  "research": ["R-0074", "R-0075"],
+  "slices": ["US-0015-S1", "US-0015-S2", "US-0015-S3"],
+  "split_decision": "no_split — 12 tasks = SPRINT_MAX_TASKS 12; OIDC smoke in UAT template (T-0174) not separate V1 task"
+}

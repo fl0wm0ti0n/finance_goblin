@@ -1,0 +1,159 @@
+{
+  "sprint": "S0014",
+  "story_id": "US-0013",
+  "orchestrator_run_id": "auto-20260608-us0013-001",
+  "verified_at": "2026-06-08T09:50:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0013",
+  "tasks_source": "sprints/S0014/tasks.md",
+  "tasks_source_note": "sprints/S0014/tasks.md materialized at sprint-plan 2026-06-08; task.json not used for standard sprints",
+  "architecture_ref": "docs/engineering/architecture.md#US-0013",
+  "decision_alignment": {
+    "decision_id": "DEC-0076",
+    "aligned": true,
+    "research_basis": ["R-0071", "R-0043", "R-0044", "R-0045", "R-0053", "R-0062"],
+    "contract_elements_covered": [
+      "Overlay additive profiles [external] on stats-forecast; traefik network; host port 8091 (T-0144, T-0145)",
+      "FORECAST_ML_ENABLED + STATS_FORECAST_URL passthrough on flow-finance-ai; DEC-0049 default-off (T-0145, T-0146)",
+      ".env.example omniflow ML block documentation (T-0146)",
+      "compose-config-check.sh 3-service external set + stats-forecast traefik assert (T-0147)",
+      "Runtime health_ok() gate before ML phase; DEC-0052 skip metadata (T-0148)",
+      "Post-sync forecast_ml phase verify; sync status ML label (T-0148)",
+      "ml_enhanced persistence + GET /forecast variant=ml_enhanced (T-0148, T-0149)",
+      "ForecastPage Compare + sidecar_disabled copy DEC-0066 (T-0150)",
+      "WealthPage portfolio-forecast + FX low-confidence banner R-0034 (T-0151)",
+      "Grafana forecast-horizons $forecast_variant=ml_enhanced (T-0152)",
+      "Runbook § Omniflow ML enablement + user guide cross-ref (T-0153)",
+      "forecast_ml_integration wiremock + compose assert dual CI guard (T-0147, T-0154)"
+    ],
+    "frozen_boundaries_respected": [
+      "S1-before-S2 sequencing — sidecar must start before sync/API verify",
+      "Verify-first US-0009 backend/frontend/Grafana — no new ML algorithms",
+      "DEC-0049 default-off preserved — operator opt-in FORECAST_ML_ENABLED=true",
+      "DEC-0052/0066 failure semantics unchanged — skip metadata, sync continues",
+      "DEC-0056 minimal+external profile guard unchanged in compose-config-check",
+      "No US-0015 bucket attribution; no BUG-0009 Grafana-only scope",
+      "BUG-0010 prerequisite checked — baseline authoritative before ML overlay"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "T-0144 → T-0145 → T-0146 → T-0147 → T-0148 → T-0149 → (T-0150 + T-0151 + T-0152) → (T-0153 + T-0154); BACKEND_COMPOSE_DEPLOY + Full sync before verify-work omniflow smoke",
+    "notes": "S1 chain atomic for CI drift prevention; S2 after S1; S3 parallel after S2 data prerequisite; S4 T-0154 after T-0147; T-0153 may parallel S3 after S1"
+  },
+  "test_coverage": {
+    "compose_assert": "T-0147 — scripts/compose-config-check.sh 3-service external set + traefik network",
+    "integration": "T-0154 — cargo test --test forecast_ml_integration wiremock sidecar + skip metadata",
+    "verify_smoke": "T-0148–T-0152 — post-deploy omniflow probes for sync/API/UI/Grafana ML paths (UAT placeholder)",
+    "operator_docs": "T-0153 — runbook § Omniflow ML enablement; docs/user-guides/US-0013.md cross-ref",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "External compose overlay adds stats-forecast on external profile (not full-only); FORECAST_ML_ENABLED, STATS_FORECAST_URL, and omniflow port remap (STATS_FORECAST_PORT=8091) documented in .env.example",
+      "tasks": ["T-0144", "T-0145", "T-0146", "T-0147"],
+      "covered": true,
+      "notes": "S1 slice US-0013-S1: overlay merge, env passthrough, .env.example block, compose-config-check atomic with overlay"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "Backend [forecast_ml] enabled=true on external merge resolves sidecar health on traefik network before sync ML phase",
+      "tasks": ["T-0148"],
+      "covered": true,
+      "notes": "S2 verify health_ok() gate + FORECAST_ML_ENABLED env merge path before forecast_ml phase"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Post-sync forecast_ml phase runs after baseline per DEC-0052; ML failure records skip metadata without failing sync; sync status UI shows ML forecast when active",
+      "tasks": ["T-0148", "T-0149"],
+      "covered": true,
+      "notes": "T-0148 sync/mod.rs forecast_ml sub-phase + skip metadata + UI phase label; T-0149 persistence path per tasks.md AC-3 ref"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "model_kind=ml_enhanced computations persisted with p10/p90 bands when history ≥ min_monthly_points; GET /api/v1/forecast with variant=ml_enhanced returns non-empty 6–24 month series on omniflow after Full sync + recompute",
+      "tasks": ["T-0149"],
+      "covered": true,
+      "notes": "T-0149 verify ml_enhanced persistence + api/forecast.rs variant=ml_enhanced endpoint after enablement"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "React /forecast Compare control shows baseline + ML-enhanced overlay when ML available; degraded copy uses sidecar_disabled per DEC-0066—not generic skip message",
+      "tasks": ["T-0150"],
+      "covered": true,
+      "notes": "S3 verify ForecastPage.tsx Compare + degraded copy paths (US-0009 verify-first)"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "Wealth API/UI integrates ML portfolio overlay when US-0007 data present; signed totals and account breakdown remain correct (DEC-0065); portfolio_forecast_low_confidence banner per R-0034 when FX incomplete",
+      "tasks": ["T-0151"],
+      "covered": true,
+      "notes": "S3 verify WealthPage.tsx portfolio-forecast horizons + FX banner; wealth API overlay probe in verify scope"
+    },
+    {
+      "acceptance_id": "AC-7",
+      "criterion": "Grafana forecast-horizons ML panels return data when $forecast_variant=ml_enhanced and computations exist (post-enablement; BUG-0009 banner remains when ML off)",
+      "tasks": ["T-0152"],
+      "covered": true,
+      "notes": "S3 verify forecast-horizons.json ML panels; BUG-0009 banner unchanged when ML off"
+    },
+    {
+      "acceptance_id": "AC-8",
+      "criterion": "Operator runbook documents omniflow ML enablement: compose profile union, env vars, sidecar health probe, minimum history gate, degraded-mode troubleshooting",
+      "tasks": ["T-0153"],
+      "covered": true,
+      "notes": "S4 runbook § Omniflow ML enablement; cross-link docs/user-guides/US-0013.md (USER_GUIDE_MODE=1)"
+    },
+    {
+      "acceptance_id": "AC-9",
+      "criterion": "Automated test or CI fixture proves sidecar invoke + overlay persist path (mock HTTP or testcontainers) without production secrets",
+      "tasks": ["T-0147", "T-0154"],
+      "covered": true,
+      "notes": "Dual CI guard per DEC-0076: compose-config-check (T-0147) + forecast_ml_integration wiremock (T-0154) in tests/run-tests.sh"
+    },
+    {
+      "acceptance_id": "AC-10",
+      "criterion": "Prerequisite verified: BUG-0010 AA/AB/AC DONE (Q0013)—baseline DEC-0007 numbers authoritative before ML overlay closure",
+      "tasks": [],
+      "covered": true,
+      "prerequisite": true,
+      "notes": "Checked at intake; no sprint task — BUG-0010 released Q0013 2026-06-06"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Cold-start race — first post-deploy sync may skip ML until sidecar healthcheck green; runbook T-0153 must document re-sync (R-0071)"
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Operator gate BACKEND_COMPOSE_DEPLOY + Full sync required before omniflow verify-work smoke — documented in UAT placeholder"
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "AC-3 sync status UI ML label may share verify scope with T-0148 sync audit — confirm at execute if separate UI task needed"
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_count": 10,
+    "covered_count": 10,
+    "blocking_covered_count": 9,
+    "prerequisite_count": 1,
+    "gap_count": 0,
+    "task_count": 11,
+    "task_ids": ["T-0144", "T-0145", "T-0146", "T-0147", "T-0148", "T-0149", "T-0150", "T-0151", "T-0152", "T-0153", "T-0154"],
+    "tasks_without_acceptance_ref": [],
+    "dec_0076_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true,
+    "execute_ready_caveat": null
+  },
+  "notes": "QA plan-verify 2026-06-08: sprints/S0014/tasks.md (T-0144..T-0154) aligns with docs/product/acceptance.md § US-0013 (10 rows) and architecture § US-0013 / DEC-0076; 11/11 tasks mapped; 10/10 acceptance rows covered (9 open + 1 prerequisite checked); 0 gaps. Approved for /execute."
+}

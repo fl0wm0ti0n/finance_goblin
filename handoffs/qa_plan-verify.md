@@ -331,3 +331,28 @@ Validated `sprints/quick/Q0009/tasks.md` and `task.json` against `docs/product/a
 ## Next phase
 
 `/execute` in fresh subagent context. No `handoffs/qa_to_dev.md` fix list — plan approved as-is.
+
+---
+
+# QA plan-verify handoff — BUG-0014 / Q0022
+
+**From:** QA (`/plan-verify`)  
+**To:** Dev (`/execute`)  
+**Date:** 2026-06-10  
+**Bug:** BUG-0014  
+**Sprint:** Q0022  
+**Orchestrator:** `auto-20260607-bug0014-001`  
+**Verdict:** **PASS**
+
+## Summary
+
+Validated Q0022 sprint plan against acceptance AO–AT, architecture § BUG-0014, and DEC-0081/0082/0083. 6/6 rows covered; AP2/AR1 conditional gates clear; V1 e2e smoke; ops-only AO/AT/AP1 documented. 0 gaps.
+
+## Evidence
+
+- `sprints/quick/Q0022/plan-verify.json`
+- `handoffs/plan_verify_to_execute.md`
+
+## Next phase
+
+`/execute` in fresh subagent context.

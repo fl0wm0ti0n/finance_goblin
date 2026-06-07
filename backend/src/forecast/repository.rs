@@ -182,11 +182,22 @@ impl ForecastRepository {
                 .and_hms_opt(0, 0, 0)
                 .unwrap()
                 .and_utc();
+            let bucket_sources = row
+                .bucket_sources
+                .as_ref()
+                .map(|s| {
+                    json!({
+                        "income": s.income,
+                        "fixed_costs": s.fixed_costs,
+                        "variable_costs": s.variable_costs,
+                    })
+                });
             sqlx::query(
                 r#"
                 INSERT INTO forecast_cashflow_monthly
-                    (ts, account_id, computation_id, income, fixed_costs, variable_costs, free_cashflow)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    (ts, account_id, computation_id, income, fixed_costs, variable_costs, free_cashflow,
+                     bucket_sources, ai_mapped)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 "#,
             )
             .bind(ts)
@@ -196,6 +207,8 @@ impl ForecastRepository {
             .bind(row.fixed_costs)
             .bind(row.variable_costs)
             .bind(row.free_cashflow)
+            .bind(bucket_sources)
+            .bind(row.ai_mapped)
             .execute(&self.pool)
             .await?;
         }
@@ -507,7 +520,8 @@ impl ForecastRepository {
         let rows = sqlx::query_as::<_, MonthlyDbRow>(
             r#"
             SELECT ts, income::float8 AS income, fixed_costs::float8 AS fixed_costs,
-                   variable_costs::float8 AS variable_costs, free_cashflow::float8 AS free_cashflow
+                   variable_costs::float8 AS variable_costs, free_cashflow::float8 AS free_cashflow,
+                   bucket_sources, ai_mapped
             FROM forecast_cashflow_monthly
             WHERE computation_id = $1 AND account_id = $2
             ORDER BY ts
@@ -520,12 +534,23 @@ impl ForecastRepository {
 
         Ok(rows
             .into_iter()
-            .map(|r| MonthlyCashflow {
-                month: r.ts.date_naive(),
-                income: r.income,
-                fixed_costs: r.fixed_costs,
-                variable_costs: r.variable_costs,
-                free_cashflow: r.free_cashflow,
+            .map(|r| {
+                let bucket_sources = r.bucket_sources.and_then(|v| {
+                    Some(super::types::MonthlyBucketSources {
+                        income: v.get("income")?.as_str()?.to_string(),
+                        fixed_costs: v.get("fixed_costs")?.as_str()?.to_string(),
+                        variable_costs: v.get("variable_costs")?.as_str()?.to_string(),
+                    })
+                });
+                MonthlyCashflow {
+                    month: r.ts.date_naive(),
+                    income: r.income,
+                    fixed_costs: r.fixed_costs,
+                    variable_costs: r.variable_costs,
+                    free_cashflow: r.free_cashflow,
+                    bucket_sources,
+                    ai_mapped: r.ai_mapped,
+                }
             })
             .collect())
     }
@@ -616,6 +641,8 @@ struct MonthlyDbRow {
     fixed_costs: f64,
     variable_costs: f64,
     free_cashflow: f64,
+    bucket_sources: Option<Value>,
+    ai_mapped: bool,
 }
 
 pub fn build_metadata(account_flags: &HashMap<String, bool>, balance_warnings: &[Value]) -> Value {

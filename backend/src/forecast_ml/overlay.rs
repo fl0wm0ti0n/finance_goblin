@@ -83,6 +83,8 @@ mod tests {
                 fixed_costs: 0.0,
                 variable_costs: 0.0,
                 free_cashflow: 100.0,
+                bucket_sources: None,
+                ai_mapped: false,
             },
             MonthlyCashflow {
                 month: NaiveDate::from_ymd_opt(2025, 2, 1).unwrap(),
@@ -90,6 +92,8 @@ mod tests {
                 fixed_costs: 0.0,
                 variable_costs: 0.0,
                 free_cashflow: 100.0,
+                bucket_sources: None,
+                ai_mapped: false,
             },
         ];
         let ml = vec![

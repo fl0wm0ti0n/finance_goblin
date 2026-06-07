@@ -1,0 +1,161 @@
+{
+  "sprint": "S0015",
+  "stories": ["US-0014"],
+  "story_id": "US-0014",
+  "phase": "verify-work",
+  "plan_verified_at": "2026-06-08T12:45:00Z",
+  "qa_verified_at": "2026-06-08T13:10:00Z",
+  "verified_at": "2026-06-08T13:20:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_verify_work": false,
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0014",
+  "qa_evidence": "sprints/S0015/qa-findings.md",
+  "decisions": ["DEC-0077"],
+  "research": ["R-0072", "R-0073"],
+  "orchestrator_run_id": "auto-20260608-us0014-001",
+  "environment": {
+    "omniflow_host_available": false,
+    "backend_frontend_deploy_pending": true
+  },
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before": "UAT-9 AC-8 OIDC smoke",
+      "action": "Deploy S1-S2 frontend on US-0010 external profile (financegnome.omniflow.cc)"
+    }
+  ],
+  "automated_checks": [
+    {
+      "id": "VW-AUTO-1",
+      "description": "npm test (frontend)",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-08 — 5/5 PASS (planningFeedback 3/3 + ChatPanel 2/2)"
+    },
+    {
+      "id": "VW-AUTO-2",
+      "description": "cargo test --test plans_integration",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-08 — 5/5 PASS (compare zero-overlay, PVA no-active, leasing delta)"
+    },
+    {
+      "id": "VW-AUTO-3",
+      "description": "AC-1/AC-3/AC-4 verify-only regression audit",
+      "result": "pass",
+      "notes": "PlanningPage empty-state grid, Compare footnote + 0.00 delta, PVA guided card — Q0019 baseline intact"
+    },
+    {
+      "id": "VW-AUTO-4",
+      "description": "AC-2/AC-5/AC-6/AC-7 DEC-0077 mutation feedback",
+      "result": "pass",
+      "notes": "planningFeedback.tsx helper; 7× onError; success toasts; PVA invalidation; set-active banner Dashboard 3 copy"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "Prerequisite",
+      "description": "BUG-0011 AD/AE/AF released (Q0019) — planning baseline for US-0014 polish",
+      "result": "pass",
+      "tasks": [],
+      "evidence": "handoffs/releases/Q0019-release-notes.md; DEC-0073/DEC-0074 frozen"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-1",
+      "description": "When plans.length === 0, Scenarios shows template card grid + plan name field + Create empty plan CTA; operator reaches add-lines flow",
+      "result": "pass",
+      "tasks": ["T-0155"],
+      "evidence": "PlanningPage.tsx L359–396 card-grid, TEMPLATES (6 cards), Create empty plan L369–377, inline add form L489–500 — code audit PASS"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-2",
+      "description": "After custom/empty plan create, inline add-adjustment form visible; success toast; Compare/PVA invalidate immediately on adjustment CRUD",
+      "result": "pass",
+      "tasks": ["T-0160"],
+      "evidence": "PlanningPage.tsx addAdjustment/update/delete mutations invalidate plan-vs-actual + showPlanningFeedback success; onError wired — code audit PASS"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-3",
+      "description": "Compare tab with zero-adjustment plan shows 0.00 monthly delta and overlay-only footnote",
+      "result": "pass",
+      "tasks": ["T-0161"],
+      "evidence": "PlanningPage.tsx L600–603 footnote; plans_integration compare_zero_adjustments_overlay_delta_is_zero — verify-only PASS"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-4",
+      "description": "Plan vs Actual without active plan renders guided card with Set active / Scenarios links from 200 no_active_plan payload",
+      "result": "pass",
+      "tasks": ["T-0161"],
+      "evidence": "PlanningPage.tsx L613–632 guided card; plans_integration plan_vs_actual_without_active_plan — verify-only PASS"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-5",
+      "description": "Built-in templates reachable from empty state; Create from template / Apply template / Create empty plan show visible success confirmation",
+      "result": "pass",
+      "tasks": ["T-0157"],
+      "evidence": "PlanningPage.tsx createPlan/createFromTemplate/apply mutations showPlanningFeedback success; planningFeedback 4s auto-dismiss — code audit PASS"
+    },
+    {
+      "id": "UAT-7",
+      "acceptance_id": "AC-6",
+      "description": "After first plan create (is_active=false), yellow banner explains Set active for Plan vs Actual and Grafana Dashboard 3 (Budgets)",
+      "result": "pass",
+      "tasks": ["T-0156"],
+      "evidence": "PlanningPage.tsx set-active banner copy mentions Plan vs Actual + Grafana Dashboard 3 (Budgets, uid=budgets) — code audit PASS"
+    },
+    {
+      "id": "UAT-8",
+      "acceptance_id": "AC-7",
+      "description": "Planning mutations show operator-visible red error card with Dismiss on failure — no silent console-only failures",
+      "result": "pass",
+      "tasks": ["T-0158", "T-0159"],
+      "evidence": "planningFeedback.tsx formatPlanningError + PlanningFeedbackCard; onError on all 7 mutations (createPlan, activate, version, add/update/delete adjustment, apply) — code audit PASS"
+    },
+    {
+      "id": "UAT-9",
+      "acceptance_id": "AC-8",
+      "description": "OIDC-enabled deploy smoke: /planning Scenarios + Compare + Plan vs Actual tabs on US-0010 external profile",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "tasks": ["T-0162"],
+      "evidence": "sprints/S0015/uat.md omniflow smoke template; live probes deferred — operator deploy S1–S2 frontend on financegnome.omniflow.cc"
+    }
+  ],
+  "row_verdicts": {
+    "Prerequisite": "pass",
+    "AC-1": "pass",
+    "AC-2": "pass",
+    "AC-3": "pass",
+    "AC-4": "pass",
+    "AC-5": "pass",
+    "AC-6": "pass",
+    "AC-7": "pass",
+    "AC-8": "pass_with_prerequisites"
+  },
+  "blockers": [],
+  "summary": {
+    "acceptance_criteria_total": 8,
+    "acceptance_criteria_pass": 8,
+    "prerequisite_checked": 1,
+    "passed": 8,
+    "pass_with_prerequisites": 1,
+    "failed": 0,
+    "pending": 0,
+    "automated_pass": 4
+  },
+  "operator_prerequisites": [
+    "BACKEND_FRONTEND_DEPLOY — deploy S1–S2 frontend on US-0010 external profile (financegnome.omniflow.cc)",
+    "Execute OIDC three-tab smoke checklist in sprints/S0015/uat.md (Scenarios, Compare, Plan vs Actual)",
+    "Force mutation failure smoke (UAT-8 step 6) after deploy to confirm red error card"
+  ],
+  "next_phase": "release",
+  "plan_verify_ref": "sprints/S0015/plan-verify.json",
+  "qa_ref": "sprints/S0015/qa-findings.md",
+  "verify_work_ref": "sprints/S0015/verify-work-findings.md"
+}

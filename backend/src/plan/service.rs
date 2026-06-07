@@ -44,6 +44,8 @@ pub enum PlanError {
     NoActivePlan,
     #[error("invalid template")]
     InvalidTemplate,
+    #[error("active plan delete forbidden")]
+    ActivePlanDeleteForbidden,
     #[error("{0}")]
     Other(String),
 }
@@ -105,6 +107,10 @@ impl PlanService {
     }
 
     pub async fn delete_plan(&self, plan_id: Uuid) -> Result<(), PlanError> {
+        let plan = self.repo.get_plan(plan_id).await?;
+        if plan.is_active {
+            return Err(PlanError::ActivePlanDeleteForbidden);
+        }
         self.repo.delete_plan(plan_id).await?;
         Ok(())
     }
@@ -468,11 +474,12 @@ impl PlanService {
             starting_balance,
         );
 
-        let monthly_delta: f64 = series
-            .iter()
-            .filter(|p| p.date >= month_start && p.date <= today)
-            .map(|p| p.planned_net)
-            .sum();
+        let monthly_delta = super::overlay::monthly_overlay_delta_sum(
+            adjustments,
+            &confirmed,
+            month_start,
+            today,
+        );
 
         let month_end_balance = series
             .iter()

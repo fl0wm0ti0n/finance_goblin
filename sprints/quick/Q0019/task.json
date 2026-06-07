@@ -1,0 +1,216 @@
+{
+  "id": "Q0019",
+  "title": "BUG-0011 planning mode broken (AD/AE/AF)",
+  "status": "PLANNED",
+  "bug_id": "BUG-0011",
+  "architecture_ref": "architecture-20260608-bug0011",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["AD", "AE", "AF"],
+  "acceptance_mapping": {
+    "AD": {
+      "tasks": ["AD1", "AD2", "AD3", "T1", "V1"],
+      "primary_verify": "Start empty and add lines creates editable plan with add-line UX — not silent no-op"
+    },
+    "AE": {
+      "tasks": ["AE1", "AE2", "AE3", "AD4", "T1", "V1"],
+      "primary_verify": "Compare with empty plan shows monthly_delta_sum 0.00 — not full forecast net aggregate"
+    },
+    "AF": {
+      "tasks": ["AF1", "AF2", "T1", "V1"],
+      "primary_verify": "Plan-vs-actual returns 200 tagged no_active_plan with guided UX — not 404 breaking tab"
+    }
+  },
+  "task_count": 11,
+  "estimate_total_hours": 20,
+  "tasks": [
+    {
+      "id": "AE1",
+      "title": "Overlay delta helper (monthly_overlay_delta_sum)",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0011 AE — build_overlay_deltas sum; zero-overlay 0.00",
+      "files": ["backend/src/plan/overlay.rs", "backend/src/plan/project.rs"],
+      "decisions": ["DEC-0073"],
+      "tests": [
+        "Unit: empty adjustments returns 0.00",
+        "Unit: helper uses build_overlay_deltas not full planned_net"
+      ]
+    },
+    {
+      "id": "AE2",
+      "title": "Wire repository + service compare paths",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["AE1"],
+      "acceptance_hook": "BUG-0011 AE — version_metrics + project_adjustments_in_memory",
+      "files": ["backend/src/plan/repository.rs", "backend/src/plan/service.rs"],
+      "decisions": ["DEC-0073"],
+      "tests": [
+        "Integration: /compare monthly_delta_sum overlay-only",
+        "Regression: projected_month_end_balance unchanged"
+      ]
+    },
+    {
+      "id": "AE3",
+      "title": "Compare metric unit tests",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["AE2"],
+      "acceptance_hook": "BUG-0011 AE regression — architecture § Test strategy AE3",
+      "files": ["backend/src/plan/", "backend/tests/"],
+      "decisions": ["DEC-0073"],
+      "tests": [
+        "Zero adjustments → monthly_delta_sum = 0.00",
+        "Leasing template → ~overlay delta not baseline net"
+      ]
+    },
+    {
+      "id": "AF1",
+      "title": "Tagged PVA API 200 no_active_plan",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["AE1"],
+      "acceptance_hook": "BUG-0011 AF — PlanVsActualApiResponse tagged enum",
+      "files": ["backend/src/api/plans.rs", "backend/src/plan/types.rs", "backend/src/plan/service.rs"],
+      "decisions": ["DEC-0074"],
+      "tests": [
+        "Unit: no_active_plan serializes 200 tagged JSON",
+        "Unit: active plan ok payload unchanged",
+        "Reject: 404 via plan_error_status for NoActivePlan"
+      ]
+    },
+    {
+      "id": "AF2",
+      "title": "PVA guided empty state",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["AF1"],
+      "acceptance_hook": "BUG-0011 AF — mirror risk-score no_score UX",
+      "files": ["frontend/src/pages/PlanningPage.tsx"],
+      "decisions": ["DEC-0074"],
+      "tests": [
+        "Frontend: pvaQuery retry false; branch on status",
+        "Frontend: guided card with create + Set active CTA"
+      ]
+    },
+    {
+      "id": "AD1",
+      "title": "First-run Create empty plan",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["AF1"],
+      "acceptance_hook": "BUG-0011 AD — POST template=custom",
+      "files": ["frontend/src/pages/PlanningPage.tsx"],
+      "decisions": [],
+      "tests": [
+        "UI: template card grid includes Create empty plan",
+        "UI: first visit not Leasing-only"
+      ]
+    },
+    {
+      "id": "AD2",
+      "title": "Inline add/edit adjustment form",
+      "status": "open",
+      "estimate_hours": 3,
+      "depends_on": ["AD1"],
+      "acceptance_hook": "BUG-0011 AD — POST/PATCH adjustments wired",
+      "files": ["frontend/src/pages/PlanningPage.tsx"],
+      "decisions": [],
+      "tests": [
+        "UI: POST creates table row",
+        "UI: PATCH edits row fields"
+      ]
+    },
+    {
+      "id": "AD3",
+      "title": "Custom Apply toast + invalidation",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["AD2"],
+      "acceptance_hook": "BUG-0011 AD — Custom Apply not silent",
+      "files": ["frontend/src/pages/PlanningPage.tsx"],
+      "decisions": [],
+      "tests": [
+        "UI: toast on Custom Apply",
+        "UI: query invalidation refreshes table"
+      ]
+    },
+    {
+      "id": "AD4",
+      "title": "Compare footnote + Set active banner",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["AD2"],
+      "acceptance_hook": "BUG-0011 AD/AE — help text + Set active reminder",
+      "files": ["frontend/src/pages/PlanningPage.tsx"],
+      "decisions": ["DEC-0073"],
+      "tests": [
+        "UI: compare footnote for projected balance vs delta",
+        "UI: Set active banner after first create"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "Compare + PVA integration tests",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["AE3", "AF1"],
+      "acceptance_hook": "BUG-0011 AD/AE/AF regression — architecture § Test strategy T1",
+      "files": ["backend/tests/", "backend/src/plan/"],
+      "decisions": ["DEC-0073", "DEC-0074"],
+      "tests": [
+        "Integration: compare endpoint zero/nonempty",
+        "Integration: PVA with/without active plan both 200"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work OIDC /planning smoke",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["AF2", "AD4", "T1"],
+      "operator_gate": "Backend + frontend deploy after AE1–T1 + AF2/AD1–AD4 before runtime probes",
+      "acceptance_hook": "BUG-0011 AD, AE, AF — financegnome.omniflow.cc /planning smoke",
+      "files": ["sprints/quick/Q0019/uat.md", "docs/user-guides/BUG-0011.md"],
+      "tests": [
+        "Probe AD: empty create + add line",
+        "Probe AE: compare zero/neutral deltas",
+        "Probe AF: PVA guided state",
+        "Regression: OIDC three-tab /planning"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "(AE1 → AE2) overlay helper + compare paths",
+    "AE3 unit tests",
+    "AF1 tagged PVA API",
+    "(AF2 + AD1 → AD2 → AD3 → AD4) frontend",
+    "T1 integration tests",
+    "Deploy backend + frontend on omniflow",
+    "V1 verify-work smoke rows AD/AE/AF + regression footer"
+  ],
+  "execute_order": ["AE1", "AE2", "AE3", "AF1", "AF2", "AD1", "AD2", "AD3", "AD4", "T1", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "Deploy AE1–T1 backend + AF2/AD1–AD4 frontend PR before V1 omniflow /planning smoke",
+      "rationale": "Compare metric, PVA API contract, and planning UX require deploy before operator probes reflect new behavior"
+    }
+  ],
+  "frozen_boundaries": [
+    "AE-before-AF mandatory — AE1 helper before AF1 API freeze",
+    "DEC-0073 overlay-only monthly_delta_sum contract frozen",
+    "DEC-0074 PVA 200 no_active_plan contract frozen",
+    "No auto-activate on plan create",
+    "Grafana Dashboard 3 (budgets.json) unchanged — R-0020",
+    "US-0014 holistic UX epic out of scope",
+    "Compare numbers shift for non-empty plans — release note mandatory",
+    "PVA 404→200 breaking change — changelog + user guide",
+    "No AI simulate_plan changes"
+  ],
+  "decisions": ["DEC-0073", "DEC-0074"],
+  "research": ["R-0070", "R-0015", "R-0016", "R-0017", "R-0020"],
+  "operator_next": "After AE1–T1 + AF2/AD1–AD4 deploy: backend + frontend on omniflow; then V1 verify-work on financegnome.omniflow.cc /planning"
+}

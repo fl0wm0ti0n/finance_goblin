@@ -1,0 +1,154 @@
+{
+  "sprint_id": "Q0019",
+  "bug_id": "BUG-0011",
+  "phase": "release",
+  "orchestrator_run_id": "auto-20260608-bug0011-001",
+  "decisions": ["DEC-0073", "DEC-0074"],
+  "research": ["R-0070", "R-0015", "R-0016", "R-0017", "R-0020"],
+  "acceptance_rows": ["AD", "AE", "AF"],
+  "acceptance_source": "docs/product/acceptance.md#BUG-0011",
+  "qa_evidence": "sprints/quick/Q0019/qa-findings.md",
+  "verified_at": "2026-06-08T08:45:00Z",
+  "verdict": "PASS",
+  "ready_for_release": true,
+  "environment": {
+    "omniflow_host_available": false,
+    "backend_frontend_deploy_pending": true
+  },
+  "automated_checks": [
+    {
+      "id": "VW-AUTO-1",
+      "description": "cargo test --lib",
+      "result": "pass",
+      "notes": "release gate 2026-06-08 — 160/160"
+    },
+    {
+      "id": "VW-AUTO-2",
+      "description": "cargo test --test plans_integration",
+      "result": "pass",
+      "notes": "release gate 2026-06-08 — 5/5"
+    },
+    {
+      "id": "VW-AUTO-3",
+      "description": "AE overlay-only compare delta — monthly_overlay_delta_sum unit tests",
+      "result": "pass",
+      "notes": "qa-findings T-11–T-12; overlay.rs AE3"
+    },
+    {
+      "id": "VW-AUTO-4",
+      "description": "AF PVA API 200 no_active_plan tagged JSON serialization",
+      "result": "pass",
+      "notes": "qa-findings T-13–T-14; api::plans::plan_vs_actual_api_tests"
+    },
+    {
+      "id": "VW-AUTO-5",
+      "description": "AD first-run create + inline add/edit + Custom toast",
+      "result": "pass",
+      "notes": "qa-findings T-5–T-8; PlanningPage.tsx code review"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-AD-CODE",
+      "acceptance_id": "AD",
+      "description": "Create empty plan; inline add/edit adjustment; Custom Apply toast; Set active banner",
+      "result": "pass",
+      "tasks": ["AD1", "AD2", "AD3", "AD4"],
+      "evidence": "PlanningPage.tsx + plans API POST/PATCH/DELETE wiring"
+    },
+    {
+      "id": "AD-1",
+      "acceptance_id": "AD",
+      "description": "/planning Scenarios — Create empty plan produces editable plan with add form",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "notes": "Omniflow runtime probe deferred — US-0010 pass-with-prerequisites precedent"
+    },
+    {
+      "id": "AD-2",
+      "acceptance_id": "AD",
+      "description": "Add adjustment inline — POST creates row; PATCH edits row",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY"
+    },
+    {
+      "id": "AD-3",
+      "acceptance_id": "AD",
+      "description": "Custom template Apply — toast + table refresh",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY"
+    },
+    {
+      "id": "UAT-AE-CODE",
+      "acceptance_id": "AE",
+      "description": "Overlay-only monthly_delta_sum; zero adjustments → 0.00; Leasing ~-300",
+      "result": "pass",
+      "tasks": ["AE1", "AE2", "AE3", "AD4"],
+      "evidence": "overlay.rs + repository.rs + service.rs; plans_integration compare tests"
+    },
+    {
+      "id": "AE-1",
+      "acceptance_id": "AE",
+      "description": "Compare tab — zero-adjustment plan monthly_delta_sum ≈ 0.00",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY"
+    },
+    {
+      "id": "AE-2",
+      "acceptance_id": "AE",
+      "description": "Compare tab — Leasing template overlay delta ~ leasing amount",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY"
+    },
+    {
+      "id": "UAT-AF-CODE",
+      "acceptance_id": "AF",
+      "description": "Route 200 no_active_plan tagged JSON; PVA guided empty state retry:false",
+      "result": "pass",
+      "tasks": ["AF1", "AF2"],
+      "evidence": "PlanVsActualApiResponse + plan_vs_actual handler + PlanningPage pvaQuery branch"
+    },
+    {
+      "id": "AF-1",
+      "acceptance_id": "AF",
+      "description": "GET /api/v1/plans/active/plan-vs-actual (no active) → HTTP 200 no_active_plan",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY"
+    },
+    {
+      "id": "AF-2",
+      "acceptance_id": "AF",
+      "description": "Plan vs Actual tab (no active) — guided card, not blank/404",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY"
+    },
+    {
+      "id": "REG-1",
+      "acceptance_id": "regression",
+      "description": "OIDC /planning three tabs load without console errors",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY"
+    }
+  ],
+  "row_verdicts": {
+    "AD": "pass",
+    "AE": "pass",
+    "AF": "pass"
+  },
+  "summary": {
+    "acceptance_rows_total": 3,
+    "acceptance_rows_pass": 3,
+    "steps_total": 11,
+    "passed": 4,
+    "pass_with_prerequisites": 7,
+    "failed": 0,
+    "automated_pass": 5
+  },
+  "operator_prerequisites": [
+    "BACKEND_FRONTEND_DEPLOY — deploy backend + frontend with AE1–T1 + AF2/AD1–AD4 merged",
+    "Confirm containers healthy on https://financegnome.omniflow.cc before runtime probes",
+    "Execute AD/AE/AF smoke checklist per sprints/quick/Q0019/uat.md"
+  ],
+  "blocking_reason_codes": [],
+  "next_phase": "release"
+}

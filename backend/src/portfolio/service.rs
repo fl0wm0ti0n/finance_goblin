@@ -19,6 +19,7 @@ pub struct PnlResult {
     pub total_return_pct: Option<f64>,
     pub crypto_value_eur: f64,
     pub fx_incomplete: bool,
+    pub unpriced_assets: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -79,6 +80,7 @@ impl PortfolioEngine {
         let today = Utc::now().date_naive();
         let payload = serde_json::json!({
             "unpriced_assets": breakdown.unpriced_assets,
+            "fx_incomplete": breakdown.fx_incomplete,
         });
         self.repo
             .upsert_pnl_snapshot(
@@ -98,16 +100,35 @@ impl PortfolioEngine {
             total_return_pct,
             crypto_value_eur: breakdown.crypto_value_eur,
             fx_incomplete: breakdown.fx_incomplete,
+            unpriced_assets: breakdown.unpriced_assets.clone(),
         })
     }
 
     pub async fn latest(&self) -> Result<Option<PnlResult>, sqlx::Error> {
-        Ok(self.repo.latest_pnl().await?.map(|r| PnlResult {
-            realized_eur: r.realized_pnl_eur,
-            unrealized_eur: r.unrealized_pnl_eur,
-            total_return_pct: r.total_return_pct,
-            crypto_value_eur: r.crypto_value_eur,
-            fx_incomplete: false,
+        Ok(self.repo.latest_pnl().await?.map(|r| {
+            let unpriced_assets: Vec<String> = r
+                .payload
+                .get("unpriced_assets")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let fx_incomplete = r
+                .payload
+                .get("fx_incomplete")
+                .and_then(|v| v.as_bool())
+                .unwrap_or_else(|| !unpriced_assets.is_empty());
+            PnlResult {
+                realized_eur: r.realized_pnl_eur,
+                unrealized_eur: r.unrealized_pnl_eur,
+                total_return_pct: r.total_return_pct,
+                crypto_value_eur: r.crypto_value_eur,
+                fx_incomplete,
+                unpriced_assets,
+            }
         }))
     }
 }

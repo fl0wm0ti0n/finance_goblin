@@ -1,0 +1,115 @@
+{
+  "sprint": "Q0018",
+  "bug_id": "BUG-0008",
+  "orchestrator_run_id": "auto-20260608-bug0008-001",
+  "verified_at": "2026-06-08T05:45:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0008",
+  "tasks_source": "sprints/quick/Q0018/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0008",
+  "decision_alignment": {
+    "decisions": ["DEC-0071", "DEC-0072"],
+    "research_basis": ["R-0068", "R-0069", "R-0009", "R-0010", "R-0011", "R-0012", "R-0013", "R-0065"],
+    "contract_elements_covered": [
+      "DEC-0071 W1: fingerprint column + partial unique index + backfill dedupe",
+      "DEC-0071 W2: insert_alert → upsert_alert ON CONFLICT frozen SQL",
+      "DEC-0071 W3: emit only on new pending or tier increase",
+      "DEC-0071 W4: GET /api/v1/subscriptions/alerts/unread-count reconciled JSON",
+      "DEC-0071 W5: mark-read orphans on confirm/reject/inactive",
+      "DEC-0071 W6: /subscriptions banner + toast from unread-count API (US-0005 bell unchanged)",
+      "DEC-0072 X1: SEPA token strip + legal-entity suffix collapse in payee_key",
+      "DEC-0072 X2: transfer-type counterparty priority guard",
+      "DEC-0072 X3: detection_window_days 365 → 730",
+      "W7 + X4: dedup, reconciled count, lifecycle, forecast regression tests",
+      "V1: uat.md + omniflow W/X smoke after backend + frontend deploy"
+    ],
+    "frozen_boundaries_respected": [
+      "W-before-X mandatory — W1–W3 before X1",
+      "X5 Phase 2 category grouping deferred",
+      "min_emit_confidence stays 60 hardcoded — no TOML wiring",
+      "AI in-pipeline detection deferred (DEC-0072)",
+      "US-0005 unified bell unchanged — subscription-scoped unread only",
+      "list_patterns filter unchanged — additive unread-count route only (R-0065)",
+      "BUG-0007 coordinate — no AI tool changes",
+      "No combined header bell"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "W1 → W2 → W3 → W4 → W5 → W6 → W7 → X1 → X2 → X3 → X4 → deploy backend + frontend → V1 verify-work",
+    "notes": "W1–W3 before X1 (W-before-X mandatory); X3 independent of W4–W6 once W3 complete; V1 gated on deploy after W1–X4+W7"
+  },
+  "test_coverage": {
+    "unit_fixtures": "W7: migration backfill dedupe; ON CONFLICT upsert; no alert on unchanged resync; unread-count reconciled semantics; confirm/reject mark-read orphans",
+    "integration": "X4: SEPA fixture merges; forecast recurring detection regression (DEC-0013 shared core); no alert spam invariant post-W3",
+    "operator_tests": "V1: W reconciled unread-count vs pending; banner from API not list length; confirm/reject orphan cleanup; X pattern count > 12 baseline; no resync spam",
+    "doc_review": "V1 prepares sprints/quick/Q0018/uat.md smoke checklist mapping W/X + OIDC/bundled-firefly regression footer",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "W",
+      "criterion": "On US-0010 external profile after sync, subscription-scoped alert unread count reconciles with visible /subscriptions list rows (pending + confirmed + standing orders per tab contract)—not 33 alerts vs 11 list rows or equivalent mismatch without documented dismissed/rejected/dedup semantics in UI",
+      "tasks": ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "V1"],
+      "covered": true,
+      "notes": "W1–W3 fingerprint dedup + emit gate; W4 reconciled unread-count API; W5 orphan lifecycle; W6 banner/toast from API not alerts.length; W7 automated dedup/reconcile/lifecycle tests; V1 omniflow W smoke"
+    },
+    {
+      "acceptance_id": "X",
+      "criterion": "Subscription detection surfaces materially more recurring patterns from 922+ synced transactions for operator-known merchants (higher recall than post-BUG-0004 11 pending alone) without alert spam; improved rules and/or AI-assisted detection documented if used",
+      "tasks": ["X1", "X2", "X3", "X4", "V1"],
+      "covered": true,
+      "notes": "X1–X3 rule-based recall levers (normalization, counterparty priority, 730-day window); X4 forecast/subscription regression + spam invariant; V1 pattern count > 12 baseline probe; AI deferred — rule improvements documented via optional docs/user-guides/BUG-0008.md cross-ref in V1"
+    },
+    {
+      "acceptance_id": "REGRESSION",
+      "criterion": "OIDC-enabled and bundled-firefly deploy regression checks pass (acceptance footer)",
+      "tasks": ["W7", "X4", "V1"],
+      "covered": true,
+      "notes": "W7/X4 automated backend regression; V1 uat.md regression footer — operator post-deploy verify-work (ADV-3)"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "X5 Phase 2 category-aware grouping deferred per sprint capacity — DEC-0072 Phase 1 rule levers sufficient for plan-verify; execute X5 only if W7+X4 complete under estimate."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Acceptance X mentions AI-assisted detection documentation if used — DEC-0072 defers AI; V1 optional user-guide cross-ref covers rule-based improvements only."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "OIDC + bundled-firefly regression footer has no dedicated dev task; operator verify-work post-V1 per tasks.md Regression row."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "Integration tests require operator DATABASE_URL — documented carry-forward from known issues."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "Acceptance cites 11 pending baseline; V1 uses > 12 total patterns baseline from live probe — relative recall gain semantics aligned in architecture § Acceptance mapping."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 2,
+    "covered_count": 2,
+    "gap_count": 0,
+    "task_count": 12,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0071_aligned": true,
+    "dec_0072_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true
+  },
+  "notes": "QA plan-verify 2026-06-08: sprints/quick/Q0018/tasks.md aligns with docs/product/acceptance.md BUG-0008 rows W/X and architecture § BUG-0008 / DEC-0071 / DEC-0072; 12/12 tasks mapped (W1–W7, X1–X4, V1); W-before-X frozen; 0 gaps; 0 orphans. Approved for /execute."
+}

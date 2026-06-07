@@ -1,0 +1,154 @@
+{
+  "sprint_id": "Q0018",
+  "bug_id": "BUG-0008",
+  "phase": "verify-work",
+  "orchestrator_run_id": "auto-20260608-bug0008-001",
+  "decisions": ["DEC-0071", "DEC-0072"],
+  "research": ["R-0068", "R-0069", "R-0009", "R-0010", "R-0011", "R-0012", "R-0013", "R-0065"],
+  "acceptance_rows": ["W", "X"],
+  "acceptance_source": "docs/product/acceptance.md#BUG-0008",
+  "qa_evidence": "sprints/quick/Q0018/qa-findings.md",
+  "verified_at": "2026-06-08T06:20:00Z",
+  "verdict": "PASS",
+  "ready_for_release": true,
+  "environment": {
+    "omniflow_host_available": false,
+    "backend_frontend_deploy_pending": true
+  },
+  "automated_checks": [
+    {
+      "id": "VW-AUTO-1",
+      "description": "cargo test --test bug0008_subscription_alerts",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-08 — 8/8"
+    },
+    {
+      "id": "VW-AUTO-2",
+      "description": "cargo test --lib",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-08 — 156/156"
+    },
+    {
+      "id": "VW-AUTO-3",
+      "description": "W code paths — fingerprint dedup, emit gate, unread-count API, orphan lifecycle",
+      "result": "pass",
+      "notes": "bug0008_subscription_alerts + code review per qa-findings T-5–T-9"
+    },
+    {
+      "id": "VW-AUTO-4",
+      "description": "X code paths — SEPA/legal normalization, transfer counterparty guard, 730-day window",
+      "result": "pass",
+      "notes": "bug0008_subscription_alerts + normalize/group unit tests per qa-findings T-10–T-13"
+    },
+    {
+      "id": "VW-AUTO-5",
+      "description": "W6 frontend banner/toast wired to unread-count API",
+      "result": "pass",
+      "notes": "SubscriptionsPage.tsx + api.ts code review per qa-findings T-9"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-W-CODE",
+      "acceptance_id": "W",
+      "description": "Reconciled unread-count semantics; emit gate; fingerprint dedup; orphan lifecycle on confirm/reject/inactive",
+      "result": "pass",
+      "tasks": ["W1", "W2", "W3", "W4", "W5", "W7"],
+      "evidence": "bug0008_subscription_alerts 8/8; migration 010_subscription_alert_fingerprint.sql"
+    },
+    {
+      "id": "W-1",
+      "acceptance_id": "W",
+      "description": "GET /api/v1/subscriptions/alerts/unread-count returns reconciled: true; unread_new_detection <= pending_patterns",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "notes": "Omniflow runtime probe deferred — US-0010 pass-with-prerequisites precedent"
+    },
+    {
+      "id": "W-2",
+      "acceptance_id": "W",
+      "description": "/subscriptions banner count from unread_new_detection — not raw alert list length",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "notes": "Frontend W6 code PASS; live banner probe operator-verified post-deploy"
+    },
+    {
+      "id": "W-3",
+      "acceptance_id": "W",
+      "description": "Post-sync toast fires on sessionStorage delta of unread_new_detection only",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "notes": "Frontend W6 code PASS; live toast probe operator-verified post-deploy"
+    },
+    {
+      "id": "W-4",
+      "acceptance_id": "W",
+      "description": "Confirm/reject pattern marks orphan alerts read; unread-count drops",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "notes": "confirm_marks_read_orphan_alerts PASS; live lifecycle probe operator-verified post-deploy"
+    },
+    {
+      "id": "UAT-X-CODE",
+      "acceptance_id": "X",
+      "description": "Detection recall levers — SEPA/legal normalization, transfer counterparty priority, 730-day window; no resync spam",
+      "result": "pass",
+      "tasks": ["X1", "X2", "X3", "X4"],
+      "evidence": "sepa_transfer_fixtures_merge_under_single_payee_key; detection_window_defaults_to_730_days; forecast_recurring_still_detects_after_normalization; unchanged_resync_does_not_spam_alerts"
+    },
+    {
+      "id": "X-1",
+      "acceptance_id": "X",
+      "description": "GET /api/v1/subscriptions pattern count > 12 live baseline after deploy + optional sync",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "notes": "Recall code PASS; live pattern count probe operator-verified post-deploy + sync"
+    },
+    {
+      "id": "X-2",
+      "acceptance_id": "X",
+      "description": "After resync, unread_new_detection not >> pending_patterns (alert spam guard)",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "notes": "Emit gate + fingerprint dedup code PASS; live resync probe operator-verified post-deploy"
+    },
+    {
+      "id": "REG-1",
+      "acceptance_id": "regression",
+      "description": "OIDC-enabled deploy regression — health + auth paths OK",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "notes": "Non-blocking; external dev-bypass profile acceptable per prior bug releases"
+    },
+    {
+      "id": "REG-2",
+      "acceptance_id": "regression",
+      "description": "Bundled-firefly / external profile regression — subscription routes OK",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "notes": "Non-blocking; operator omniflow external profile smoke post-deploy"
+    }
+  ],
+  "row_verdicts": {
+    "W": "pass",
+    "X": "pass"
+  },
+  "summary": {
+    "acceptance_rows_total": 2,
+    "acceptance_rows_pass": 2,
+    "steps_total": 10,
+    "passed": 2,
+    "pass_with_prerequisites": 8,
+    "failed": 0,
+    "automated_pass": 5
+  },
+  "operator_prerequisites": [
+    "BACKEND_FRONTEND_DEPLOY — deploy backend + frontend image with W1–X4 + W6 merged",
+    "Confirm containers healthy on https://financegnome.omniflow.cc before runtime probes",
+    "Optional: run full Firefly sync to exercise detection recall (X-1)",
+    "Execute W-1–W-4, X-1–X-2, REG-1–REG-2 smoke checklist per sprints/quick/Q0018/uat.md"
+  ],
+  "blocking_reason_codes": [],
+  "evidence_ref": "sprints/quick/Q0018/verify-work-findings.md",
+  "next_phase": "release"
+}

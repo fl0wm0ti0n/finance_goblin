@@ -291,7 +291,8 @@ impl ExchangeRepository {
             SELECT exchange_id, asset, quantity::float8 AS quantity, product_type,
                    market_value_eur::float8 AS market_value_eur,
                    unrealized_pnl_eur::float8 AS unrealized_pnl_eur,
-                   avg_cost_eur::float8 AS avg_cost_eur
+                   avg_cost_eur::float8 AS avg_cost_eur,
+                   COALESCE(payload, '{}'::jsonb) AS payload
             FROM exchange_holdings
             WHERE quantity > 0
             ORDER BY market_value_eur DESC NULLS LAST
@@ -342,6 +343,7 @@ pub struct HoldingRow {
     pub market_value_eur: Option<f64>,
     pub unrealized_pnl_eur: Option<f64>,
     pub avg_cost_eur: Option<f64>,
+    pub payload: serde_json::Value,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]

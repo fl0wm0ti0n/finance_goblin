@@ -272,6 +272,33 @@ pub struct PlanVsActualResponse {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum PlanVsActualApiResponse {
+    #[serde(rename = "ok")]
+    Ok {
+        month: String,
+        reporting_currency: String,
+        plan_stale: bool,
+        actuals_stale: bool,
+        rows: Vec<PlanVsActualRow>,
+    },
+    #[serde(rename = "no_active_plan")]
+    NoActivePlan { reason: &'static str },
+}
+
+impl From<PlanVsActualResponse> for PlanVsActualApiResponse {
+    fn from(value: PlanVsActualResponse) -> Self {
+        Self::Ok {
+            month: value.month,
+            reporting_currency: value.reporting_currency,
+            plan_stale: value.plan_stale,
+            actuals_stale: value.actuals_stale,
+            rows: value.rows,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct SavingsSuggestion {
     pub pattern_id: String,
     pub payee_key: String,

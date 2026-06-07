@@ -2,53 +2,35 @@
 
 ## Current status
 
-- **Phase:** idle — next defect queue item
-- **Last closed bug:** BUG-0007 — AI merchant/category discovery fails despite mirror data
-- **Bug status:** BUG-0007 **DONE** (Q0017 released 2026-06-07)
-- **Last quick sprint:** **Q0017** (DEC-0069 A′+E+F + S privacy fix)
-- **Orchestrator run:** none (segment complete)
-- **Last completed phase:** refresh-context — triad rollover post-release
+- **Active bug:** none
+- **Active story:** none
+- **Active quick task:** none
+- **Latest release:** BUG-0015 (`bug0015-q0023`, Q0023, 2026-06-07); prior story US-0017 (`0.17.0-us0017`, 2026-06-09)
+- **Orchestrator run:** `auto-20260607-resume-001` (stopped — resume resolution fail)
+- **Last completed phase:** refresh-context (2026-06-07) — triad reconciled; defect drain complete
 
-## Sprint verdict
+## Next actions
 
-**Q0017 released** — AI Chat enumerates named subscription merchants; category_search resolves Strom/Amazon keywords; multi-tool fusion without user-supplied merchant names. T partial advisory (`group_by: month` gap) documented non-blocking.
-
-## Open queue
-
-| Kind | ID | Priority | Summary |
-|------|-----|----------|---------|
-| Bug | BUG-0008 | P1 | Subscription alerts vs list mismatch & under-detection |
-| Bug | BUG-0011 | P1 | Planning mode broken — intake only |
-| Epic | US-0013 | P0 | ML hardening / production overlay |
-| Epic | US-0014 | P2 | Planning UX holistic improvements |
-| Epic | US-0015 | P2 | AI bucket mapping |
-
-## Recommended next auto target
-
-**`/auto bug-target=BUG-0008`**
+1. **Backlog drain** — invoke `/auto` without `bug-target=` to advance **US-0018** (OPEN; `AUTO_BACKLOG_DRAIN=1` in scratchpad)
+2. Operator (post-release): deploy Q0020+Q0022+Q0023 bundle; **BACKEND_FRONTEND_DEPLOY** + **POSTGRES_PERSISTENCE_PROBE** + **FULL_FIREFLY_SYNC**
+3. Operator: rebuild smoke per `sprints/quick/Q0022/uat.json` and `sprints/quick/Q0023/uat.json`
 
 ## Intended resume phase
 
-**discovery** (PO) on BUG-0008 — alert count semantics vs list filters; detection recall gaps
+**idle** — last `/auto` blocked on closed bug targets; next story drain starts at **intake** for US-0018
 
 ## Resolution metadata
 
-- `resolution_source`: resume_brief
-- `resolved_start_phase`: discovery
+- `resolution_source`: argument
+- `resolved_start_phase`: (blocked — no phase spawned)
 - `segment_work_item_kind`: bug
-- `active_bug_id`: BUG-0008
-- `orchestrator_run_id`: _(pending materialization)_
-- `intake_status`: complete — `intake-20260605-subscription-alerts-detection`
-- `sprint_evidence`: handoffs/intake_evidence/intake-20260605-subscription-alerts-detection.json, docs/product/backlog.md#BUG-0008
-- `recommended_next_auto`: bug-target=BUG-0008 phase=discovery
-- `blocking_issue`: none
-- `coordinate`: BUG-0007 DONE — additive subscription JSON only; do not regress alert/list semantics (R-0065 §4)
-
-## BUG-0008 context (from intake)
-
-- **W:** 33 subscription alerts vs 11 list rows — count mismatch
-- **X:** Under-detection — operator expects higher recall from 922+ txs
-- **Acceptance:** rows W/X in `docs/product/acceptance.md`
-- **Out of scope:** merge with BUG-0007 (AI chat vs UI alert surface)
-
-**Next artifact:** `/auto bug-target=BUG-0008` or `/discovery`
+- `resume_error_code`: AUTO_BUG_TARGET_NOT_OPEN
+- `requested_bug_targets`: BUG-0014, BUG-0015
+- `closed_bug_id`: BUG-0015
+- `last_quick_task_id`: Q0023
+- `release_version`: bug0015-q0023
+- `bug_queue_remaining`: 0
+- `open_stories_remaining`: 3
+- `orchestration_stop_boundary_utc`: 2026-06-07T15:30:00Z
+- `backlog_drain_active`: false (bug-target argv selected bug scheduler)
+- `defect_drain_complete`: true

@@ -1,0 +1,232 @@
+{
+  "id": "Q0018",
+  "title": "BUG-0008 subscription alerts & detection recall",
+  "status": "PLANNED",
+  "bug_id": "BUG-0008",
+  "architecture_ref": "architecture-20260608-bug0008",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["W", "X"],
+  "acceptance_mapping": {
+    "W": {
+      "tasks": ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "V1"],
+      "primary_verify": "Subscription-scoped unread count reconciles with visible /subscriptions list; banner uses unread-count API not raw alert list length"
+    },
+    "X": {
+      "tasks": ["X1", "X2", "X3", "X4", "V1"],
+      "primary_verify": "Materially more recurring patterns from 922+ txs than 12 baseline without unread_new_detection >> pending_patterns"
+    }
+  },
+  "task_count": 12,
+  "estimate_total_hours": 24,
+  "tasks": [
+    {
+      "id": "W1",
+      "title": "Fingerprint migration + backfill dedupe",
+      "status": "open",
+      "estimate_hours": 3,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0008 W — fingerprint column, partial unique index, backfill dedupe",
+      "files": ["backend/migrations/", "backend/src/subscriptions/repository.rs"],
+      "decisions": ["DEC-0071"],
+      "tests": [
+        "Migration: backfill dedupes duplicates; partial unique index present",
+        "Backfill: keep newest unread per fingerprint; mark-read orphans"
+      ]
+    },
+    {
+      "id": "W2",
+      "title": "upsert_alert repository",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["W1"],
+      "acceptance_hook": "BUG-0008 W — ON CONFLICT upsert; no duplicate unread fingerprints",
+      "files": ["backend/src/subscriptions/repository.rs"],
+      "decisions": ["DEC-0071"],
+      "tests": [
+        "Unit: ON CONFLICT upsert updates body, sync_run_id, created_at",
+        "Unit: fingerprint per alert_type rules"
+      ]
+    },
+    {
+      "id": "W3",
+      "title": "Detection emit gate",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["W2"],
+      "acceptance_hook": "BUG-0008 W — emit only on new pending or tier increase",
+      "files": ["backend/src/subscriptions/detection.rs"],
+      "decisions": ["DEC-0071"],
+      "tests": [
+        "Unit: no alert on unchanged pending pattern resync",
+        "Unit: alert on new pending or tier increase"
+      ]
+    },
+    {
+      "id": "W4",
+      "title": "Unread-count API route",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["W3"],
+      "acceptance_hook": "BUG-0008 W — GET /api/v1/subscriptions/alerts/unread-count reconciled semantics",
+      "files": [
+        "backend/src/subscriptions/routes.rs",
+        "backend/src/subscriptions/service.rs"
+      ],
+      "decisions": ["DEC-0071"],
+      "tests": [
+        "Integration: response schema per DEC-0071 §2",
+        "Integration: reconciled true when counts align; JOIN guard"
+      ]
+    },
+    {
+      "id": "W5",
+      "title": "Orphan lifecycle hooks",
+      "status": "open",
+      "estimate_hours": 1.5,
+      "depends_on": ["W3"],
+      "acceptance_hook": "BUG-0008 W — mark-read orphans on confirm/reject/inactive",
+      "files": ["backend/src/subscriptions/service.rs"],
+      "decisions": ["DEC-0071"],
+      "tests": [
+        "Unit: confirm/reject mark-read unread new_detection for pattern_id",
+        "Unit: mark_inactive mark-reads all unread alerts"
+      ]
+    },
+    {
+      "id": "W6",
+      "title": "Frontend banner + toast",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["W4"],
+      "acceptance_hook": "BUG-0008 W — banner/toast from unread-count API not list length",
+      "files": ["frontend/src/pages/SubscriptionsPage.tsx"],
+      "decisions": ["DEC-0071"],
+      "tests": [
+        "Frontend: banner uses unread_new_detection from API",
+        "Frontend: post-sync toast sessionStorage delta",
+        "Regression: header bell unchanged (US-0005-only)"
+      ]
+    },
+    {
+      "id": "W7",
+      "title": "Backend dedup + lifecycle tests",
+      "status": "open",
+      "estimate_hours": 3,
+      "depends_on": ["W1", "W2", "W3", "W4", "W5"],
+      "acceptance_hook": "BUG-0008 W regression — architecture § Test strategy",
+      "files": ["backend/tests/", "backend/src/subscriptions/"],
+      "decisions": ["DEC-0071"],
+      "tests": [
+        "W1–W5 frozen test contract from architecture § Test strategy"
+      ]
+    },
+    {
+      "id": "X1",
+      "title": "Payee normalization",
+      "status": "open",
+      "estimate_hours": 3,
+      "depends_on": ["W3"],
+      "acceptance_hook": "BUG-0008 X — SEPA token strip, entity suffix collapse",
+      "files": ["backend/src/recurrence/normalize.rs"],
+      "decisions": ["DEC-0072"],
+      "tests": [
+        "Unit: SEPA fixture merges under single payee key",
+        "Unit: legal suffix collapse GmbH, AB"
+      ]
+    },
+    {
+      "id": "X2",
+      "title": "Transfer counterparty priority",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["X1"],
+      "acceptance_hook": "BUG-0008 X — transfer-type counterparty priority guard",
+      "files": [
+        "backend/src/recurrence/group.rs",
+        "backend/src/subscriptions/detection.rs"
+      ],
+      "decisions": ["DEC-0072"],
+      "tests": [
+        "Unit: SVWZ|UEBERWEISUNG|Lastschrift guard prefers counterparty_name",
+        "Unit: non-transfer paths unchanged"
+      ]
+    },
+    {
+      "id": "X3",
+      "title": "detection_window_days 730",
+      "status": "open",
+      "estimate_hours": 0.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0008 X — config 365 → 730",
+      "files": ["backend/config/default.toml"],
+      "decisions": ["DEC-0072"],
+      "tests": [
+        "Config: 730-day window loads from TOML"
+      ]
+    },
+    {
+      "id": "X4",
+      "title": "Forecast + subscription integration tests",
+      "status": "open",
+      "estimate_hours": 2,
+      "depends_on": ["X1", "X2", "X3"],
+      "acceptance_hook": "BUG-0008 X regression — forecast shared-core guard DEC-0013",
+      "files": ["backend/tests/", "backend/src/recurrence/"],
+      "decisions": ["DEC-0072", "DEC-0013"],
+      "tests": [
+        "Integration: forecast recurring unaffected or improved",
+        "Integration: subscription detection recall fixtures"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work omniflow smoke",
+      "status": "open",
+      "estimate_hours": 1,
+      "depends_on": ["W6", "X4", "W7"],
+      "operator_gate": "Backend + frontend deploy after W1–X4+W7 before runtime probes",
+      "acceptance_hook": "BUG-0008 W, X — financegnome.omniflow.cc subscription smoke",
+      "files": [
+        "sprints/quick/Q0018/uat.md",
+        "docs/user-guides/BUG-0008.md"
+      ],
+      "tests": [
+        "Probe W: unread-count reconciled; banner matches API",
+        "Probe X: patterns > 12 baseline; no alert spam",
+        "Regression: OIDC + bundled-firefly deploy"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "(W1 → W2 → W3) migration + repository + detection gate",
+    "(W4 → W5) API + lifecycle",
+    "W6 frontend",
+    "(X1 → X2 → X3) recurrence core",
+    "(W7 → X4) tests",
+    "Deploy backend + frontend on omniflow",
+    "V1 verify-work smoke rows W/X + regression footer"
+  ],
+  "execute_order": ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "X1", "X2", "X3", "X4", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "Deploy W1–X4+W7 backend + W6 frontend PR before V1 omniflow smoke",
+      "rationale": "Migration, API, detection, and UI changes require deploy before operator probes reflect new contracts"
+    }
+  ],
+  "frozen_boundaries": [
+    "W-before-X mandatory — W1–W3 before X1",
+    "DEC-0071 fingerprint + unread-count contract frozen",
+    "DEC-0072 Phase 1 only — X5 category grouping deferred",
+    "Header bell US-0005-only — no combined subscription badge",
+    "R-0065 coordinate — additive unread-count route only; no list_patterns filter changes",
+    "min_emit_confidence stays 60 hardcoded until W closed + FP review",
+    "AI in-pipeline detection deferred — document in release notes",
+    "BUG-0007 AI tool changes out of scope",
+    "No Firefly re-sync required unless operator chooses full detection re-run"
+  ],
+  "decisions": ["DEC-0071", "DEC-0072"],
+  "research": ["R-0068", "R-0069", "R-0009", "R-0010", "R-0011", "R-0012", "R-0013", "R-0065"],
+  "operator_next": "After W1–X4+W7+W6 deploy: backend + frontend on omniflow; then V1 verify-work on financegnome.omniflow.cc"
+}

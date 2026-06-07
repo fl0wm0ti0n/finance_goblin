@@ -1,0 +1,148 @@
+{
+  "id": "Q0021",
+  "title": "US-0017 README living-doc expansion and troubleshooting",
+  "status": "PLANNED",
+  "story_id": "US-0017",
+  "architecture_ref": "architecture-20260609-us0017",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_ids": ["AC-1", "AC-2", "AC-3", "AC-4", "AC-5"],
+  "acceptance_mapping": {
+    "AC-1": {
+      "tasks": ["E1", "UG1"],
+      "primary_verify": "README Examples H3 omniflow external-profile smoke — sync, recompute, routes, exchange sanity"
+    },
+    "AC-2": {
+      "tasks": ["E2", "UG1"],
+      "primary_verify": "Limitations H3 Troubleshooting — gates, symptom table, ML-off vs data-missing"
+    },
+    "AC-3": {
+      "tasks": ["E3"],
+      "primary_verify": "Product status lists US-0015 + post-US-0016 closures; verify-only"
+    },
+    "AC-4": {
+      "tasks": ["E4", "E5"],
+      "primary_verify": "Developer README + runbook per-segment Product status maintenance hooks"
+    },
+    "AC-5": {
+      "tasks": ["E6"],
+      "primary_verify": "validate_doc_profile --no-template-parity exit 0; split layout preserved"
+    }
+  },
+  "task_count": 7,
+  "mandatory_task_count": 7,
+  "optional_task_ids": [],
+  "estimate_total_hours": 5.5,
+  "tasks": [
+    {
+      "id": "E1",
+      "title": "Omniflow smoke H3 under Examples",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "depends_on": [],
+      "acceptance_hook": "US-0017 AC-1",
+      "files": ["README.md"],
+      "decisions": ["DEC-0070", "DEC-0059"],
+      "research": ["R-0078"]
+    },
+    {
+      "id": "E2",
+      "title": "Troubleshooting H3 under Limitations",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "depends_on": [],
+      "acceptance_hook": "US-0017 AC-2",
+      "files": ["README.md"],
+      "decisions": ["DEC-0070", "DEC-0059"],
+      "research": ["R-0078"]
+    },
+    {
+      "id": "E3",
+      "title": "Product status verify-only",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": ["E1", "E2"],
+      "acceptance_hook": "US-0017 AC-3",
+      "files": ["README.md"],
+      "decisions": ["DEC-0070"]
+    },
+    {
+      "id": "E4",
+      "title": "Developer README per-segment wording",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": [],
+      "acceptance_hook": "US-0017 AC-4",
+      "files": ["docs/developer/README.md"],
+      "decisions": ["DEC-0070"],
+      "research": ["R-0078"]
+    },
+    {
+      "id": "E5",
+      "title": "Runbook README maintenance delta",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": [],
+      "acceptance_hook": "US-0017 AC-4",
+      "files": ["docs/engineering/runbook.md"],
+      "decisions": ["DEC-0070"],
+      "research": ["R-0078"]
+    },
+    {
+      "id": "UG1",
+      "title": "Publish docs/user-guides/US-0017.md",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": ["E1", "E2"],
+      "acceptance_hook": "US-0017 AC-1, AC-2 (operator distill)",
+      "files": ["docs/user-guides/US-0017.md"],
+      "user_guide_mode": true
+    },
+    {
+      "id": "E6",
+      "title": "validate_doc_profile --no-template-parity gate",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": ["E1", "E2", "E3", "E4", "E5", "UG1"],
+      "acceptance_hook": "US-0017 AC-5",
+      "files": [],
+      "decisions": ["DEC-0070", "DEC-0059"],
+      "tests": [
+        "python3 scripts/validate_doc_profile.py --repo . --no-template-parity"
+      ]
+    }
+  ],
+  "frozen_boundaries": {
+    "in_scope": [
+      "README.md H3 Omniflow smoke + Troubleshooting only — no new root H2",
+      "docs/developer/README.md per-segment maintenance wording",
+      "runbook § README maintenance release-segment definition",
+      "docs/user-guides/US-0017.md operator distill",
+      "validate_doc_profile --no-template-parity gate unchanged command"
+    ],
+    "out_of_scope": [
+      "Application source code",
+      "Analytics dashboards or backend",
+      "Dedicated ## Troubleshooting H2",
+      "Full runbook §23 inline duplicate",
+      "DEC-0081 or new DEC-xxxx",
+      "Credential literals in any doc surface",
+      "Per-commit README automation"
+    ],
+    "content_sources": [
+      "R-0078 §2 omniflow curl templates",
+      "R-0078 §3 symptom table",
+      "sprints/quick/Q0020/uat.md operator gates"
+    ]
+  },
+  "execute_order": ["E1", "E2", "E4", "E5", "E3", "UG1", "E6"],
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260609-q0021-us0017",
+  "orchestrator_run_id": "auto-20260609-us0017-001"
+}

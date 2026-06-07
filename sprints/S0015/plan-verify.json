@@ -1,0 +1,151 @@
+{
+  "sprint": "S0015",
+  "story_id": "US-0014",
+  "orchestrator_run_id": "auto-20260608-us0014-001",
+  "verified_at": "2026-06-08T12:45:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0014",
+  "tasks_source": "sprints/S0015/tasks.md",
+  "tasks_source_note": "sprints/S0015/tasks.md materialized at sprint-plan 2026-06-08; task.json not used for standard sprints",
+  "architecture_ref": "docs/engineering/architecture.md#US-0014",
+  "decision_alignment": {
+    "decision_id": "DEC-0077",
+    "aligned": true,
+    "research_basis": ["R-0072", "R-0073", "R-0070"],
+    "contract_elements_covered": [
+      "Page-local planningFeedback helper — success/error card variants, single active slot (T-0158)",
+      "Mandatory onError on all 7 planning mutations (T-0159)",
+      "Success confirmations: createPlan, applyTemplate (all), addAdjustment, activate (T-0157, T-0160)",
+      "Immediate plan-vs-actual invalidation on adjustment CRUD + activate + createPlan (T-0160)",
+      "Set-active banner Plan vs Actual + Grafana Dashboard 3 budgets copy (T-0156)",
+      "AC-1 empty-state onboarding regression verify — no Q0019 rewrite (T-0155)",
+      "AC-3 Compare footnote + 0.00 overlay verify; AC-4 PVA guided card verify (T-0161)",
+      "Compare/PVA shipped UX verify — DEC-0073/0074 frozen (T-0161)",
+      "docs/user-guides/US-0014.md finalize + UAT OIDC three-tab smoke template BACKEND_FRONTEND_DEPLOY gate (T-0162)"
+    ],
+    "frozen_boundaries_respected": [
+      "DEC-0073 compare overlay-delta metric frozen — verify-only AC-3",
+      "DEC-0074 PVA no_active_plan 200 payload frozen — verify-only AC-4",
+      "No global MutationCache or toast library — page-local scope only",
+      "No backend plans API changes unless regression found",
+      "No auto-activate first plan",
+      "Q0019 shipped AC-1/AC-3/AC-4 verify-first — no greenfield rewrite",
+      "BUG-0011 prerequisite checked at intake — AD/AE/AF released Q0019"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "T-0158 → T-0159 → T-0160; (T-0155 ∥ T-0156) after T-0158; T-0157 after T-0158; T-0161 → T-0162 after S2; BACKEND_FRONTEND_DEPLOY before verify-work omniflow OIDC smoke",
+    "notes": "S2 helper foundation before S1 success toasts and S3 error-path smoke; S1 verify may parallel S2 after T-0158; S3 after S2 lands"
+  },
+  "test_coverage": {
+    "manual_regression": "T-0155 — AC-1 empty-state template grid + Create empty plan CTA",
+    "mutation_feedback": "T-0158–T-0160 — force 4xx/5xx → red error card; add line → success toast + Compare/PVA refresh",
+    "verify_compare_pva": "T-0161 — zero-overlay 0.00 monthly delta; PVA guided card when no active plan",
+    "operator_docs": "T-0161 — docs/user-guides/US-0014.md delta over US-0004",
+    "uat_smoke": "T-0162 — OIDC /planning three-tab smoke on US-0010 external profile (UAT placeholder)",
+    "backend_regression": "cargo test --test plans_integration — no API change expected",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "Prerequisite",
+      "criterion": "Parent defect BUG-0011 AC rows AD/AE/AF released (Q0019, DEC-0073, DEC-0074) — functional gates satisfied",
+      "tasks": [],
+      "covered": true,
+      "prerequisite": true,
+      "notes": "Checked at intake 2026-06-08; no sprint task — Q0019 released"
+    },
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "When plans.length === 0, /planning Scenarios shows template card grid plus name field and primary Create empty plan CTA — operator reaches add-lines flow without Leasing-only dead end",
+      "tasks": ["T-0155"],
+      "covered": true,
+      "notes": "S1 verify-only — Q0019 shipped empty branch; T-0155 regression checklist, no rewrite"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "After custom/empty plan create, inline add-adjustment form visible and wired; submitting a line updates compare/PVA after recompute; API/mutation errors surface as toast or inline — no silent no-op",
+      "tasks": ["T-0160", "T-0159"],
+      "covered": true,
+      "notes": "T-0160 addAdjustment success toast + plan-vs-actual invalidation; T-0159 onError on addAdjustmentMutation for error surface"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Compare tab with zero-adjustment plan shows 0.00 monthly delta (DEC-0073) and contextual help explaining overlay-only delta vs projected balance — no illogical aggregates",
+      "tasks": ["T-0161"],
+      "covered": true,
+      "notes": "S3 verify-only — Compare footnote + monthly_delta_sum 0.00 regression per DEC-0073"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "When no active plan, Plan vs Actual tab renders guided card from status: no_active_plan 200 payload (DEC-0074) with link to Set active / Scenarios — not blank tab",
+      "tasks": ["T-0161"],
+      "covered": true,
+      "notes": "S3 verify-only — PVA guided card regression per DEC-0074"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Built-in templates reachable from first-run empty state and from existing-plan Scenarios UI; Create from {template} succeeds with visible confirmation",
+      "tasks": ["T-0157"],
+      "covered": true,
+      "notes": "T-0157 success toasts on createPlan + applyTemplate (all templates) per DEC-0077 §3; extends beyond Q0019 Custom-only"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "After first plan create (is_active=false default), inline banner or persistent cue explains Set active requirement for Plan vs Actual and Grafana Dashboard 3",
+      "tasks": ["T-0156"],
+      "covered": true,
+      "notes": "T-0156 extends showSetActiveBanner with Plan vs Actual + Grafana Dashboard 3 budgets copy per DEC-0077 §5"
+    },
+    {
+      "acceptance_id": "AC-7",
+      "criterion": "Planning mutations (create plan, add adjustment, set active, version create) show operator-visible errors on failure — no silent console-only failures",
+      "tasks": ["T-0158", "T-0159"],
+      "covered": true,
+      "notes": "S2 primary — T-0158 helper foundation; T-0159 mandatory onError on all 7 mutations per DEC-0077 §2"
+    },
+    {
+      "acceptance_id": "AC-8",
+      "criterion": "/planning all three tabs pass OIDC-enabled deploy smoke on US-0010 external profile (pass-with-prerequisites BACKEND_FRONTEND_DEPLOY)",
+      "tasks": ["T-0162"],
+      "covered": true,
+      "notes": "T-0162 user guide US-0014 finalize + uat.md OIDC three-tab smoke template; operator gate BACKEND_FRONTEND_DEPLOY before omniflow verify-work"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "BACKEND_FRONTEND_DEPLOY operator gate required before omniflow OIDC smoke (AC-8) — documented in UAT template T-0162"
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "T-0157 applyTemplate toast must cover all built-in templates — not Custom-only per Q0019 partial ship (R-0073)"
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "T-0160 optional update/delete toasts may omit per DEC-0077 — AC-2 primary path is addAdjustment success + invalidation"
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_count": 9,
+    "covered_count": 9,
+    "blocking_covered_count": 8,
+    "prerequisite_count": 1,
+    "gap_count": 0,
+    "task_count": 8,
+    "task_ids": ["T-0155", "T-0156", "T-0157", "T-0158", "T-0159", "T-0160", "T-0161", "T-0162"],
+    "tasks_without_acceptance_ref": [],
+    "dec_0077_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true,
+    "execute_ready_caveat": null
+  },
+  "notes": "QA plan-verify 2026-06-08: sprints/S0015/tasks.md (T-0155..T-0162) aligns with docs/product/acceptance.md § US-0014 (9 rows) and architecture § US-0014 / DEC-0077; 8/8 tasks mapped; 9/9 acceptance rows covered (8 open + 1 prerequisite checked); 0 gaps. Approved for /execute."
+}

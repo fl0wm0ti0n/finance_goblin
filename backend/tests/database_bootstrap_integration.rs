@@ -58,6 +58,7 @@ fn test_config(db_name: &str, bootstrap_url: &str) -> AppConfig {
             retention_count: 5,
             recurring_amount_tolerance_pct: 5.0,
             category_buckets: std::collections::HashMap::new(),
+            ai_bucket_min_confidence: 0.75,
         },
         subscriptions: SubscriptionsConfig::default(),
         plans: PlansConfig::default(),

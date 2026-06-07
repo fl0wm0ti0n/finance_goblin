@@ -1,0 +1,137 @@
+{
+  "sprint": "Q0020",
+  "bug_id": "BUG-0013",
+  "orchestrator_run_id": "auto-20260608-bug0013-001",
+  "verified_at": "2026-06-08T23:30:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0013",
+  "tasks_source": "sprints/quick/Q0020/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0013",
+  "decision_alignment": {
+    "decisions": ["DEC-0079", "DEC-0080"],
+    "research_basis": ["R-0076", "R-0077"],
+    "contract_elements_covered": [
+      "DEC-0079 AL1: planned CTE AND pdc.ts::date <= CURRENT_DATE on budgets.json panel 5",
+      "DEC-0079 AL1: deviation row uses capped planned minus actual; optional mid-month plan-start footnote",
+      "DEC-0080 AN1a: bitunix.rs wallet data[] array parse + unrealizedPNL field keys",
+      "DEC-0080 AN1b: pnl.rs futures USDT equity via stablecoin path; linear unrealized USDT→EUR; skip linear notional in crypto_value_eur sum (DEC-0064)",
+      "DEC-0080 AN1c: unit tests — array wallet mock + linear unrealized persist",
+      "AJ1: subscriptions price-changes documented empty-state copy (P2 optional)",
+      "AK2: portfolio performance % min-snapshot footnote when <2 snapshots (P2 optional)",
+      "V1: omniflow smoke AI–AN after BACKEND_FRONTEND_DEPLOY + GRAFANA_PROVISIONING_RELOAD + Full sync + forecast recompute",
+      "AM waived per R-0077 unless operator HAR shows non-200"
+    ],
+    "frozen_boundaries_respected": [
+      "AL1 Grafana-only — no backend MTD view",
+      "AN1 no linear notional in market_value_eur (DEC-0064 double-count guard)",
+      "AI/AJ/AM no mandatory code fixes — discovery refuted or ops-only per architecture",
+      "AJ1/AK2 optional P2 — skip without blocking P0 AL1+AN1+V1 closure",
+      "US-0013 ML overlay out of scope",
+      "AM1 deferred unless HAR non-200",
+      "DEC-0064 exposure_eur display tier 2 out of scope"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "AL1 ∥ AN1 (parallel) → optional AJ1, AK2 → single release deploy → BACKEND_FRONTEND_DEPLOY + GRAFANA_PROVISIONING_RELOAD → Full Firefly sync + forecast recompute → V1 verify-work",
+    "notes": "AL1 and AN1 independent layers — parallel safe; V1 blocked on deploy and operator gates; AJ1/AK2 optional provisioning before or with deploy"
+  },
+  "test_coverage": {
+    "unit_fixtures": "AN1c: array-shaped wallet mock → futures row with USDT equity; linear unrealized_pnl_eur persist; cargo test bitunix/pnl paths",
+    "integration": "AN1: GET /api/v1/wealth crypto.subtotal_eur > 0 when wallet equity > 0 post sync",
+    "operator_tests": "V1: AL budgets MTD plausible; AN/AK wealth + portfolio crypto non-zero; AI cashflow + forecast-horizons acct 114 baseline; AJ price-changes rows or documented empty-state; AM ds/query + annotations 200; six /analytics/{slug} routes",
+    "doc_review": "V1 uses sprints/quick/Q0020/uat.md smoke checklist mapping AI–AN + operator gates",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AI",
+      "criterion": "Cashflow Balance forecast with scarcity threshold and forecast-horizons baseline panels show non-empty signed balances for funded asset account — not persistent flat 0 € regression",
+      "tasks": ["V1"],
+      "covered": true,
+      "notes": "Discovery refuted code regression — V1 re-smoke acct 114 baseline panels after Full sync + recompute; no dev task required"
+    },
+    {
+      "acceptance_id": "AJ",
+      "criterion": "Subscriptions Price changes (90 days) panel shows change rows when amount changes occurred, or documented empty-state when none",
+      "tasks": ["AJ1", "V1"],
+      "covered": true,
+      "notes": "AJ1 optional P2 provides documented empty-state copy for 0-event discovery case; V1 probes subscriptions price-changes rows or empty-state"
+    },
+    {
+      "acceptance_id": "AK",
+      "criterion": "Portfolio crypto value reflects exchange holdings when sync populated positions; FX incomplete warning only with documented partial totals; total return % populated when snapshot history exists",
+      "tasks": ["AN1", "AK2", "V1"],
+      "covered": true,
+      "notes": "AN1 DEC-0080 prices futures wallet + linear unrealized EUR; AK2 optional footnote when <2 snapshots; V1 portfolio crypto stat probe; FX posture via existing wealth API + DEC-0080 linear path (no new fx_incomplete flag for symbol)"
+    },
+    {
+      "acceptance_id": "AL",
+      "criterion": "Budgets MTD plan/actual/deviation rows plausible for active plan — not unexplained Planned MTD −€150K with Actual €0",
+      "tasks": ["AL1", "V1"],
+      "covered": true,
+      "notes": "AL1 DEC-0079 caps planned CTE at CURRENT_DATE; V1 /analytics/budgets MTD probe"
+    },
+    {
+      "acceptance_id": "AM",
+      "criterion": "POST /analytics/grafana/api/ds/query and annotation queries return 200 without browser Failed to fetch on omniflow",
+      "tasks": ["V1"],
+      "covered": true,
+      "notes": "V1 ds/query + annotations 200 regression; waived per R-0077 unless operator HAR shows non-200 — no AM1 execute task"
+    },
+    {
+      "acceptance_id": "AN",
+      "criterion": "Exchange crypto balances appear in wealth/portfolio totals when venue sync succeeds — not permanently €0 with configured read-only keys",
+      "tasks": ["AN1", "V1"],
+      "covered": true,
+      "notes": "AN1 fixes Bitunix wallet parse + EUR valuation; V1 GET /api/v1/wealth + portfolio crypto stat after Full sync"
+    },
+    {
+      "acceptance_id": "REGRESSION",
+      "criterion": "OIDC-enabled deploy regression checks pass (acceptance footer)",
+      "tasks": ["V1"],
+      "covered": true,
+      "notes": "V1 uat.md REG-1 six /analytics/{slug} routes + operator post-deploy verify-work"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "AJ1 and AK2 are P2 optional — if skipped at execute, AJ documented empty-state and AK performance-% footnote rely on V1 accepting discovery-refuted empty panels or existing Grafana noValue; frozen boundary allows skip without blocking P0."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "AK FX incomplete warning sub-criterion has no dedicated V1 probe step — satisfied by existing wealth API banner behavior post-DEC-0080; operator should note fx_incomplete if partial alt pricing remains."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "V1 gated on BACKEND_FRONTEND_DEPLOY + GRAFANA_PROVISIONING_RELOAD + Full Firefly sync + forecast recompute — omniflow runtime probes deferred until operator gates (standard quick-sprint pattern)."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "AM waived per R-0077 — AM1 execute only if operator HAR captures non-200; V1 curl regression sufficient for plan closure."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 6,
+    "covered_count": 6,
+    "gap_count": 0,
+    "task_count": 5,
+    "mandatory_task_count": 3,
+    "optional_task_count": 2,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0079_aligned": true,
+    "dec_0080_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true
+  },
+  "notes": "QA plan-verify 2026-06-08: sprints/quick/Q0020/tasks.md aligns with docs/product/acceptance.md BUG-0013 rows AI–AN and architecture § BUG-0013 / DEC-0079 / DEC-0080; 5/5 tasks mapped (AL1, AN1, AJ1, AK2, V1); AL1∥AN1 parallel; 0 gaps; 0 orphans. Approved for /execute."
+}

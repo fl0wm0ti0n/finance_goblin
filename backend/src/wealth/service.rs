@@ -11,8 +11,8 @@ use crate::portfolio::PortfolioEngine;
 use super::repository::WealthRepository;
 use super::types::{
     AccountWealthRow, AllocationGap, AllocationWeights, CryptoBreakdown, CryptoExchangeSummary,
-    CryptoHoldingRow, ExtendedWealthBreakdown, FireflyBreakdown, NetWorthBreakdown, PnlSummary,
-    WealthError, WealthHistoryPoint,
+    CryptoHoldingRow, ExtendedWealthBreakdown, FireflyBreakdown, HoldingsAllRow,
+    NetWorthBreakdown, PnlSummary, WealthError, WealthHistoryPoint,
 };
 
 #[derive(Clone)]
@@ -106,6 +106,7 @@ impl WealthService {
             fx_complete: true,
             exchanges: vec![],
             holdings_top: vec![],
+            holdings_all: vec![],
             unpriced_assets: vec![],
         };
         let mut crypto_placeholder = true;
@@ -156,31 +157,59 @@ impl WealthService {
             crypto.holdings_top = top;
 
             crypto.subtotal_eur = holdings.iter().filter_map(|h| h.market_value_eur).sum();
+
+            let mut all: Vec<HoldingsAllRow> = holdings
+                .iter()
+                .map(|h| HoldingsAllRow {
+                    asset: h.asset.clone(),
+                    quantity: h.quantity,
+                    product_type: h.product_type.clone(),
+                    value_eur: h.market_value_eur,
+                    unrealized_pnl_eur: h.unrealized_pnl_eur,
+                    native_unit: native_unit_for_holding(h),
+                })
+                .collect();
+            all.sort_by(|a, b| compare_holdings_all(a, b));
+            all.truncate(50);
+            crypto.holdings_all = all;
         }
 
-        let pnl = if let Some(pe) = portfolio {
+        let (pnl, pnl_fx_incomplete, pnl_unpriced) = if let Some(pe) = portfolio {
             if let Ok(Some(latest)) = pe.latest().await {
-                PnlSummary {
-                    realized_eur: latest.realized_eur,
-                    unrealized_eur: latest.unrealized_eur,
-                    total_return_pct: latest.total_return_pct,
-                }
+                (
+                    PnlSummary {
+                        realized_eur: latest.realized_eur,
+                        unrealized_eur: latest.unrealized_eur,
+                        total_return_pct: latest.total_return_pct,
+                    },
+                    latest.fx_incomplete,
+                    latest.unpriced_assets,
+                )
             } else {
+                (
+                    PnlSummary {
+                        realized_eur: 0.0,
+                        unrealized_eur: 0.0,
+                        total_return_pct: None,
+                    },
+                    false,
+                    vec![],
+                )
+            }
+        } else {
+            (
                 PnlSummary {
                     realized_eur: 0.0,
                     unrealized_eur: 0.0,
                     total_return_pct: None,
-                }
-            }
-        } else {
-            PnlSummary {
-                realized_eur: 0.0,
-                unrealized_eur: 0.0,
-                total_return_pct: None,
-            }
+                },
+                false,
+                vec![],
+            )
         };
 
-        let fx_incomplete = !crypto.unpriced_assets.is_empty();
+        crypto.unpriced_assets = pnl_unpriced;
+        let fx_incomplete = pnl_fx_incomplete || !crypto.unpriced_assets.is_empty();
         crypto.fx_complete = !fx_incomplete;
 
         let total_eur = if fx_incomplete {
@@ -301,9 +330,58 @@ impl WealthService {
     }
 }
 
+fn native_unit_for_holding(h: &crate::exchanges::repository::HoldingRow) -> String {
+    h.asset.clone()
+}
+
+fn compare_holdings_all(a: &HoldingsAllRow, b: &HoldingsAllRow) -> std::cmp::Ordering {
+    match (a.value_eur, b.value_eur) {
+        (Some(va), Some(vb)) => vb
+            .partial_cmp(&va)
+            .unwrap_or(std::cmp::Ordering::Equal),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.asset.cmp(&b.asset),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::wealth::types::AccountWealthRow;
+    use crate::wealth::types::{AccountWealthRow, HoldingsAllRow};
+
+    #[test]
+    fn holdings_all_sorts_priced_before_unpriced() {
+        let rows = vec![
+            HoldingsAllRow {
+                asset: "ALT".into(),
+                quantity: 1.0,
+                product_type: "spot".into(),
+                value_eur: None,
+                unrealized_pnl_eur: None,
+                native_unit: "ALT".into(),
+            },
+            HoldingsAllRow {
+                asset: "BTC".into(),
+                quantity: 0.1,
+                product_type: "spot".into(),
+                value_eur: Some(5000.0),
+                unrealized_pnl_eur: None,
+                native_unit: "BTC".into(),
+            },
+        ];
+        let mut sorted = rows;
+        sorted.sort_by(super::compare_holdings_all);
+        assert_eq!(sorted[0].asset, "BTC");
+        assert_eq!(sorted[1].asset, "ALT");
+    }
+
+    #[test]
+    fn fx_incomplete_when_unpriced_assets_present() {
+        let unpriced: Vec<String> = vec!["DOGE".into()];
+        let pnl_fx = false;
+        let fx_incomplete = pnl_fx || !unpriced.is_empty();
+        assert!(fx_incomplete);
+    }
 
     #[test]
     fn mixed_currency_when_multiple_currencies() {

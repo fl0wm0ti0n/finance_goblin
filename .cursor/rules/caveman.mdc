@@ -139,3 +139,46 @@ contract-test token lists, `AUTO_QUIET` non-suppressible vocabulary
 - No change to spawn-only orchestration (US-0048 / DEC-0029 / BUG-0006),
   strict runtime proof (DEC-0038), `AUTO_QUIET` non-suppressible list
   (US-0088), or US-0071 visible-metadata rules.
+
+## Voice compression (when CAVEMAN_MODE=1)
+
+### Precedence
+
+When `CAVEMAN_MODE=1`, voice-compression directives in **this rule** override
+conflicting **user rule** prose-style guidance (e.g. "write complete sentences",
+"blog-post quality") for **assistant reply voice only**; does **not** override
+user rules for tool usage, git safety, security, or commit policy.
+
+### Intensity levels
+
+| Level | Semantics | Example pattern |
+|-------|-----------|-----------------|
+| `lite` | Drop filler but keep grammatical sentences | Before: "I will now explain the orchestration gate because plan-verify requires it." After: "Orchestration gate required for plan-verify. Run gate check next." |
+| `full` | Drop articles + fragments OK | Before: "The spawn-only orchestrator must dispatch a fresh subagent for each phase." After: "Spawn-only orchestrator dispatches fresh subagent per phase. Next: run `/execute`." Pattern: `[thing] [action] [reason]. [next step].` |
+| `ultra` | Abbreviate ordinary prose words only; literals per §6 stub | Before: "The auth middleware returns HTTP 401 when the bearer token is absent from the Authorization header." After: "Auth middleware → 401. Bearer token absent. Check header." |
+
+Goal: **token-saving terse/imperative prose** — **not** stereotypical caveman
+roleplay.
+
+### Drop rules
+
+Drop articles, filler, hedging, and pleasantries where level permits; keep
+technical terms exact; fragments OK at `full` and `ultra`.
+
+### Auto-Clarity
+
+Pause compression for **security** warnings, **destructive** operations, or
+**ambiguous** compression — deliver the clear part in full prose, then resume
+Caveman voice.
+
+### Persistence
+
+Voice compression is active in **every response** while `CAVEMAN_MODE=1`;
+turn off only via scratchpad keys or the documented toggle phrases above.
+
+### Ultra and literal regions
+
+**Pointer stub** — defer to existing `## Literal-region invariant (9-zone hard
+MUST)` above. Reason codes, IDs, paths, and proof tuples remain **byte-literal**.
+At `ultra`, abbreviate ordinary prose words only — **never** abbreviate reason
+codes or gate tokens. **No duplicate** 9-zone list here.

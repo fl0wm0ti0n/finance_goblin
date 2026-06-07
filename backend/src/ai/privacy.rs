@@ -1,8 +1,32 @@
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 use crate::config::PrivacyConfig;
+
+pub const RAW_BUCKET_BATCH_CAP: usize = 50;
+
+#[derive(Debug, Clone)]
+pub struct RawBucketFeatureInput {
+    pub feature_id: String,
+    pub category_name: Option<String>,
+    pub payee_normalized: String,
+    pub amount: f64,
+    pub recurring_label: Option<String>,
+    pub pattern_class: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct BucketFeatureRow {
+    pub feature_id: String,
+    pub category_name: Option<String>,
+    pub merchant_token: String,
+    pub amount_sign: i8,
+    pub magnitude_band: String,
+    pub recurring_label: Option<String>,
+    pub pattern_class: String,
+}
 
 pub struct PrivacyLayer {
     config: PrivacyConfig,
@@ -34,6 +58,54 @@ impl PrivacyLayer {
 
     pub fn summarize_args(&self, args: &Value) -> Value {
         self.walk_value_for_tool("", args.clone(), false)
+    }
+
+    /// Privacy-safe feature rows for forecast bucket inference (DEC-0078 / R-0075).
+    pub fn prepare_bucket_features(
+        &self,
+        rows: &[RawBucketFeatureInput],
+    ) -> Vec<BucketFeatureRow> {
+        let allow_raw = self.config.allow_raw_transactions;
+        let raw_cap = if allow_raw {
+            rows.len().min(RAW_BUCKET_BATCH_CAP)
+        } else {
+            0
+        };
+
+        rows.iter()
+            .enumerate()
+            .map(|(idx, row)| {
+                let amount_sign = if row.amount > 0.0 {
+                    1i8
+                } else if row.amount < 0.0 {
+                    -1
+                } else {
+                    0
+                };
+                let magnitude_band = magnitude_band(row.amount.abs());
+                let category_name = row
+                    .category_name
+                    .as_ref()
+                    .map(|s| s.trim().to_lowercase())
+                    .filter(|s| !s.is_empty());
+
+                let merchant_token = if allow_raw && idx < raw_cap {
+                    row.payee_normalized.trim().to_lowercase()
+                } else {
+                    self.hash_counterparty(&row.payee_normalized)
+                };
+
+                BucketFeatureRow {
+                    feature_id: row.feature_id.clone(),
+                    category_name,
+                    merchant_token,
+                    amount_sign,
+                    magnitude_band,
+                    recurring_label: row.recurring_label.clone(),
+                    pattern_class: row.pattern_class.clone(),
+                }
+            })
+            .collect()
     }
 
     fn is_subscription_label_field(tool_name: &str, key: &str) -> bool {
@@ -137,6 +209,16 @@ impl PrivacyLayer {
     }
 }
 
+fn magnitude_band(abs_amount: f64) -> String {
+    if abs_amount < 50.0 {
+        "0-50".into()
+    } else if abs_amount < 200.0 {
+        "50-200".into()
+    } else {
+        "200+".into()
+    }
+}
+
 fn contains_row_array(value: &Value) -> bool {
     match value {
         Value::Object(map) => {
@@ -235,5 +317,48 @@ mod tests {
             .as_str()
             .unwrap()
             .starts_with("Counterparty-"));
+    }
+
+    #[test]
+    fn prepare_bucket_features_strips_raw_payee_by_default() {
+        let layer = layer();
+        let rows = vec![RawBucketFeatureInput {
+            feature_id: "a:::-1".into(),
+            category_name: Some("Groceries".into()),
+            payee_normalized: "Netflix GmbH Secret Payee".into(),
+            amount: -12.99,
+            recurring_label: None,
+            pattern_class: "subscription".into(),
+        }];
+        let prepared = layer.prepare_bucket_features(&rows);
+        assert_eq!(prepared.len(), 1);
+        let row = &prepared[0];
+        assert!(!row.merchant_token.contains("Netflix"));
+        assert!(row.merchant_token.starts_with("Counterparty-"));
+        assert_eq!(row.category_name.as_deref(), Some("groceries"));
+        assert_eq!(row.amount_sign, -1);
+        assert_eq!(row.magnitude_band, "0-50");
+    }
+
+    #[test]
+    fn prepare_bucket_features_opt_in_raw_limited_to_50() {
+        let layer = PrivacyLayer::new(PrivacyConfig {
+            allow_raw_transactions: true,
+            redact_iban: true,
+            redact_counterparties: true,
+        });
+        let rows: Vec<_> = (0..55)
+            .map(|i| RawBucketFeatureInput {
+                feature_id: format!("f{i}:::-1"),
+                category_name: None,
+                payee_normalized: format!("raw-merchant-{i}"),
+                amount: -10.0,
+                recurring_label: None,
+                pattern_class: "discretionary".into(),
+            })
+            .collect();
+        let prepared = layer.prepare_bucket_features(&rows);
+        assert!(prepared[0].merchant_token.starts_with("raw-merchant"));
+        assert!(prepared[54].merchant_token.starts_with("Counterparty-"));
     }
 }

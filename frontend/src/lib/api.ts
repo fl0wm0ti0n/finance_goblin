@@ -172,6 +172,15 @@ export interface SubscriptionAlert {
   created_at: string;
 }
 
+export interface SubscriptionUnreadCount {
+  unread_total: number;
+  unread_new_detection: number;
+  unread_price_change: number;
+  pending_patterns: number;
+  reconciled: boolean;
+  reconciliation_note: string;
+}
+
 export interface ForecastBalanceWarning {
   account_id: string;
   starting_balance: number;
@@ -285,6 +294,12 @@ export interface ForecastMonthly {
     fixed_costs: string;
     variable_costs: string;
     free_cashflow: string;
+    bucket_sources?: {
+      income: string;
+      fixed_costs: string;
+      variable_costs: string;
+    };
+    ai_mapped?: boolean;
   }[];
   seasonal?: {
     seasonal_detected: boolean;
@@ -341,13 +356,19 @@ export interface PlanVsActualRow {
   deviation: string | null;
 }
 
-export interface PlanVsActual {
-  month: string;
-  reporting_currency: string;
-  plan_stale: boolean;
-  actuals_stale: boolean;
-  rows: PlanVsActualRow[];
-}
+export type PlanVsActual =
+  | {
+      status: "ok";
+      month: string;
+      reporting_currency: string;
+      plan_stale: boolean;
+      actuals_stale: boolean;
+      rows: PlanVsActualRow[];
+    }
+  | {
+      status: "no_active_plan";
+      reason: "no_active_plan";
+    };
 
 export interface SavingsSuggestion {
   pattern_id: string;
@@ -376,6 +397,22 @@ export interface CryptoHoldingRow {
   product_type: string;
 }
 
+export interface HoldingsAllRow {
+  asset: string;
+  quantity: number;
+  product_type: string;
+  value_eur: number | null;
+  unrealized_pnl_eur?: number | null;
+  native_unit: string;
+}
+
+export type AdjustmentTargetType =
+  | "household"
+  | "subscription"
+  | "category"
+  | "custom_label"
+  | "allocation_target";
+
 export interface CryptoBreakdown {
   subtotal_eur: number;
   fx_complete: boolean;
@@ -387,6 +424,7 @@ export interface CryptoBreakdown {
     holdings_count: number;
   }[];
   holdings_top: CryptoHoldingRow[];
+  holdings_all: HoldingsAllRow[];
   unpriced_assets: string[];
 }
 

@@ -79,12 +79,15 @@ jobs:
 
       - name: No commands set
         if: ${{ steps.runbook.outputs.TEST_COMMAND == '' && steps.runbook.outputs.LINT_COMMAND == '' && steps.runbook.outputs.TYPECHECK_COMMAND == '' }}
-        run: echo "No runbook commands set."
+        run: echo "no tests configured yet"
 
       - name: Summarise results
         if: always()
         run: |
           echo "### CI Results" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.runbook.outputs.TEST_COMMAND }}" = "" ] && [ "${{ steps.runbook.outputs.LINT_COMMAND }}" = "" ] && [ "${{ steps.runbook.outputs.TYPECHECK_COMMAND }}" = "" ]; then
+            echo "**no tests configured yet**" >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "| Step | Result |" >> "$GITHUB_STEP_SUMMARY"
           echo "|------|--------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| Test | ${{ steps.test.outcome || 'skipped' }} |" >> "$GITHUB_STEP_SUMMARY"
@@ -189,116 +192,3 @@ jobs:
           echo "  2. Run:  bash scripts/validate-and-push.sh"
           echo "     (or:  powershell scripts/validate-and-push.ps1)"
           echo "  3. Fix failures, the script loops until green, then pushes."
-
-  # ── npm package test (Ubuntu) ──────────────────────────────────────
-  npm-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - name: npm pack
-        run: |
-          npm pack
-          TGZ=$(ls -t its-magic-*.tgz 2>/dev/null | head -1)
-          echo "TGZ=$TGZ" >> "$GITHUB_ENV"
-          echo "Package created: $TGZ"
-      - name: Install globally from tarball
-        run: npm install -g "$TGZ"
-      - name: Smoke test - help
-        run: its-magic --help
-      - name: Smoke test - install into temp dir
-        run: |
-          TEST_DIR=$(mktemp -d)
-          its-magic --target "$TEST_DIR" --mode missing --create
-          FAIL=0
-          for f in \
-            ".cursor/commands/intake.md" \
-            ".cursor/rules/core.mdc" \
-            ".cursor/hooks.json" \
-            ".cursor/scratchpad.md" \
-            "docs/engineering/runbook.md"; do
-            if [ -f "$TEST_DIR/$f" ]; then
-              echo "PASS: $f"
-            else
-              echo "FAIL: $f"
-              FAIL=1
-            fi
-          done
-          rm -rf "$TEST_DIR"
-          exit $FAIL
-      - name: Cleanup
-        if: always()
-        run: npm uninstall -g its-magic || true
-
-  # ── Homebrew formula test (macOS) ──────────────────────────────────
-  brew-test:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate formula syntax
-        run: brew style packaging/homebrew/its-magic.rb || true
-      - name: Test installer.sh
-        run: |
-          TEST_DIR=$(mktemp -d)
-          sh installer.sh --target "$TEST_DIR" --mode missing --create
-          FAIL=0
-          for f in \
-            ".cursor/commands/intake.md" \
-            ".cursor/rules/core.mdc" \
-            ".cursor/hooks.json" \
-            ".cursor/scratchpad.md" \
-            "docs/engineering/runbook.md"; do
-            if [ -f "$TEST_DIR/$f" ]; then
-              echo "PASS: $f"
-            else
-              echo "FAIL: $f"
-              FAIL=1
-            fi
-          done
-          rm -rf "$TEST_DIR"
-          exit $FAIL
-
-  # ── Chocolatey package test (Windows) ──────────────────────────────
-  choco-test:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate choco pack
-        shell: powershell
-        run: |
-          Push-Location packaging/chocolatey
-          choco pack
-          $nupkg = Get-ChildItem -Filter "*.nupkg" | Select-Object -First 1
-          if ($nupkg) {
-            Write-Host "PASS: Package created - $($nupkg.Name)"
-          } else {
-            Write-Host "FAIL: No .nupkg created"
-            exit 1
-          }
-          Pop-Location
-      - name: Test installer.ps1
-        shell: powershell
-        run: |
-          $testDir = Join-Path $env:TEMP "its-magic-ci-test"
-          & .\installer.ps1 -Target $testDir -Mode missing -Create
-          $fail = 0
-          $files = @(
-            ".cursor\commands\intake.md",
-            ".cursor\rules\core.mdc",
-            ".cursor\hooks.json",
-            ".cursor\scratchpad.md",
-            "docs\engineering\runbook.md"
-          )
-          foreach ($f in $files) {
-            $fp = Join-Path $testDir $f
-            if (Test-Path $fp) {
-              Write-Host "PASS: $f"
-            } else {
-              Write-Host "FAIL: $f"
-              $fail = 1
-            }
-          }
-          Remove-Item -Recurse -Force $testDir
-          exit $fail

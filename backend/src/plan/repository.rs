@@ -745,12 +745,14 @@ impl PlanRepository {
 
         let today = Utc::now().date_naive();
         let month_start = NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap();
-        let month_end = super::overlay::overlay_horizon_end(month_start);
-
-        let series = self
-            .fetch_planned_series(version.id, computation_id, month_start, month_end)
-            .await?;
-        let monthly_delta: f64 = series.values().sum();
+        let adjustments = self.load_adjustments(version.id).await?;
+        let confirmed = self.confirmed_for_overlay().await?;
+        let monthly_delta = super::overlay::monthly_overlay_delta_sum(
+            &adjustments,
+            &confirmed,
+            month_start,
+            today,
+        );
 
         let balance_rows: Vec<(NaiveDate, f64)> = sqlx::query_as(
             r#"

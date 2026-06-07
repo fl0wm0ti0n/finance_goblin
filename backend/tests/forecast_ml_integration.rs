@@ -20,6 +20,7 @@ fn test_forecast_config() -> ForecastConfig {
         retention_count: 5,
         recurring_amount_tolerance_pct: 5.0,
         category_buckets: HashMap::new(),
+        ai_bucket_min_confidence: 0.75,
     }
 }
 

@@ -22,9 +22,9 @@ fail() {
 echo "==> compose-config-check: external-only services (AC-1)"
 services=$(compose -f docker-compose.yml -f docker-compose.external.yml \
   --profile external config --services | sort | tr '\n' ' ')
-expected="flow-finance-ai grafana "
+expected="flow-finance-ai grafana stats-forecast "
 if [[ "$services" != "$expected" ]]; then
-  fail "external profile services expected [flow-finance-ai grafana], got [$services]"
+  fail "external profile services expected [flow-finance-ai grafana stats-forecast], got [$services]"
 fi
 echo "    OK: $services"
 
@@ -77,12 +77,12 @@ echo "==> compose-config-check: external overlay merged config (AC-2, T-0117)"
 if ! echo "$config" | grep -q 'external: true'; then
   fail "traefik network must be external: true"
 fi
-for svc in flow-finance-ai grafana; do
-  if ! echo "$config" | grep -A80 "^  ${svc}:" | grep -q 'traefik: null'; then
+for svc in flow-finance-ai grafana stats-forecast; do
+  if ! echo "$config" | grep -A120 "^  ${svc}:" | grep -q 'traefik: null'; then
     fail "${svc} must join traefik network in external merge"
   fi
 done
-echo "    OK: flow-finance-ai and grafana on traefik network"
+echo "    OK: flow-finance-ai, grafana, and stats-forecast on traefik network"
 
 if echo "$config" | grep -A20 '^  flow-finance-ai:' | grep -qE '^    published: |^      published:'; then
   fail "flow-finance-ai must not publish host ports in external merge"
@@ -92,13 +92,24 @@ if echo "$config" | grep -A20 '^  grafana:' | grep -qE '^    published: |^      
 fi
 echo "    OK: host ports cleared on flow-finance-ai and grafana"
 
-if ! echo "$config" | grep -A80 '^  flow-finance-ai:' | grep -q 'DATABASE_HOST: postgres'; then
+if ! echo "$config" | grep -A120 '^  flow-finance-ai:' | grep -q 'DATABASE_HOST: postgres'; then
   fail "flow-finance-ai DATABASE_HOST must default to postgres in external merge"
 fi
-if ! echo "$config" | grep -A80 '^  flow-finance-ai:' | grep -q 'FIREFLY_BASE_URL: http://firefly:8080'; then
+if ! echo "$config" | grep -A120 '^  flow-finance-ai:' | grep -q 'FIREFLY_BASE_URL: http://firefly:8080'; then
   fail "flow-finance-ai FIREFLY_BASE_URL must default to http://firefly:8080"
 fi
-echo "    OK: DNS override env vars present"
+if ! echo "$config" | grep -A120 '^  flow-finance-ai:' | grep -q 'FORECAST_ML_ENABLED: "false"'; then
+  fail "flow-finance-ai FORECAST_ML_ENABLED must default to false in external merge"
+fi
+if ! echo "$config" | grep -A120 '^  flow-finance-ai:' | grep -q 'STATS_FORECAST_URL: http://stats-forecast:8090'; then
+  fail "flow-finance-ai STATS_FORECAST_URL must default to http://stats-forecast:8090"
+fi
+echo "    OK: DNS override and ML env vars present"
+
+if ! echo "$config" | grep -A40 '^  stats-forecast:' | grep -qE 'published: "8091"|published: 8091'; then
+  fail "stats-forecast must publish host port 8091 in external merge"
+fi
+echo "    OK: stats-forecast host port remap 8091:8090"
 
 for forbidden in postgres firefly firefly-iii; do
   if echo "$config" | grep -qE "^  ${forbidden}:"; then

@@ -1,0 +1,200 @@
+{
+  "sprint": "Q0022",
+  "bug_id": "BUG-0014",
+  "orchestrator_run_id": "auto-20260607-bug0014-001",
+  "verified_at": "2026-06-10T01:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0014",
+  "tasks_source": "sprints/quick/Q0022/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#bug-0014--post-rebuild-omniflow-cluster-ml-sidecar-crypto-display-grafana-planning",
+  "decision_alignment": {
+    "decisions": ["DEC-0081", "DEC-0082", "DEC-0083"],
+    "extensions": ["DEC-0080", "DEC-0064", "DEC-0066", "DEC-0076", "DEC-0077"],
+    "research_basis": ["R-0079"],
+    "contract_elements_covered": [
+      "DEC-0081 AQ1: holdings_all cap 50; wire PnL unpriced_assets; fx_incomplete unified gate",
+      "DEC-0081 AQ2: WealthPage native qty + EUR columns; unified FX banner with API list",
+      "DEC-0082 AS1: 409 active_plan_delete_forbidden; React confirm + disabled active delete",
+      "DEC-0083 AS2: remove invalid account; expose household/subscription/category/custom_label/allocation_target + help",
+      "AO1: forecast-horizons panel 13 dual-scenario ML copy (DEC-0066/DEC-0076 extension)",
+      "AP2 conditional: defensive subtotal when sum(market_value_eur)==0 AND pnl.crypto_value_eur>0; holdings count annotation",
+      "AR1 conditional: cashflow.json fix only when API acct 114 non-zero AND Grafana panel zero",
+      "V1: verify-work omniflow smoke rows AO–AT; operator gates before live probes",
+      "Ops-only: AO runtime (THREE_SERVICE_COMPOSE + Full sync), AT (compose smoke), AP1 (SQL probe gate)"
+    ],
+    "frozen_boundaries_respected": [
+      "No ExchangePriceBook tier-2 population",
+      "No Grafana dynamic Postgres ML variable (option B deferred)",
+      "No target_type enum expansion beyond DEC-0083 UI alignment",
+      "Linear notional excluded from crypto.subtotal_eur (DEC-0064)",
+      "AP2 only after AP1_SQL_PROBE gate passes",
+      "AR1 only after V1 AR verify gate (API≠Grafana)",
+      "AS2 P1 optional — skip allowed without blocking P0 execute",
+      "AO/AT runtime ops-only — not sprint code tasks"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "AO1 ∥ AQ1 ∥ AS1 (parallel) → AQ2 → optional AS2 → single release deploy → operator gates (BACKEND_FRONTEND_DEPLOY, THREE_SERVICE_COMPOSE, FULL_FIREFLY_SYNC) → AP1 SQL → AP2 if gate → GRAFANA_PROVISIONING_RELOAD → V1 AR probe → AR1 if API≠Grafana → V1 full smoke",
+    "notes": "AR1 trigger evaluated during V1 partial AR steps; execute_order lists AR1 before V1 for task inventory but deploy_order defers AR1 until V1 AR gate fails — feasible two-pass V1 pattern documented in uat.md"
+  },
+  "operator_gates_review": {
+    "documented": true,
+    "gates": [
+      {
+        "id": "BACKEND_FRONTEND_DEPLOY",
+        "before_tasks": ["V1", "AP2"],
+        "documented_in": ["sprint.json", "tasks.md", "uat.md"]
+      },
+      {
+        "id": "THREE_SERVICE_COMPOSE",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "tasks.md", "uat.md"],
+        "covers_acceptance": ["AO", "AT"]
+      },
+      {
+        "id": "FULL_FIREFLY_SYNC",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "tasks.md", "uat.md"],
+        "covers_acceptance": ["AO", "AR", "AP", "AQ"]
+      },
+      {
+        "id": "GRAFANA_PROVISIONING_RELOAD",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "tasks.md", "uat.md"]
+      },
+      {
+        "id": "AP1_SQL_PROBE",
+        "before_tasks": ["AP2"],
+        "documented_in": ["sprint.json", "tasks.md", "uat.md", "architecture.md"],
+        "enter_criteria": "futures row priced AND API subtotal_eur=0",
+        "skip_criteria": "NULL wallet after deploy — ops only, no AP2"
+      }
+    ],
+    "waived_ops_only": {
+      "AO_runtime": "Start stats-forecast + Full sync — operator gate, not sprint execute task",
+      "AT": "Three-service compose smoke — verify in V1 only",
+      "AP1": "Operator SQL probe on exchange_holdings — prerequisite for AP2, not sprint task"
+    }
+  },
+  "conditional_tasks_review": {
+    "AP2": {
+      "gate_id": "AP1_SQL_PROBE",
+      "enter_when": "futures row priced AND API subtotal_eur=0 after Q0020+ deploy + Full sync",
+      "skip_when": "NULL wallet — redeploy ops only; or subtotal_eur>0 — AP closed without AP2",
+      "documented": true
+    },
+    "AR1": {
+      "gate_id": "V1_AR_VERIFY",
+      "enter_when": "GET /api/v1/forecast/daily?account_id=114 non-zero AND cashflow panel SQL zero",
+      "skip_when": "Both non-zero or both zero — verify-only path",
+      "documented": true
+    }
+  },
+  "test_coverage": {
+    "unit_fixtures": "AQ1 cargo test wealth paths; AP2 defensive subtotal logging; AS1 plans delete 409",
+    "integration": "AQ1 holdings_all + fx_incomplete API; AS1 DELETE active/non-active plans",
+    "operator_tests": "V1 uat.md: AO forecast/meta + panel 13; AP wealth subtotal; AQ Wealth tab; AR cashflow acct 114 API vs Grafana; AS planning delete + target_type; AT docker ps stats-forecast; REG six /analytics/{slug}",
+    "doc_review": "uat.md acceptance traceability + conditional gates table; operator gates checklist",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AO",
+      "criterion": "FORECAST_ML_ENABLED=true + healthy stats-forecast → ml_computation_id set after Full sync or accurate sidecar-down copy — not permanent US-0013 not-enabled when env opts in",
+      "tasks": ["AO1", "V1"],
+      "operator_gates": ["THREE_SERVICE_COMPOSE", "FULL_FIREFLY_SYNC", "GRAFANA_PROVISIONING_RELOAD"],
+      "covered": true,
+      "notes": "AO1 dual-scenario Grafana panel 13 copy; runtime ML via THREE_SERVICE_COMPOSE + Full sync (ops); V1 probes forecast/meta and forecast-horizons banner"
+    },
+    {
+      "acceptance_id": "AP",
+      "criterion": "Wealth crypto subtotal, exchange cards, and portfolio panels non-zero when Bitunix holdings priced per DEC-0080 — not €0 with holdings count only",
+      "tasks": ["AP2", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY", "AP1_SQL_PROBE", "FULL_FIREFLY_SYNC"],
+      "covered": true,
+      "notes": "AP1 gate determines AP2 vs ops-only; AP2 defensive subtotal + count annotation when gate passes; V1 GET /api/v1/wealth subtotal + holdings_all; portfolio panels implied via wealth API + Q0020 DEC-0080 (no dedicated Grafana portfolio step — advisory)"
+    },
+    {
+      "acceptance_id": "AQ",
+      "criterion": "Native asset amounts + EUR equivalents; FX incomplete banner only with documented unpriced_assets — not when wallet equity priced",
+      "tasks": ["AQ1", "AQ2", "V1"],
+      "operator_gates": ["FULL_FIREFLY_SYNC"],
+      "covered": true,
+      "notes": "DEC-0081 AQ1 backend contract + AQ2 WealthPage table/banner; V1 Wealth crypto tab probe"
+    },
+    {
+      "acceptance_id": "AR",
+      "criterion": "Cashflow Grafana balance forecast + recent daily balances non-zero acct 114 after Full sync + recompute — not flat 0 when API non-zero",
+      "tasks": ["AR1", "V1"],
+      "operator_gates": ["FULL_FIREFLY_SYNC", "THREE_SERVICE_COMPOSE"],
+      "covered": true,
+      "notes": "Default verify-only path in V1; AR1 conditional on API≠Grafana divergence; architecture refutes premature AR1 without gate"
+    },
+    {
+      "acceptance_id": "AS",
+      "criterion": "Delete plan from /planning UI; plan mutations surface errors; target-type UX improved beyond household/subscription/account confusion",
+      "tasks": ["AS1", "AS2", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "AS1 DEC-0082 delete + 409 guard; AS2 DEC-0083 target_type (P1 optional — skip defers target-type sub-criterion per frozen boundary); V1 planning probes"
+    },
+    {
+      "acceptance_id": "AT",
+      "criterion": "External profile rebuild/runbook starts stats-forecast with app + Grafana when ML enabled",
+      "tasks": ["V1"],
+      "operator_gates": ["THREE_SERVICE_COMPOSE"],
+      "covered": true,
+      "notes": "Ops-only — no code task; V1 AT-1 docker ps includes stats-forecast on external profile"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "AS2 P1 optional — if skipped at execute, AS target-type sub-criterion may remain partially open until follow-up; frozen boundary explicitly allows skip without blocking P0 execute."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "AP acceptance cites portfolio Grafana panels — V1 probes API wealth subtotal/holdings_all but no explicit /analytics/portfolio crypto panel step; satisfied via DEC-0080 Q0020 + wealth API path per architecture."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "task.json execute_order lists AR1 before V1 but AR1 trigger requires V1 AR-API/AR-GRAF comparison — use uat.md two-pass V1 pattern (partial AR probe → conditional AR1 → V1 completion)."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "Acceptance footer OIDC regression not explicit V1 step — REG-1 six /analytics/{slug} routes covers standard quick-sprint regression posture."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "V1 depends_on AO1/AQ1/AQ2/AS1 only — AS2/AP2/AR1 intentionally excluded; conditional tasks may complete before or during V1 per deploy_order."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 6,
+    "covered_count": 6,
+    "gap_count": 0,
+    "task_count": 8,
+    "mandatory_task_count": 5,
+    "conditional_task_count": 2,
+    "optional_task_count": 1,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0081_0082_0083_aligned": true,
+    "operator_gates_documented": true,
+    "conditional_gates_documented": true,
+    "v1_e2e_smoke": true,
+    "scope_creep_beyond_architecture": false,
+    "dependency_graph_valid": true,
+    "execute_ready": true
+  },
+  "notes": "QA plan-verify 2026-06-10: sprints/quick/Q0022 tasks align with docs/product/acceptance.md BUG-0014 AO–AT and architecture § BUG-0014 / DEC-0081/0082/0083; 8 tasks mapped; 6/6 acceptance rows covered; 0 gaps; 0 orphans; ops-only AO/AT/AP1 paths documented. Approved for /execute."
+}

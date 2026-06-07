@@ -1,0 +1,110 @@
+{
+  "sprint": "S0013",
+  "stories": ["US-0016"],
+  "story_id": "US-0016",
+  "phase": "verify-work",
+  "plan_verified_at": "2026-06-08T04:00:00Z",
+  "qa_verified_at": "2026-06-08T04:20:00Z",
+  "verified_at": "2026-06-08T04:30:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_verify_work": false,
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0016",
+  "qa_evidence": "sprints/S0013/qa-findings.md",
+  "decisions": ["DEC-0070"],
+  "research": ["R-0066", "R-0067"],
+  "orchestrator_run_id": "auto-20260606-us0016-001",
+  "automated_checks": [
+    {
+      "id": "VW-AUTO-1",
+      "description": "python3 scripts/validate_doc_profile.py --repo . --no-template-parity",
+      "result": "pass",
+      "notes": "Verify-work 2026-06-08 — [DOC_PROFILE_VALIDATE_OK] exit 0"
+    },
+    {
+      "id": "VW-AUTO-2",
+      "description": "README DEC-0059 H2 structure + non-stub content inspection",
+      "result": "pass",
+      "notes": "Purpose, Quickstart, Examples, Limitations, Related documentation, Contributing — Flow Finance AI content"
+    },
+    {
+      "id": "VW-AUTO-3",
+      "description": "Runbook § README maintenance (US-0016) + dev shard pointer",
+      "result": "pass",
+      "notes": "Release/refresh-context hooks; validator command table; docs/developer/README.md pointer"
+    },
+    {
+      "id": "VW-AUTO-4",
+      "description": "tests/run-tests.sh doc-profile CI gate wiring",
+      "result": "pass",
+      "notes": "Line 73 invokes validate_doc_profile.py --no-template-parity"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "Root README.md exists with DEC-0059 user-channel H2 sections (Purpose, Quickstart, Examples, Limitations, Related documentation) populated with Flow Finance AI-specific content — not placeholder stubs",
+      "result": "pass",
+      "tasks": ["T-0137", "T-0138", "T-0139", "T-0140"],
+      "evidence": "README.md — six user H2s; Product status under Purpose; compose profiles, API examples, analytics routes, real limitations"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "Root README includes ## Contributing pointing to docs/developer/README.md; no forbidden DEV_* H2 titles in root",
+      "result": "pass",
+      "tasks": ["T-0137"],
+      "evidence": "## Contributing at line 118 links to docs/developer/README.md; zero ## DEV_* headings"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "Related documentation links docs/user-guides/, docs/engineering/runbook.md, and documents minimal / bundled-firefly / external omniflow compose entry commands",
+      "result": "pass",
+      "tasks": ["T-0140"],
+      "evidence": "Related documentation table lines 99–100; Quickstart profile table lines 34–36; compose blocks lines 109–115"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "python scripts/validate_doc_profile.py --repo . exits 0 on CI and locally with current scratchpad profile flags",
+      "result": "pass",
+      "tasks": ["T-0141"],
+      "evidence": "Verify-work run: [DOC_PROFILE_VALIDATE_OK] exit 0 with --no-template-parity; wired in tests/run-tests.sh line 73"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": "Runbook documents README maintenance cadence: release or refresh-context updates Product status when a US or BUG closes; validator run at release gate",
+      "result": "pass",
+      "tasks": ["T-0142", "T-0143"],
+      "evidence": "docs/engineering/runbook.md § README maintenance (US-0016); docs/developer/README.md quality gates pointer"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-6",
+      "description": "template/README.md present and profile H2 parity matches active root when template/ tree exists",
+      "result": "pass",
+      "deferred": true,
+      "vacuous": true,
+      "tasks": [],
+      "evidence": "template/ absent; --no-template-parity retained per DEC-0070 — vacuous until template/ lands"
+    }
+  ],
+  "blockers": [],
+  "summary": {
+    "acceptance_criteria_total": 6,
+    "acceptance_criteria_pass": 6,
+    "blocking_pass": 5,
+    "deferred_vacuous": 1,
+    "passed": 6,
+    "failed": 0,
+    "pending": 0
+  },
+  "next_phase": "release",
+  "plan_verify_ref": "sprints/S0013/plan-verify.json",
+  "qa_ref": "sprints/S0013/qa-findings.md",
+  "verify_work_ref": "sprints/S0013/verify-work-findings.md"
+}

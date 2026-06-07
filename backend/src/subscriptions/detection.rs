@@ -8,8 +8,11 @@ use crate::subscriptions::classify::classify_kind;
 use crate::subscriptions::price_change::{
     classify_price_change, delta_pct, PriceChangeConfig, PriceChangeKind,
 };
-use crate::subscriptions::repository::SubscriptionRepository;
-use crate::subscriptions::types::PatternRow;
+use crate::subscriptions::repository::{
+    find_confirmed_payee_interval, is_rejected_payee_interval, interval_matches,
+    SubscriptionRepository,
+};
+use crate::subscriptions::types::{ConfirmedPayeeInterval, PatternRow};
 
 pub struct DetectionPipeline<'a> {
     repo: &'a SubscriptionRepository,
@@ -25,7 +28,9 @@ impl<'a> DetectionPipeline<'a> {
         sync_run_id: Uuid,
         rejections: &HashSet<String>,
         confirmed_fps: &HashSet<String>,
-    ) -> Result<Vec<(Uuid, RecurrenceGroup, bool)>, sqlx::Error> {
+        confirmed_payee_intervals: &[ConfirmedPayeeInterval],
+        rejected_payee_intervals: &[(String, i32)],
+    ) -> Result<CandidateRunResult, sqlx::Error> {
         let config = self.repo.config();
         let txs = self.repo.load_expense_transactions(config.detection_window_days).await?;
         let recurrence_config = RecurrenceConfig {
@@ -38,40 +43,79 @@ impl<'a> DetectionPipeline<'a> {
         let groups = detect_recurrence_groups(&txs, &recurrence_config);
         let mut new_detections = Vec::new();
 
-        for group in groups {
-            let fingerprint = compute_fingerprint(&group.payee_key, group.interval_days, group.median_amount);
+        for group in &groups {
+            let fingerprint =
+                compute_fingerprint(&group.payee_key, group.interval_days, group.median_amount);
             if rejections.contains(&fingerprint) || confirmed_fps.contains(&fingerprint) {
                 continue;
             }
 
-            let kind = classify_kind(&group, config);
-            let id = self
+            let interval_days = group.interval_days as i32;
+            if is_rejected_payee_interval(rejected_payee_intervals, &group.payee_key, interval_days)
+            {
+                continue;
+            }
+
+            if let Some(confirmed) =
+                find_confirmed_payee_interval(confirmed_payee_intervals, &group.payee_key, interval_days)
+            {
+                let kind = classify_kind(group, config);
+                let merged = self
+                    .repo
+                    .merge_confirmed_pattern(
+                        confirmed.id,
+                        group,
+                        &fingerprint,
+                        kind,
+                        sync_run_id,
+                    )
+                    .await?;
+                if merged {
+                    continue;
+                }
+            }
+
+            let kind = classify_kind(group, config);
+            let outcome = self
                 .repo
-                .upsert_pending_pattern(&group, &fingerprint, kind, sync_run_id)
+                .upsert_pending_pattern(group, &fingerprint, kind, sync_run_id)
                 .await?;
 
-            let is_new = self
-                .repo
-                .insert_alert(
-                    Some(id),
+            let mut alert_emitted = false;
+            if outcome.emit_detection_alert {
+                let alert_fp = SubscriptionRepository::compute_alert_fingerprint(
                     "new_detection",
-                    &format!("New recurring pattern: {}", group.display_name),
-                    Some(&format!(
-                        "Detected {} every {} days at €{:.2} ({}% confidence)",
-                        group.display_name,
-                        group.interval_days,
-                        group.median_amount.abs(),
-                        group.confidence_pct
-                    )),
-                    sync_run_id,
-                )
-                .await
-                .is_ok();
+                    outcome.id,
+                    None,
+                    None,
+                    None,
+                );
+                self.repo
+                    .upsert_alert(
+                        Some(outcome.id),
+                        "new_detection",
+                        &format!("New recurring pattern: {}", group.display_name),
+                        Some(&format!(
+                            "Detected {} every {} days at €{:.2} ({}% confidence)",
+                            group.display_name,
+                            group.interval_days,
+                            group.median_amount.abs(),
+                            group.confidence_pct
+                        )),
+                        sync_run_id,
+                        &alert_fp,
+                    )
+                    .await?;
+                alert_emitted = true;
+            }
 
-            new_detections.push((id, group, is_new));
+            new_detections.push((outcome.id, group.clone(), alert_emitted));
         }
 
-        Ok(new_detections)
+        Ok(CandidateRunResult {
+            new_detections,
+            groups,
+        })
     }
 
     pub async fn process_confirmed(
@@ -137,13 +181,25 @@ impl<'a> DetectionPipeline<'a> {
                             sync_run_id,
                         )
                         .await?;
+                    let alert_fp = SubscriptionRepository::compute_alert_fingerprint(
+                        "price_change",
+                        pattern.id,
+                        Some("increase"),
+                        Some(amount),
+                        None,
+                    );
                     self.repo
-                        .insert_alert(
+                        .upsert_alert(
                             Some(pattern.id),
                             "price_change",
                             &format!("Price increase: {}", pattern.display_name),
-                            Some(&format!("Changed from €{:.2} to €{:.2}", prev.abs(), amount.abs())),
+                            Some(&format!(
+                                "Changed from €{:.2} to €{:.2}",
+                                prev.abs(),
+                                amount.abs()
+                            )),
                             sync_run_id,
+                            &alert_fp,
                         )
                         .await?;
                 }
@@ -160,13 +216,25 @@ impl<'a> DetectionPipeline<'a> {
                             sync_run_id,
                         )
                         .await?;
+                    let alert_fp = SubscriptionRepository::compute_alert_fingerprint(
+                        "price_change",
+                        pattern.id,
+                        Some("decrease"),
+                        Some(amount),
+                        None,
+                    );
                     self.repo
-                        .insert_alert(
+                        .upsert_alert(
                             Some(pattern.id),
                             "price_change",
                             &format!("Price decrease: {}", pattern.display_name),
-                            Some(&format!("Changed from €{:.2} to €{:.2}", prev.abs(), amount.abs())),
+                            Some(&format!(
+                                "Changed from €{:.2} to €{:.2}",
+                                prev.abs(),
+                                amount.abs()
+                            )),
                             sync_run_id,
+                            &alert_fp,
                         )
                         .await?;
                 }
@@ -192,12 +260,15 @@ impl<'a> DetectionPipeline<'a> {
 
     pub async fn mark_stale_inactive(
         &self,
-        active_fps: &HashSet<String>,
+        active_payee_intervals: &HashSet<(String, i32)>,
     ) -> Result<(), sqlx::Error> {
         let confirmed = self.repo.list_confirmed_patterns().await?;
         let today = Utc::now().date_naive();
         for pattern in confirmed {
-            if !active_fps.contains(&pattern.fingerprint) {
+            let is_active = active_payee_intervals.iter().any(|(pk, iv)| {
+                pk == &pattern.payee_key && interval_matches(*iv, pattern.interval_days)
+            });
+            if !is_active {
                 let gap = (today - pattern.last_seen_at).num_days();
                 if gap > pattern.interval_days as i64 * 2 {
                     self.repo.mark_inactive(pattern.id).await?;
@@ -206,6 +277,19 @@ impl<'a> DetectionPipeline<'a> {
         }
         Ok(())
     }
+}
+
+#[derive(Debug)]
+pub struct CandidateRunResult {
+    pub new_detections: Vec<(Uuid, RecurrenceGroup, bool)>,
+    pub groups: Vec<RecurrenceGroup>,
+}
+
+pub fn build_active_payee_intervals(groups: &[RecurrenceGroup]) -> HashSet<(String, i32)> {
+    groups
+        .iter()
+        .map(|g| (g.payee_key.clone(), g.interval_days as i32))
+        .collect()
 }
 
 pub fn build_active_fingerprint_map(
@@ -218,4 +302,56 @@ pub fn build_active_fingerprint_map(
             (fp, g.clone())
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::subscriptions::repository::SubscriptionRepository;
+
+    #[test]
+    fn new_detection_fingerprint_is_stable() {
+        let id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        assert_eq!(
+            SubscriptionRepository::compute_alert_fingerprint("new_detection", id, None, None, None),
+            "sub_alert:new_detection:550e8400-e29b-41d4-a716-446655440000"
+        );
+    }
+
+    #[test]
+    fn price_change_fingerprint_includes_direction_and_amount() {
+        let id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        assert_eq!(
+            SubscriptionRepository::compute_alert_fingerprint(
+                "price_change",
+                id,
+                Some("increase"),
+                Some(12.995),
+                None,
+            ),
+            "sub_alert:price_change:550e8400-e29b-41d4-a716-446655440000:increase:13.00"
+        );
+    }
+
+    #[test]
+    fn build_active_payee_intervals_from_groups() {
+        let groups = vec![RecurrenceGroup {
+            payee_key: "cursor".into(),
+            display_name: "Cursor".into(),
+            interval_days: 30,
+            median_amount: -20.0,
+            confidence_pct: 80,
+            transaction_ids: vec![],
+            transaction_dates: vec![],
+            category_ids: vec![],
+        }];
+        let active = build_active_payee_intervals(&groups);
+        assert!(active.contains(&("cursor".to_string(), 30)));
+    }
+
+    #[test]
+    fn interval_matches_covers_monthly_variance() {
+        assert!(interval_matches(30, 31));
+        assert!(!interval_matches(7, 30));
+    }
 }
