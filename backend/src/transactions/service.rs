@@ -1,14 +1,16 @@
 use std::sync::Arc;
 
-use chrono::Duration;
+use chrono::{Datelike, Duration, NaiveDate};
 
 use crate::config::PrivacyConfig;
 use crate::db::DbPool;
 
 use super::repository::TransactionsRepository;
 use super::types::{
-    compute_period_status, AggregateFilter, CategoryAggregate, GroupBy, MirrorDateBounds,
-    TransactionAggregates,
+    compute_expense_series_summary, compute_period_status, validate_expense_series_months,
+    AggregateFilter, CategoryAggregate, CategoryCatalogItem, CategoryCatalogResponse,
+    ExpenseSeriesCategory, ExpenseSeriesMeta, ExpenseSeriesResponse, GroupBy, MirrorDateBounds,
+    TransactionAggregates, UNCATEGORIZED_CATEGORY_ID,
 };
 
 const RAW_ROW_CAP: i64 = 20;
@@ -27,6 +29,8 @@ pub enum TransactionsError {
     Db(#[from] sqlx::Error),
     #[error("invalid arguments: {0}")]
     InvalidArgs(String),
+    #[error("category not found: {0}")]
+    NotFound(String),
 }
 
 impl TransactionsService {
@@ -154,6 +158,109 @@ impl TransactionsService {
 
         Ok(result)
     }
+
+    pub async fn list_categories_catalog(
+        &self,
+        search: Option<&str>,
+    ) -> Result<CategoryCatalogResponse, TransactionsError> {
+        if let Some(keyword) = search {
+            let trimmed = keyword.trim();
+            if trimmed.len() < MIN_CATEGORY_SEARCH_LEN {
+                return Err(TransactionsError::InvalidArgs(format!(
+                    "search query must be at least {MIN_CATEGORY_SEARCH_LEN} characters after trim"
+                )));
+            }
+        }
+
+        let (rows, truncated) = self
+            .repo
+            .list_categories_catalog(search.map(str::trim).filter(|s| !s.is_empty()))
+            .await?;
+
+        Ok(CategoryCatalogResponse {
+            categories: rows
+                .into_iter()
+                .map(|(id, name)| CategoryCatalogItem { id, name })
+                .collect(),
+            truncated: truncated.then_some(true),
+        })
+    }
+
+    pub async fn expense_series(
+        &self,
+        category_id: &str,
+        months: u32,
+        end: NaiveDate,
+    ) -> Result<ExpenseSeriesResponse, TransactionsError> {
+        validate_expense_series_months(months)
+            .map_err(TransactionsError::InvalidArgs)?;
+
+        let (period_start, period_end) = expense_series_window(end, months);
+        let is_uncategorized = category_id == UNCATEGORIZED_CATEGORY_ID;
+
+        if !is_uncategorized && !self.repo.category_exists(category_id).await? {
+            return Err(TransactionsError::NotFound(category_id.to_string()));
+        }
+
+        let category_filter = if is_uncategorized {
+            ExpenseSeriesCategory::Uncategorized
+        } else {
+            ExpenseSeriesCategory::MirrorId(category_id)
+        };
+
+        let months_data = self
+            .repo
+            .expense_series_by_month(category_filter, period_start, period_end)
+            .await?;
+
+        let transaction_count: i64 = months_data.iter().map(|m| m.transaction_count).sum();
+        let summary = compute_expense_series_summary(&months_data);
+
+        let (category_name, category_label, uncategorized) = if is_uncategorized {
+            (
+                None,
+                Some("Uncategorized".to_string()),
+                Some(true),
+            )
+        } else {
+            let name = self.repo.category_name(category_id).await?;
+            (name.clone(), None, Some(false))
+        };
+
+        Ok(ExpenseSeriesResponse {
+            category_id: category_id.to_string(),
+            category_name,
+            category_label,
+            uncategorized,
+            months: months_data,
+            summary,
+            meta: ExpenseSeriesMeta {
+                period_start: period_start.to_string(),
+                period_end: period_end.to_string(),
+            },
+            transaction_count,
+        })
+    }
+}
+
+pub fn expense_series_window(end: NaiveDate, months: u32) -> (NaiveDate, NaiveDate) {
+    let end_month = month_start(end);
+    let start_month = subtract_months(end_month, months.saturating_sub(1));
+    (start_month, end)
+}
+
+fn month_start(date: NaiveDate) -> NaiveDate {
+    NaiveDate::from_ymd_opt(date.year(), date.month(), 1).unwrap_or(date)
+}
+
+fn subtract_months(date: NaiveDate, months: u32) -> NaiveDate {
+    let mut y = date.year() as i32;
+    let mut m = date.month() as i32 - months as i32;
+    while m < 1 {
+        m += 12;
+        y -= 1;
+    }
+    NaiveDate::from_ymd_opt(y, m as u32, 1).unwrap_or(date)
 }
 
 fn label_uncategorized_categories(rows: Vec<CategoryAggregate>) -> Vec<CategoryAggregate> {
@@ -253,5 +360,20 @@ mod tests {
             compute_period_status(0, 0.0, 0),
             PeriodStatus::NoRowsInPeriod
         );
+    }
+
+    #[test]
+    fn expense_series_window_twelve_months() {
+        let end = NaiveDate::from_ymd_opt(2026, 6, 15).unwrap();
+        let (start, end_out) = super::expense_series_window(end, 12);
+        assert_eq!(start, NaiveDate::from_ymd_opt(2025, 7, 1).unwrap());
+        assert_eq!(end_out, end);
+    }
+
+    #[test]
+    fn expense_series_window_rejects_over_cap_via_types() {
+        use crate::transactions::types::{validate_expense_series_months, EXPENSE_SERIES_MAX_MONTHS};
+        assert!(validate_expense_series_months(24).is_ok());
+        assert!(validate_expense_series_months(EXPENSE_SERIES_MAX_MONTHS + 1).is_err());
     }
 }

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use chrono::NaiveDate;
 
-use super::overlay::build_overlay_deltas;
+use super::overlay::{build_overlay_deltas, CategoryRemoveCaps};
 use super::types::{ConfirmedSubscription, DailyNetPoint, PlanAdjustment};
 
 /// Merge baseline household daily net with overlay deltas.
@@ -13,8 +13,9 @@ pub fn project_plan_series(
     start: NaiveDate,
     end: NaiveDate,
     starting_balance: f64,
+    category_remove_caps: &CategoryRemoveCaps,
 ) -> Vec<DailyNetPoint> {
-    let overlay = build_overlay_deltas(adjustments, confirmed_subs, start, end);
+    let overlay = build_overlay_deltas(adjustments, confirmed_subs, start, end, category_remove_caps);
     let mut dates: Vec<NaiveDate> = baseline_net.keys().chain(overlay.keys()).copied().collect();
     dates.sort();
     dates.dedup();
@@ -91,7 +92,15 @@ mod tests {
             sort_order: 0,
         }];
 
-        let series = project_plan_series(&baseline, &adjustments, &[], start, end, 5000.0);
+        let series = project_plan_series(
+            &baseline,
+            &adjustments,
+            &[],
+            start,
+            end,
+            5000.0,
+            &CategoryRemoveCaps::new(),
+        );
         assert_eq!(series.len(), 3);
         let day2 = series.iter().find(|p| p.date == start + chrono::Duration::days(1)).unwrap();
         assert!(day2.planned_net < -350.0);

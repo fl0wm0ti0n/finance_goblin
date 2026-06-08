@@ -2,7 +2,9 @@
 
 ## Current context pack
 
-- **Latest released story:** US-0017 / Q0021 (`0.17.0-us0017`, 2026-06-09) — README living-doc expansion (DEC-0070 extension: omniflow smoke H3, Troubleshooting H3, per-segment maintenance); doc-only; verify-work + release PASS
+- **Latest released story:** US-0020 / S0019 (`0.20.0-us0020`, 2026-06-10) — subscription discover explorer, manual confirm, majority category, operator tags (DEC-0098 discover explorer, DEC-0099 manual confirm, DEC-0100 majority category, DEC-0101 tag schema, DEC-0102 tag assign/filter, DEC-0103 Grafana `$tag` P2); verify-work + release PASS; intake bundle drain complete
+- **Prior released story:** US-0019 / S0018 (`0.19.0-us0019`, 2026-06-09) — goal-driven planning with per-plan stats & AI savings (DEC-0091 goal schema, DEC-0092 goal-stats API, DEC-0093 category overlay cap, DEC-0094 savings ranking, DEC-0095 goal account, DEC-0096 PVA scope, DEC-0097 AI tool path); verify-work + release PASS
+- **Prior released story:** US-0018 / S0017 (`0.18.0-us0018`, 2026-06-09) — category filters & expense trend analytics (DEC-0087 expense-series API, DEC-0088 filter + bar chart, DEC-0089 cross-surface semantics, DEC-0090 index deferral); verify-work + release PASS
 - **Latest bug fix:** BUG-0015 / Q0023 (`bug0015-q0023`, 2026-06-07) — subscription confirm persistence after rebuild (DEC-0084 card payee_key, DEC-0085 payee+interval inheritance, DEC-0086 ±3d tolerance); verify-work + release PASS
 - **Prior bug fix:** BUG-0014 / Q0022 (`bug0014-q0022`, 2026-06-07) — omniflow post-rebuild cluster (DEC-0081 AQ holdings+FX, DEC-0082 AS1 plan delete guard, DEC-0083 AS2 target_type UI); verify-work + release PASS
 - **Prior bug fix:** BUG-0013 / Q0020 (`bug0013-q0020`, 2026-06-09) — budgets MTD cap (DEC-0079 AL1) + Bitunix futures EUR valuation (DEC-0080 AN1); verify-work + release PASS
@@ -26,11 +28,12 @@
 - **Open epics:** (empty — backlog drain complete for current scope)
 - **Active bug:** none
 - **Active quick task:** none
-- **Active story:** none
-- **Open stories:** (empty — backlog drain complete for current scope)
-- **Research:** [R-0081](research.md#r-0081--bug-0015-confirmed-subscription-reconfirm-after-rebuild) + [R-0082](research.md#r-0082--card-billing-descriptor-normalization-for-subscription-identity) fulfilled by BUG-0015/Q0023/DEC-0084/0085/0086; [R-0079](research.md#r-0079--bug-0014-post-rebuild-omniflow-ml-sidecar-crypto-display-grafana-planning) fulfilled by BUG-0014/Q0022/DEC-0081/0082/0083
-- **Recommended next:** idle — operator follow-up or PO intake
-- **Backlog drain:** complete — all stories DONE; defect queue drained
+- **Active story:** none (intake bundle backlog drain complete)
+- **Open stories:** (empty)
+- **Research:** [R-0085](research.md#r-0085--us-0020-subscription-discover-majority-category--operator-tags) fulfilled by US-0020/S0019/DEC-0098..0103; [R-0080](research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake) fulfilled (US-0018/US-0019/US-0020 portions via R-0083/R-0084/R-0085); [R-0084](research.md#r-0084--us-0019-goal-plans-per-plan-stats-category-overlay--ai-savings) fulfilled by US-0019/S0018/DEC-0091..0097; [R-0083](research.md#r-0083--us-0018-category-filters-expense-series-api--trend-analytics) fulfilled by US-0018/S0017/DEC-0087..0090; prior [R-0081](research.md#r-0081--bug-0015-confirmed-subscription-reconfirm-after-rebuild) + [R-0082](research.md#r-0082--card-billing-descriptor-normalization-for-subscription-identity) fulfilled by BUG-0015/Q0023/DEC-0084/0085/0086; [R-0079](research.md#r-0079--bug-0014-post-rebuild-omniflow-ml-sidecar-crypto-display-grafana-planning) fulfilled by BUG-0014/Q0022/DEC-0081/0082/0083
+- **Architecture:** **DEC-0098**..**DEC-0103** shipped US-0020 (2026-06-10); **DEC-0091**..**DEC-0097** shipped US-0019 (2026-06-09); **DEC-0087**..**DEC-0090** shipped US-0018 (2026-06-09)
+- **Recommended next:** idle — await new intake
+- **Backlog drain:** complete — `open_stories_remaining=0`
 
 ## Compact decision index (bounded summaries)
 
@@ -121,6 +124,35 @@
 | DEC-0084 | Accepted | Card billing payee_key normalization | Comma/asterisk/domain collapse in `payee_key()` per R-0082; extends DEC-0072 (BUG-0015 AU1) |
 | DEC-0085 | Accepted | Payee+interval confirm inheritance | Skip+merge on `(payee_key, interval_days)`; rejection by payee+interval; stale map (BUG-0015 AU2–AU4) |
 | DEC-0086 | Accepted | Interval tolerance + fingerprint rotation | ±3d `interval_matches`; in-place fingerprint update on confirmed merge (BUG-0015 AU2–AU4) |
+| DEC-0087 | Accepted | Category expense-series API | Month spine SQL; catalog + expense-series; `__uncategorized__` sentinel; server summary (R-0083, US-0018) |
+| DEC-0088 | Accepted | CategoryFilter + bar trend chart | Single-select MVP; bar default ECharts; defer multi-overlay (R-0083, US-0018) |
+| DEC-0089 | Accepted | Cross-surface filter semantics | Forecast actuals-only panel; planning widget; independent Grafana `$category` (R-0083, US-0018) |
+| DEC-0090 | Accepted | Category index deferral | No index in MVP; optional migration if EXPLAIN >50 ms (R-0083 §7, US-0018) |
+| DEC-0091 | Accepted | Goal balance plan schema | `goal_balance` enum + plan-level target fields (R-0084 §1, US-0019) |
+| DEC-0092 | Accepted | Per-plan goal-stats API | `GET …/goal-stats`; calendar yearly rollup; gap copy; 730d horizon (R-0084 §2, US-0019) |
+| DEC-0093 | Accepted | Category overlay cap | remove_outflow capped at 3-mo avg; add household-labeled (R-0084 §3, US-0019) |
+| DEC-0094 | Accepted | Deterministic savings suggestions | Aggregate ranking; fixed-bucket exclusion; modal apply (R-0084 §4, US-0019) |
+| DEC-0095 | Accepted | Goal account scope | Optional `goal_account_id`; default max-balance asset (R-0084 §5, US-0019) |
+| DEC-0096 | Accepted | PVA household scope | Active-plan PVA unchanged; per-plan stats via goal-stats (R-0084, US-0019) |
+| DEC-0097 | Accepted | AI savings path | REST primary; optional `get_category_savings` tool P2 (R-0084 §4, US-0019) |
+| DEC-0098 | Accepted | Subscription discover explorer | Reuse recurrence core; GET `/discover`; cap 50; amount band P2 (R-0085 §1, US-0020) |
+| DEC-0099 | Accepted | Manual confirm-from-discover | POST `/discover/confirm`; direct confirmed; DEC-0085 merge; no alert (R-0085 §2, US-0020) |
+| DEC-0100 | Accepted | Display majority category | `display_category_id`; RANK tie-break; recompute on merge (R-0085 §3, US-0020) |
+| DEC-0101 | Accepted | Operator tag schema | `operator_tags` + junction; hard delete; global scope (R-0085 §4, US-0020) |
+| DEC-0102 | Accepted | Tag assign and list filter | PUT replace set; `?tag=` slug filter (R-0085 §4–5, US-0020) |
+| DEC-0103 | Accepted | Grafana subscriptions `$tag` | P2 stretch; DEC-0089 independent pattern (R-0085 §6, US-0020) |
+
+### US-0020 architecture (2026-06-10) — released S0019 2026-06-10
+
+Per [R-0085](research.md#r-0085--us-0020-subscription-discover-majority-category--operator-tags): **DEC-0098**..**DEC-0103** accepted and shipped (`0.20.0-us0020`); operator discover/tag smoke pass-with-prerequisites; intake bundle drain complete.
+
+### US-0019 architecture (2026-06-09) — released S0018 2026-06-09
+
+Per [R-0084](research.md#r-0084--us-0019-goal-plans-per-plan-stats-category-overlay--ai-savings): **DEC-0091**..**DEC-0097** accepted and shipped (`0.19.0-us0019`); operator goal-plan smoke pass-with-prerequisites.
+
+### US-0018 architecture (2026-06-08) — released S0017 2026-06-09
+
+Per [R-0083](research.md#r-0083--us-0018-category-filters-expense-series-api--trend-analytics): **DEC-0087**, **DEC-0088**, **DEC-0089**, **DEC-0090** accepted and shipped (`0.18.0-us0018`). T-0185 EXPLAIN probe deferred DEC-0090; operator category-filter smoke pass-with-prerequisites.
 
 ### BUG-0015 architecture (2026-06-07) — released Q0023 2026-06-07
 
@@ -585,3 +617,20 @@ Freeze provisioning-only contracts for BUG-0009 execute — no backend changes u
 - `decisions/DEC-0081.md` — Wealth all-holdings display and unified FX incomplete (BUG-0014 AQ)
 - `decisions/DEC-0082.md` — Block delete of active plan (BUG-0014 AS1)
 - `decisions/DEC-0083.md` — Planning adjustment target_type UI alignment (BUG-0014 AS2)
+- `decisions/DEC-0087.md` — Category expense-series API and uncategorized sentinel (US-0018)
+- `decisions/DEC-0088.md` — CategoryFilter and bar trend chart UX (US-0018)
+- `decisions/DEC-0089.md` — Cross-surface category filter semantics and Grafana independence (US-0018)
+- `decisions/DEC-0090.md` — Category query index deferral policy (US-0018)
+- `decisions/DEC-0091.md` — Goal balance plan schema and template (US-0019)
+- `decisions/DEC-0092.md` — Per-plan goal-stats API and feasibility copy (US-0019)
+- `decisions/DEC-0093.md` — Category-scoped plan overlay semantics (US-0019)
+- `decisions/DEC-0094.md` — Deterministic category savings suggestions (US-0019)
+- `decisions/DEC-0095.md` — Goal account scope for balance projection (US-0019)
+- `decisions/DEC-0096.md` — Plan vs Actual household scope unchanged (US-0019)
+- `decisions/DEC-0097.md` — AI category savings tool optional REST primary (US-0019)
+- `decisions/DEC-0098.md` — Subscription discover explorer API (US-0020)
+- `decisions/DEC-0099.md` — Manual confirm-from-discover (US-0020)
+- `decisions/DEC-0100.md` — Subscription display majority category (US-0020)
+- `decisions/DEC-0101.md` — Operator tag schema (US-0020)
+- `decisions/DEC-0102.md` — Subscription tag assign and list filter (US-0020)
+- `decisions/DEC-0103.md` — Grafana subscriptions `$tag` variable P2 (US-0020)

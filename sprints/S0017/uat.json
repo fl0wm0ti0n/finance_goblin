@@ -1,0 +1,179 @@
+{
+  "sprint": "S0017",
+  "stories": ["US-0018"],
+  "story_id": "US-0018",
+  "phase": "verify-work",
+  "plan_verified_at": "2026-06-08T22:00:00Z",
+  "qa_verified_at": "2026-06-08T23:20:00Z",
+  "verified_at": "2026-06-08T23:30:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_verify_work": false,
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0018",
+  "qa_evidence": "sprints/S0017/qa-findings.md",
+  "decisions": ["DEC-0087", "DEC-0088", "DEC-0089", "DEC-0090"],
+  "research": ["R-0080", "R-0083"],
+  "orchestrator_run_id": "auto-20260608-us0018-001",
+  "environment": {
+    "omniflow_host_available": false,
+    "backend_frontend_deploy_pending": true,
+    "grafana_provisioning_reload_pending": true,
+    "full_firefly_sync_pending": true
+  },
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before": "AC-6 OIDC smoke + live category-filter probes",
+      "action": "Deploy S0017 backend + frontend on US-0010 external profile (financegnome.omniflow.cc)"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before": "AC-1/AC-5 live category mirror smoke",
+      "action": "Full Firefly sync so category_id mirror is current"
+    },
+    {
+      "id": "GRAFANA_PROVISIONING_RELOAD",
+      "before": "AC-1 Grafana $category smoke",
+      "action": "Reload cashflow + budgets dashboards after deploy"
+    }
+  ],
+  "automated_checks": [
+    {
+      "id": "VW-AUTO-1",
+      "description": "cargo test --lib",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-08 — 193/193 PASS"
+    },
+    {
+      "id": "VW-AUTO-2",
+      "description": "npm test -- --run",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-08 — 7/7 PASS (CategoryTrendChart 1/1 + planningFeedback 4/4 + ChatPanel 2/2)"
+    },
+    {
+      "id": "VW-AUTO-3",
+      "description": "AC-1 shared filter surfaces + Grafana $category",
+      "result": "pass",
+      "notes": "ForecastPage/PlanningPage/WealthPage CategoryFilter; grafana cashflow.json + budgets.json $category variable"
+    },
+    {
+      "id": "VW-AUTO-4",
+      "description": "AC-2..AC-5 expense-series API + chart + summary + uncategorized",
+      "result": "pass",
+      "notes": "api/categories.rs; types.rs 12/24 cap; compute_expense_series_summary; __uncategorized__ sentinel"
+    },
+    {
+      "id": "VW-AUTO-5",
+      "description": "AC-6 US-0015 regression audit",
+      "result": "pass",
+      "notes": "No project.rs S0017 edits; ForecastPage AI-mapped badge; compare API no category_id param"
+    }
+  ],
+  "probe_results": [
+    {
+      "step": "cargo test --lib baseline",
+      "probe_kind": "test",
+      "command": "cd backend && cargo test --lib",
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "notes": "Direct verify-work re-run 193/193; uat_probe_lib run-tests.sh exit 101 in sandbox superseded"
+    },
+    {
+      "step": "npm test frontend vitest",
+      "probe_kind": "test",
+      "command": "cd frontend && npm test -- --run",
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "notes": "Direct verify-work re-run 7/7"
+    },
+    {
+      "step": "OIDC omniflow category-filter smoke AC-1 AC-6",
+      "probe_kind": "manual_operator",
+      "passed": false,
+      "reason_code": "UAT_PROBE_UNRESOLVED",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY,FULL_FIREFLY_SYNC,GRAFANA_PROVISIONING_RELOAD",
+      "notes": "Live probes deferred per BUG-0013/0014/0015 precedent; checklist in uat.md"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "Shared category filter on /forecast monthly, /planning compare, /wealth breakdown, and cashflow + budgets Grafana dashboards",
+      "result": "pass",
+      "tasks": ["T-0177", "T-0178", "T-0179", "T-0180", "T-0181", "T-0182"],
+      "evidence": "ForecastPage.tsx CategoryFilter+Chart; PlanningPage compare toolbar; WealthPage subsection; grafana $category on cashflow.json + budgets.json — code audit PASS"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "GET category expense API returns per-month EUR outflow/inflow; default 12 months, max 24",
+      "result": "pass",
+      "tasks": ["T-0175", "T-0176"],
+      "evidence": "GET /api/v1/categories/expense-series; EXPENSE_SERIES_DEFAULT_MONTHS=12; EXPENSE_SERIES_MAX_MONTHS=24; expense_series_by_month spine — code audit PASS"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "React trend chart renders month labels with EUR amounts; single category; empty-state when no categorized rows",
+      "result": "pass",
+      "tasks": ["T-0177", "T-0178"],
+      "evidence": "CategoryTrendChart.tsx ECharts bar + formatEur; disabled prompt; vitest empty-selection — PASS"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "UI surfaces MoM change and best/worst month for selected category",
+      "result": "pass",
+      "tasks": ["T-0176", "T-0177", "T-0178"],
+      "evidence": "compute_expense_series_summary mom_delta_pct/best_month/worst_month; CategoryTrendChart stat cards — code audit PASS"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": "Series uses Firefly-synced category_id; uncategorized bucket explicit via __uncategorized__",
+      "result": "pass",
+      "tasks": ["T-0175", "T-0176"],
+      "evidence": "UNCATEGORIZED_CATEGORY_ID sentinel; SQL category_id/IS NULL filters; full spine with zero months — lib tests PASS"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-6",
+      "description": "OIDC US-0010 external profile smoke; read-only Firefly; US-0015 bucket mapping unchanged",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY,FULL_FIREFLY_SYNC,GRAFANA_PROVISIONING_RELOAD",
+      "tasks": ["T-0184"],
+      "evidence": "No project.rs changes; AI-mapped badge preserved; sprints/S0017/uat.md OIDC checklist; live probes deferred"
+    }
+  ],
+  "row_verdicts": {
+    "AC-1": "pass",
+    "AC-2": "pass",
+    "AC-3": "pass",
+    "AC-4": "pass",
+    "AC-5": "pass",
+    "AC-6": "pass_with_prerequisites"
+  },
+  "blockers": [],
+  "summary": {
+    "acceptance_criteria_total": 6,
+    "acceptance_criteria_pass": 6,
+    "passed": 5,
+    "pass_with_prerequisites": 1,
+    "failed": 0,
+    "pending": 0,
+    "deferred_operator": 9,
+    "automated_pass": 5
+  },
+  "operator_prerequisites": [
+    "BACKEND_FRONTEND_DEPLOY — deploy S0017 backend + frontend on US-0010 external profile (financegnome.omniflow.cc)",
+    "FULL_FIREFLY_SYNC — ensure category_id mirror current",
+    "GRAFANA_PROVISIONING_RELOAD — reload cashflow + budgets dashboards",
+    "Execute OIDC 10-step checklist in sprints/S0017/uat.md after deploy"
+  ],
+  "next_phase": "release",
+  "plan_verify_ref": "sprints/S0017/plan-verify.json",
+  "qa_ref": "sprints/S0017/qa-findings.md",
+  "verify_work_ref": "sprints/S0017/verify-work-findings.md"
+}

@@ -3115,6 +3115,156 @@ cd frontend && npm test -- --run
 
 **Boundaries:** BUG-0008 alert dedup unchanged; US-0003 confirm/reject UX preserved; DEC-0072 SEPA paths unchanged for non-card payees.
 
+#### 26. US-0018 — Category filters & expense trend analytics (S0017 / released 2026-06-09)
+
+**Release:** US-0018 **DONE** — operator notes `handoffs/releases/S0017-release-notes.md`. Category analytics on US-0010 external profile per **DEC-0087**, **DEC-0088**, **DEC-0089**, **DEC-0090**: **(AC-1)** shared `CategoryFilter` on Forecast Monthly, Planning Compare, Wealth Overview + Grafana `$category` on cashflow/budgets; **(AC-2)** `GET /api/v1/categories/expense-series` month-spine (12 default / 24 max); **(AC-3)** `CategoryTrendChart` bar chart + empty-state; **(AC-4)** server `summary` MoM/best/worst; **(AC-5)** `__uncategorized__` sentinel; **(AC-6)** OIDC smoke template (pass-with-prerequisites at release).
+
+**Deploy (backend + frontend + Grafana provisioning):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai grafana
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before AC-6 OIDC smoke):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+**Operator gate — FULL_FIREFLY_SYNC:** Settings → Sync → **Full sync** (not exchanges-only) so `category_id` mirror is current.
+
+**Operator gate — GRAFANA_PROVISIONING_RELOAD (required before AC-1 Grafana `$category` smoke):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate grafana
+```
+
+**Grafana UI warning:** Do **not** click **Save** on analytics dashboards after variable changes — persisted `current` blocks override provisioning JSON (see §17).
+
+**Operator smoke (post-deploy + all three gates):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 193/193 |
+| Frontend unit | `cd frontend && npm test -- --run` | 7/7 |
+| App health | `curl -sf https://financegnome.omniflow.cc/health` | HTTP 200 |
+| AC-1 | `/forecast` Monthly `CategoryFilter` + chart | Filter visible; chart loads; household cards unchanged |
+| AC-1 | `/planning` Compare category widget | Filter + Actual spending trend; compare table unchanged |
+| AC-1 | `/wealth` Overview category subsection | Category spending subsection renders |
+| AC-1 | `/analytics/cashflow` + `/analytics/budgets` | `$category` variable filters panels |
+| AC-2 | `GET /api/v1/categories/expense-series` | Per-month EUR spine; 12 default / 24 max |
+| AC-5 | `category_id=__uncategorized__` | `uncategorized: true`; full spine with €0 months |
+| AC-6 | OIDC 10-step checklist | `sprints/S0017/uat.md` § OIDC smoke checklist |
+| Regression | US-0015 AI-mapped badge | Unchanged on `/forecast` Monthly |
+| Regression | Read-only Firefly | No POST/PUT/PATCH/DELETE to Firefly during smoke |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+cd frontend && npm test -- --run
+```
+
+**Boundaries:** US-0015 bucket mapping unchanged; forecast monthly API shape unchanged when category filter is UI-only (DEC-0089); T-0185 EXPLAIN probe deferred per DEC-0090; user guide `docs/user-guides/US-0018.md`.
+
+#### 27. US-0019 — Goal-driven planning with per-plan stats & category savings (S0018 / released 2026-06-09)
+
+**Release:** US-0019 **DONE** — operator notes `handoffs/releases/S0018-release-notes.md`. Goal planning on US-0010 external profile per **DEC-0091**, **DEC-0092**, **DEC-0093**, **DEC-0094**, **DEC-0095**, **DEC-0096**, **DEC-0097**: **(AC-1)** `goal_balance` template with target balance + date; **(AC-2)** `GET /api/v1/plans/{id}/goal-stats` + `GoalStatsStrip` per-plan (not household on detail); **(AC-3)** category `remove_outflow` cap via 3-month expense-series average + goal account fork; **(AC-4)** savings modal with checkbox apply only; **(AC-5)** aggregate-only savings path + optional `get_category_savings` AI tool; **(AC-6)** US-0014 template regression preserved; OIDC smoke template (pass-with-prerequisites at release).
+
+**Deploy (backend + frontend):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before AC-6 OIDC smoke):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+**Operator gate — FULL_FIREFLY_SYNC:** Settings → Sync → **Full sync** (not exchanges-only) so `category_id` mirror and aggregates are current for overlay cap + savings ranking.
+
+**Operator smoke (post-deploy + both gates):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 204/204 |
+| Frontend unit | `cd frontend && npm test -- --run` | 9/9 |
+| App health | `curl -sf https://financegnome.omniflow.cc/health` | HTTP 200 |
+| AC-1 | `/planning` Scenarios Goal balance template | Create plan with target + date; appears in list |
+| AC-2 | Goal stats strip on Scenarios + Compare | Monthly delta, yearly rollup, projected at target |
+| AC-3 | Category `remove_outflow` adjustment | Recompute; Compare/PVA reflect capped change |
+| AC-4 | Savings modal | Ranked categories; checkbox apply; no auto-apply |
+| AC-5 | Savings privacy | Aggregate-only API; audit log on apply |
+| AC-6 | OIDC 9-step checklist | `sprints/S0018/uat.md` § OIDC smoke checklist |
+| Regression | US-0014 template grid + PVA guided card | Unchanged |
+| Regression | DEC-0089 compare CategoryTrendChart | Actuals-only; compare API unchanged |
+| Regression | Read-only Firefly | No POST/PUT/PATCH/DELETE to Firefly during smoke |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+cd frontend && npm test -- --run
+```
+
+**Boundaries:** PVA tab unchanged (household active plan per DEC-0096); US-0018 category filter contract unchanged; user guide `docs/user-guides/US-0019.md`.
+
+#### 28. US-0020 — Subscription manual discovery, majority category & operator tags (S0019 / released 2026-06-10)
+
+**Release:** US-0020 **DONE** — operator notes `handoffs/releases/S0019-release-notes.md`. Subscription discover on US-0010 external profile per **DEC-0098**, **DEC-0099**, **DEC-0100**, **DEC-0101**, **DEC-0102**, **DEC-0103**: **(AC-1)** `GET /api/v1/subscriptions/discover` + Discover tab (account + payee + interval; cap 50); **(AC-2)** `POST …/discover/confirm` direct confirmed insert with DEC-0085 merge; **(AC-3)** RANK majority `display_category_id` + badge/tooltip tie-break; **(AC-4)** operator tag CRUD/assign/filter; **(AC-5)** product DB storage only — no Firefly write-back; **(AC-6)** US-0003/US-0008 regression preserved; OIDC smoke template (pass-with-prerequisites at release). **Last story in intake bundle.**
+
+**Deploy (backend + frontend):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before AC-6 OIDC smoke):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+**Operator gate — FULL_FIREFLY_SYNC:** Settings → Sync → **Full sync** (not exchanges-only) so mirror transactions and `category_id` are current for discover search + majority category.
+
+**Operator smoke (post-deploy + both gates):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 213/213 |
+| Frontend unit | `cd frontend && npm test -- --run` | 9/9 |
+| App health | `curl -sf https://financegnome.omniflow.cc/health` | HTTP 200 |
+| AC-1 | `/subscriptions` Discover tab | Search by account, payee, interval; results capped at 50 |
+| AC-2 | Confirm discover candidate | Appears in All/confirmed list; DEC-0085 merge on duplicate |
+| AC-3 | Majority category badge | Display category + RANK tie-break tooltip |
+| AC-4 | Tag manager + filter | CRUD tags; multi-assign; filter All tab by slug |
+| AC-5 | Storage contract | Tags + display_category in app DB only |
+| AC-6 | OIDC 8-step checklist | `sprints/S0019/uat.md` § OIDC smoke checklist |
+| Regression | US-0003 pending confirm/reject | Unchanged |
+| Regression | US-0008 alert dedup | Manual confirm does not emit `new_detection` |
+| Regression | Read-only Firefly | No POST/PUT/PATCH/DELETE to Firefly during smoke |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+cd frontend && npm test -- --run
+```
+
+**Boundaries:** US-0003 auto-detection pipeline unchanged; DEC-0084..0086 confirm normalization preserved; optional Grafana `$tag` on subscriptions dashboard (DEC-0103 P2); user guide `docs/user-guides/US-0020.md`.
+
 ### Tests
 
 ```bash

@@ -5057,7 +5057,7 @@ Per R-0071 / DEC-0076: `docker compose -f docker-compose.yml -f docker-compose.e
 
 **Linked:** US-0018, US-0019, US-0020, US-0004, US-0003, US-0015, R-0015, R-0009, R-0074  
 **Confidence:** medium-high (intake synthesis; discovery validates SQL + UX)  
-**Status:** current — intake 2026-06-07
+**Status:** fulfilled — all portions shipped (US-0018 S0017, US-0019 S0018, US-0020 S0019 via [R-0085](research.md#r-0085--us-0020-subscription-discover-majority-category--operator-tags)/DEC-0098..0103); retain for traceability
 
 ---
 
@@ -5208,5 +5208,678 @@ Operator trust requires **confirm-once** semantics: a subscription confirmed via
 **Linked:** BUG-0015, R-0081, DEC-0072, DEC-0013  
 **Confidence:** medium (heuristic; validate against operator Cursor/Apple rows)  
 **Status:** fulfilled — shipped DEC-0084 (AU1); retain for traceability
+
+---
+
+## R-0083 — US-0018 category filters, expense-series API & trend analytics
+
+**Date:** 2026-06-08  
+**Topic:** Technical research for shared category filter contract, monthly per-category expense series, React trend chart, and Grafana `$category` wiring  
+**Query:** Resolve discovery open questions for US-0018 AC-1..AC-6: monthly SQL shape, catalog API, forecast filter depth, planning compare semantics, Grafana panels, chart default, performance on 24-month window  
+**Sources:**
+- [PostgreSQL `generate_series` gap-fill](https://stackoverflow.com/questions/65307015/how-to-fill-the-time-gap-after-grouping-date-record-for-months-in-postgres) — zero-filled month spine
+- [PostgreSQL time-series gap-fill pattern](https://viprasol.com/blog/postgres-time-series-data/) — `date_trunc` + left join
+- [Grafana PostgreSQL template variables](https://grafana.com/docs/grafana/latest/datasources/postgres/template-variables/) — `__value`/`__text`, `__searchFilter`
+- [Grafana variables — Include All / custom all value](https://grafana.com/docs/grafana/latest/dashboards/variables/add-template-variables/) — empty-string “All” vs regex
+- [Highcharts — line vs bar for time data](https://www.highcharts.com/blog/best-practices/line-chart-vs-bar-chart-choosing-the-right-one-for-your-objectives-and-data/) — trend vs discrete comparison
+- Code: `backend/src/transactions/repository.rs` (`aggregates_by_category`, `aggregates_by_month`, `search_categories_by_name`), `backend/src/transactions/service.rs` (`label_uncategorized_categories`, `MIN_CATEGORY_SEARCH_LEN=2`), `backend/src/api/mod.rs` (no category routes), `backend/src/forecast/categories.rs` (`resolve_bucket` via `category_id`→name→DEC-0007 map), `grafana/provisioning/dashboards/analytics/{cashflow,budgets}.json` (`$account_id` only), `frontend/src/components/forecast/MonthlyChart.tsx` (ECharts bar), `frontend/src/pages/ForecastPage.tsx` (account `<select>` pattern)
+- Prior: [R-0080](research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake), [R-0008](research.md#r-0008--grafana-dashboard-as-code-for-analytics-dashboards), [R-0060](research.md#r-0060--transaction-aggregate-contract-bug-0006), US-0011 embed shell
+
+**Findings:**
+
+### 1. Monthly per-category expense series (AC-2, AC-5)
+
+**Correction vs R-0080:** mirror has **period** `aggregates_by_category`, not monthly-by-category. `aggregates_by_month` is household-only (no `category_id` dimension). New repository method required.
+
+**Recommended SQL (single category or uncategorized sentinel):**
+
+```sql
+-- Params: $start, $end (inclusive dates), $category_id (TEXT or NULL for uncategorized-only)
+WITH month_spine AS (
+  SELECT generate_series(
+    date_trunc('month', $start::date),
+    date_trunc('month', $end::date),
+    '1 month'::interval
+  ) AS month_start
+)
+SELECT
+  to_char(m.month_start, 'YYYY-MM') AS month,
+  COALESCE(SUM(CASE WHEN t.amount::float8 < 0 THEN ABS(t.amount::float8) ELSE 0 END), 0) AS outflow_eur,
+  COALESCE(SUM(CASE WHEN t.amount::float8 > 0 THEN t.amount::float8 ELSE 0 END), 0) AS inflow_eur,
+  COUNT(t.*)::bigint AS transaction_count
+FROM month_spine m
+LEFT JOIN transactions t
+  ON date_trunc('month', t.date) = m.month_start
+ AND t.date >= $start AND t.date <= $end
+ AND (
+   ($category_id IS NOT NULL AND t.category_id = $category_id)
+   OR ($category_id IS NULL AND t.category_id IS NULL)
+ )
+GROUP BY m.month_start
+ORDER BY m.month_start;
+```
+
+- **Window:** default 12 months, max 24 — compute `$end = CURRENT_DATE`, `$start = date_trunc('month', $end) - (months-1) * interval '1 month'` in service layer (not data min/max) so AC-3 labels always show full spine with explicit €0 months.
+- **Uncategorized (AC-5):** dedicated request `category_id=__uncategorized__` (or omit + `bucket=uncategorized`) maps to `t.category_id IS NULL`; response includes `category_label: "Uncategorized"` and `uncategorized: true`. Reuse `label_uncategorized_categories` naming — never return silent zeros without bucket metadata.
+- **EUR reporting:** mirror amounts are already EUR-normalized at ingest (BUG-0006); mixed native currency note belongs in API meta/tooltip only when `payload` currency ≠ EUR (defer footnote to architecture if rare).
+- **Alternatives rejected:**
+  - *Materialized view / Timescale continuous aggregate* — overkill for ≤24-point single-category series on ~1k rows; adds refresh orchestration.
+  - *Gap-fill only on months with data* — fails AC-3 month-label contract when category idle in a month.
+
+**API shape (research draft):**
+
+| Endpoint | Contract |
+|----------|----------|
+| `GET /api/v1/categories` | Full mirror catalog `{id, name}` sorted by name; optional `?q=` with `MIN_CATEGORY_SEARCH_LEN=2` reuse; cap 200 rows; `truncated` flag if over cap |
+| `GET /api/v1/categories/expense-series` | Query: `category_id` (required), `months` (default 12, max 24), optional `end` (default today); returns `{category_id, category_name, months[], summary{mom_delta_pct, best_month, worst_month}, meta{period_start, period_end, uncategorized}}` |
+
+`summary` fields satisfy AC-4 (MoM on last two **non-empty** months or last two spine months — architecture must pick; recommend **last two calendar months in window** with zero allowed).
+
+**Risks:** `date_trunc('month', date)` prevents index-only `idx_transactions_date` use when filtering `category_id`; acceptable at MVP scale — see §7.
+
+### 2. Category catalog (AC-1)
+
+- **Full list MVP** — typical Firefly households have &lt;100 categories; paginate only if `COUNT(*) > 200`.
+- Reuse `search_categories_by_name` for `?q=` but raise `CATEGORY_SEARCH_LIMIT` for public catalog (AI tool keeps 10-cap path).
+- **React `CategoryFilter`:** clone `ForecastPage` account `<select>` for ≤20 categories; switch to searchable combobox (native `<datalist>` or lightweight filter input) above 20 — no new dependency required.
+- Sentinel options: `All categories` (value `""`) for toolbar surfaces; trend chart requires explicit pick (disable chart until selected).
+
+### 3. Grafana `$category` (AC-1)
+
+Extend existing `$account_id` pattern per [R-0008](research.md#r-0008--grafana-dashboard-as-code-for-analytics-dashboards):
+
+```json
+{
+  "name": "category",
+  "type": "query",
+  "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+  "query": "SELECT '' AS __value, 'All categories' AS __text UNION ALL SELECT c.firefly_id AS __value, COALESCE(c.name, c.firefly_id) AS __text FROM categories c ORDER BY 2",
+  "refresh": 1,
+  "sort": 1
+}
+```
+
+**Panel filter SQL:** `AND ('${category}' = '' OR t.category_id = '${category}')` on `transactions t` joins.
+
+| Dashboard | Panel action |
+|-----------|--------------|
+| **cashflow** | New time-series/bar panel: monthly category outflow from mirror (`date_trunc('month', t.date)`, sum abs negative amounts), respects `$category` + existing `$account_id` optional later |
+| **budgets** | Extend **Ist** / deviation CTEs: when `$category` set, filter `actual` leg `AND t.category_id = '${category}'`; planned leg unchanged (plan engine is household-level) — document “All categories” = current behavior |
+
+**Empty variable state:** default `''` (All) — panels match pre-US-0018 household view; no broken queries.
+
+**MVP: no SPA↔iframe sync** — independent filters per discovery; avoids auth/query-param coupling on US-0011 embed.
+
+**Risks:** Grafana single-select only in MVP; SQL injection mitigated by variable type query (values from DB ids). Category deleted in Firefly but stale in mirror until sync — panel shows empty series (acceptable).
+
+### 4. React trend chart & performance insight (AC-3, AC-4)
+
+- **Default: bar chart** — aligns with existing `MonthlyChart` (stacked bars), Finanzguru-like discrete “Jan €300” labels, and PO discovery “bar default”. Optional line toggle is **stretch** (not required for AC-3).
+- Web guidance ([Highcharts best practices](https://www.highcharts.com/blog/best-practices/line-chart-vs-bar-chart-choosing-the-right-one-for-your-objectives-and-data/)): line emphasizes slope; bars emphasize month-to-month magnitude — AC-3/AC-4 wording favors **bar + stat callouts**.
+- **Primary home:** `/forecast` monthly tab above/below `MonthlyChart` per discovery; component exported for `/wealth` subsection embed.
+- **Empty state:** no rows in period for category → “No categorized spending in this period” + link to Firefly (read-only); uncategorized bucket with zero txs still shows spine with zeros if explicitly selected.
+- **MoM / best / worst:** compute server-side in `expense-series` `summary` to keep clients thin; chart annotation optional.
+
+### 5. Forecast filter depth (AC-1, decision gate)
+
+**Recommendation (display-only MVP):** `category_id` on forecast monthly **does not** re-run `forecast_cashflow_monthly` or fork DEC-0007 projection.
+
+| Surface | With category selected |
+|---------|------------------------|
+| Stat cards (Income/Fixed/Variable/Free) | **Unchanged** — household forecast |
+| `MonthlyChart` | **Unchanged** — household buckets |
+| New `CategoryTrendChart` | **Filtered actuals** from `expense-series` only |
+| Optional decomposition table row filter | Architecture choice — P2 |
+
+Full category-scoped forecast re-projection requires mapping `category_id` → bucket via `resolve_bucket` + re-aggregating recurring patterns — **US-0019 / follow-on**, not US-0018 blocker.
+
+**Alternative rejected:** Block US-0018 on forecast engine category fork — unnecessary for AC-1..AC-5.
+
+### 6. Planning compare & wealth (AC-1)
+
+| Surface | MVP behavior |
+|---------|--------------|
+| **Planning compare toolbar** | `CategoryFilter` stores selection in page state; **compare API unchanged** — filter applies to adjacent **category trend** widget or PVA actuals preview only. Plan versions with `target_type=category` adjustments remain visible in compare table. |
+| **Wealth overview** | New “Category spending” subsection: period totals via `expense-series` or one-shot `aggregates_by_category` for selected month range + link “View trend” → `/forecast` with query `?category_id=` (optional deep link; not required AC). |
+
+**Alternative rejected:** Recompute `build_compare_metrics` per category in US-0018 — scope creep into plan engine.
+
+### 7. Performance & indexes (24-month window)
+
+- Existing indexes: `idx_transactions_date` only; **no** `category_id` index (`001_initial.sql`).
+- Estimate: 24-month filter on ~900 rows with `category_id = $1` → sequential scan on date range is **&lt;10 ms** on typical mirror; no migration required for MVP.
+- **Gate:** if `EXPLAIN` &gt;50 ms on operator mirror, add `CREATE INDEX idx_transactions_category_date ON transactions (category_id, date)` in execute — optional task.
+- Timescale `time_bucket` unnecessary — calendar month spine via `date_trunc` matches existing `aggregates_by_month`.
+
+### 8. Regression & privacy (AC-6)
+
+- New endpoints are **aggregate-only** (same privacy posture as AI `aggregates_by_category`).
+- US-0015 `bucket_sources` / AI mapping **unchanged** — category filter does not alter projection path in MVP.
+- OIDC external profile smoke: category routes behind same JWT/Traefik stack as forecast — no new public surface.
+
+### Decision gates (carry to `/architecture`)
+
+| Gate | Research recommendation | Alternative |
+|------|----------------------|-------------|
+| Multi-category overlay | **Defer** — single series (AC-3) | ≤3 series same chart |
+| Trend chart type | **Bar default**; line toggle stretch | Line default |
+| Grafana ↔ SPA sync | **Independent** | iframe `category_id` query param |
+| Forecast filter depth | **Actuals-only side panel**; household forecast unchanged | Full category forecast fork |
+| Uncategorized sentinel | **`__uncategorized__` query token** | Separate `/uncategorized` route |
+| Planning compare filter | **UI-scoped actuals widget**; compare API unchanged | Server-side compare recompute |
+| Category index migration | **Defer** unless explain fails | Ship index in US-0018 |
+
+**Linked:** US-0018, R-0080, R-0008, R-0060, DEC-0007, DEC-0032, US-0011, US-0015, BUG-0006  
+**Confidence:** high (code audit + SQL/Grafana patterns); medium on planning-compare UX nuance  
+**Status:** fulfilled — released S0017 via **DEC-0087**..**DEC-0090** (`0.18.0-us0018`, 2026-06-09); retain for traceability
+
+---
+
+## R-0084 — US-0019 goal plans, per-plan stats, category overlay & AI savings
+
+**Date:** 2026-06-09  
+**Topic:** Technical research for US-0019 AC-1..AC-6 — `goal_balance` template, target-date projection, category-scoped overlay, deterministic savings ranking, account-scoped balance  
+**Query:** Resolve discovery open questions: goal schema migration; balance at arbitrary `target_date` from `plan_computations`; yearly rollup grain; `build_overlay_deltas` category scoping; AI category savings under `allow_raw_transactions=false`; default asset account for goal progress  
+**Sources:**
+- [PostgreSQL recursive CTE budget projection](https://gist.github.com/codingthat/7b1e29ddfb878696468eca177dff01b4) — month-forward balance carry
+- [Financial plan on PostgreSQL — cumulative window](https://widefix.com/blog/financial-plan-on-postgresql/) — `sum(profit) OVER (ORDER BY month)` pattern
+- [Savings goal PMT formula](https://calc.mintloop.dev/finance/savings-goal-calculator) — required monthly contribution back-solve
+- [Wealthfolio Save-Up Planner](https://wealthfolio.app/docs/guide/goals/) — target date + required monthly contribution bisection
+- [Yodlee Spending by Category insight](https://developer.yodlee.com/resources/yodlee/insights-details/docs/spending-by-category-all-accounts) — top-N categories by debit total (threshold param)
+- [Pareto / 80-20 discretionary focus](https://www.wichitawealth.com/post/the-pareto-principle-cash-flow-unlocking-smarter-financial-strategies)
+- Code: `backend/migrations/004_plans.sql`, `backend/src/plan/{overlay.rs,project.rs,service.rs,repository.rs,types.rs,templates.rs}`, `backend/src/forecast/service.rs` (`aggregate_daily_balances`), `backend/src/transactions/repository.rs` (`aggregates_by_category`, `expense_series_by_month`), `backend/src/api/plans.rs` (`savings_suggestions` payee-only), `frontend/src/pages/PlanningPage.tsx`
+- Prior: [R-0080](research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake), [R-0015](research.md#r-0015--plan-engine-delta-overlay-on-forecast-baseline), [R-0018](research.md#r-0018--plan-persistence-schema-plans-versions-adjustments-daily-snapshots), [R-0083](research.md#r-0083--us-0018-category-filters-expense-series-api--trend-analytics), **DEC-0073**, **DEC-0087**..**DEC-0089**, **DEC-0032**
+
+**Findings:**
+
+### 1. Goal schema & template (AC-1)
+
+**Current gap:** `plan_template` enum has no `goal_balance`; `PlanRow` has no goal columns; `templates.rs` has no goal preset.
+
+**Recommendation — plan-level columns + enum value:**
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `target_balance_eur` | `NUMERIC(18,2) NULL` | Required when `template = 'goal_balance'` |
+| `target_date` | `DATE NULL` | Must be ≥ today on create; editable on latest unfrozen version context |
+| `goal_account_id` | `TEXT NULL` | Firefly `accounts.firefly_id`; optional — see §6 |
+
+Migration: `ALTER TYPE plan_template ADD VALUE 'goal_balance'` + `ALTER TABLE plans ADD COLUMN …` (nullable for backward compat).
+
+**Alternatives:**
+
+| Option | Verdict |
+|--------|---------|
+| JSON `metadata` blob on `plans` | **Reject** — weak typing; harder API validation |
+| Goal columns on `plan_versions` | **Defer** — per-version goal drift rare; PO wants plan-level metadata editable until frozen |
+| Separate `plan_goals` table | **Reject** — over-normalized for 3 fields |
+
+**Risks:** existing plans NULL-safe; enum migration requires migration script ordering; frozen version should expose goal fields read-only in UI only (no DB immutability trigger needed for MVP).
+
+### 2. Target-date balance projection (AC-2)
+
+**Existing asset:** `plan_daily_cashflow` stores `planned_balance` per `(version_id, computation_id, ts)` after recompute (`run_projection` → `bulk_insert_daily`). Horizon = **730 days** (`overlay_horizon_end`).
+
+**Recommended SQL — balance at `target_date`:**
+
+```sql
+SELECT pdc.planned_balance::float8
+FROM plan_daily_cashflow pdc
+JOIN plan_computations pc ON pc.id = pdc.computation_id
+WHERE pdc.version_id = $1
+  AND pc.status = 'success'
+  AND pc.computed_at = (
+      SELECT MAX(computed_at) FROM plan_computations
+      WHERE version_id = $1 AND status = 'success'
+  )
+  AND pdc.ts::date <= $2::date          -- target_date
+ORDER BY pdc.ts DESC
+LIMIT 1;
+```
+
+**Beyond horizon:** if `target_date > today + 730d`, return `{ "projected_balance_at_target": null, "beyond_horizon": true }` — do not extrapolate silently.
+
+**Yearly rollup — recommend calendar year:**
+
+```sql
+SELECT EXTRACT(YEAR FROM ts)::int AS yr,
+       SUM(planned_net::float8) AS net_eur
+FROM plan_daily_cashflow
+WHERE version_id = $1 AND computation_id = $2
+GROUP BY 1 ORDER BY 1;
+```
+
+Overlay-only yearly delta (vs baseline) = same query on **synthetic overlay-only series** OR `SUM(overlay_delta)` per year from in-memory recompute — **simpler MVP:** expose **full scenario** `planned_net` yearly sum + separate `overlay_monthly_delta` (DEC-0073) already computed; label clearly in UI.
+
+**Alternatives:** rolling 12m from target horizon — **reject** for Compare strip (calendar year matches US-0018 month labels).
+
+**New API sketch:** `GET /api/v1/plans/{plan_id}/goal-stats?version_id={optional}`
+
+```json
+{
+  "plan_id": "...",
+  "version_id": "...",
+  "target_balance_eur": "10000.00",
+  "target_date": "2026-11-01",
+  "goal_account_id": "114",
+  "monthly_delta_vs_baseline": "-120.00",
+  "yearly_rollup": [{ "year": 2026, "planned_net_eur": "2400.00" }],
+  "projected_balance_at_target": "9850.00",
+  "gap_eur": "150.00",
+  "on_track": false,
+  "beyond_horizon": false,
+  "reporting_currency": "EUR"
+}
+```
+
+**Scope guard (AC-2):** stats keyed by `plan_id` + `version_id` — never aggregate across plans on detail view. Compare tab shows stats for **selected plan** only; PVA remains **active-plan household** per discovery.
+
+**Risks:** stale `plan_computations` if recompute pending; month-end vs arbitrary date lookup — use last daily point ≤ target_date, not interpolation.
+
+### 3. Category overlay in plan engine (AC-3)
+
+**Current gap:** `AdjustmentTarget::Category` exists in DB enum + form (`PlanningPage.tsx` `CategoryFilter`), but `build_overlay_deltas` applies category adjustments **identically to household** — full `signed_amount` on frequency schedule with no `category_id` join (`overlay.rs` L22–41).
+
+**Recommended overlay semantics:**
+
+| Direction | Behavior |
+|-----------|----------|
+| `remove_outflow` + `category` | Cap each application at **trailing 3-month average monthly outflow** for `target_key` (category Firefly id) from mirror; amount = `min(adj.amount, avg_monthly_outflow)`; spread on existing monthly/weekly schedule |
+| `add_outflow` + `category` | Treat as labeled household outflow (category is metadata for compare/PVA only) — **or** reject in API validation; architecture gate |
+| `subscription` | unchanged (payee match) |
+
+**Data source:** reuse `expense_series_by_month` (R-0083) for last 3 months → `avg(outflow_eur)`; empty mirror → overlay contributes **0** with UI warning.
+
+**DEC-0007 interaction:** overlay modifies **plan delta layer only** — forecast baseline buckets unchanged (same as R-0015). Category removal does not rewrite Income/Fixed/Variable projection.
+
+**Alternatives:**
+
+| Option | Verdict |
+|--------|---------|
+| Display-only category lines (no recompute) | **Reject** — fails AC-3 |
+| Daily mirror-weighted removal | **Defer** — higher SQL cost; monthly cap sufficient for MVP |
+| Fork forecast per category | **Reject** — scope explosion |
+
+**Risks:** fixed-cost categories (rent) appear as reducible — filter suggestions separately (§5); uncategorized spend invisible to category overlay; double-count if cap exceeds actual category spend in future months.
+
+### 4. AI / deterministic savings suggestions (AC-4, AC-5)
+
+**Current:** `GET /api/v1/plans/templates/savings-mode/suggestions` returns **confirmed subscription payees only** (`map_savings_suggestions`).
+
+**Recommended — new aggregate endpoint + modal UX:**
+
+`GET /api/v1/plans/{plan_id}/category-savings-suggestions?months=6&limit=10`
+
+1. `aggregates_by_category(period_start, period_end, None)` — sort by `total_outflow` DESC
+2. Filter: `total_outflow / months >= 20` (min €20/mo); exclude categories already in plan adjustments (`target_type=category`, `remove_outflow`)
+3. Optional: exclude DEC-0007 **fixed** bucket categories from `resolve_bucket` map (rent, utilities) — architecture gate
+4. Return top-N with evidence: `category_id`, `name`, `avg_monthly_outflow_eur`, `transaction_count`, `suggested_reduction_eur` (= 50% of avg or `adj.amount` default)
+
+**Operator flow:** modal mirrors savings-mode checkboxes → `POST` batch `remove_outflow` adjustments — **no silent auto-apply** (AC-4).
+
+**AI path (AC-5):** deterministic ranking is **primary**; optional chat tool `get_category_savings` wrapping same aggregate service. `get_transactions` with `group_by: category` already privacy-safe under `allow_raw_transactions=false` (DEC-0032) — reuse audit patterns from US-0006/US-0015.
+
+**Alternatives:**
+
+| Option | Verdict |
+|--------|---------|
+| LLM-only ranking | **Reject** for MVP — non-deterministic; privacy review burden |
+| Chat-only (no REST) | **Reject** — Scenarios modal needs REST |
+
+**Risks:** suggesting cuts to non-discretionary categories; multi-account mirror includes all asset txs — consistent with household actuals; operator selects before apply — audit log per adjustment create.
+
+### 5. Account default for goal balance (AC-2)
+
+**Current:** `aggregate_daily_balances` **sums all asset accounts** in reporting currency (`forecast/service.rs` L265–288) — household total, not per-account (acct **114** vs **116** ambiguity per BUG-0013).
+
+**Recommendation for `goal_balance` plans:**
+
+| `goal_account_id` | Baseline source |
+|-------------------|-----------------|
+| Set explicitly | `fetch_daily_series(computation_id, account_id)` + starting balance from that account |
+| NULL on create | Default = **asset account with max positive balance** in `reporting_currency` (ORDER BY balance DESC LIMIT 1 among `type='asset'`) |
+| Fallback | Household sum (current behavior) + UI banner "Goal uses all accounts — select one account for precision" |
+
+Non-goal templates remain household aggregate (no regression).
+
+**Alternatives:** always household — **reject** for goal UX; require account on create — **reject** (optional field per discovery).
+
+**Risks:** multi-currency accounts excluded by currency filter; goal progress jumps when operator changes `goal_account_id` — require recompute + confirmation.
+
+### 6. Feasibility / gap copy (discovery)
+
+**MVP math (0% interest):**
+
+- `gap_eur = target_balance - projected_balance_at_target`
+- `required_monthly_savings = gap_eur / months_remaining` (ceil to cent)
+- UI shows gap + required monthly **copy only** — do **not** auto-insert savings adjustment lines (PO recommendation)
+
+**Alternative:** annuity PMT with savings rate — **defer** (Wealthfolio/Monarch pattern; no product savings-rate config today).
+
+### 7. UI surface map (AC-1..AC-6)
+
+| Surface | Research contract |
+|---------|-------------------|
+| Scenarios template grid | Add **Goal balance** card → `POST { template: "goal_balance", target_balance_eur, target_date, goal_account_id? }` |
+| Scenarios summary | Goal stats strip when `template=goal_balance` |
+| Compare tab | Per-plan goal stats above version table (not mixed across plans) |
+| Add-line form | `CategoryFilter` + `target_type=category` (exists); overlay must affect recompute |
+| AI savings action | New modal parallel to savings-mode; checkbox → POST adjustments |
+| Regression | US-0014 templates/toasts/PVA guided state; DEC-0089 compare category filter stays actuals-only |
+
+### Decision gates (carry to `/architecture`)
+
+| Gate | Research recommendation | Alternative |
+|------|-------------------------|-------------|
+| Goal storage | `plans` columns + `goal_balance` enum | JSON blob; per-version columns |
+| Stats API | `GET …/goal-stats` per plan+version | Extend `/compare` only |
+| Yearly rollup | Calendar year `SUM(planned_net)` | Rolling 12m |
+| Category `remove_outflow` | Cap via 3-mo mirror avg outflow | Daily weighted; display-only |
+| Category `add_outflow` | Household-labeled (no cap) | API reject |
+| Savings ranking | Deterministic top-N aggregates | LLM-only |
+| Fixed-category exclusion | Exclude DEC-0007 fixed bucket from suggestions | Show all |
+| Account scope | Optional `goal_account_id`; default max-balance asset | Always household |
+| Feasibility | Gap + required monthly (0% interest) | PMT + auto-lines |
+| PVA scope | Unchanged household active plan | Per-plan PVA |
+| AI tool | Optional wrapper; REST primary | Chat-only |
+
+### Risks (summary)
+
+| Risk | Mitigation |
+|------|------------|
+| `target_date` beyond 730d horizon | `beyond_horizon` flag + UI copy |
+| Category overlay over-removal | Cap at historical avg outflow |
+| Goal account vs household compare mismatch | Document; goal-stats uses plan account scope |
+| Fixed costs in savings list | Filter fixed bucket at ranking |
+| Migration enum ordering | Dedicated migration file; test rollback path |
+| DEC-0089 regression | Category filter on Compare stays actuals-only |
+
+**Linked:** US-0019, US-0018, US-0014, US-0004, US-0006, R-0080, R-0015, R-0018, R-0083, DEC-0073, DEC-0087, DEC-0088, DEC-0089, DEC-0032, DEC-0007  
+**Confidence:** high (code audit + SQL patterns); medium on category overlay cap tuning and fixed-category exclusion policy  
+**Status:** fulfilled — released S0018 via **DEC-0091**..**DEC-0097** (`0.19.0-us0019`, 2026-06-09); retain for traceability
+
+---
+
+## R-0085 — US-0020 subscription discover, majority category & operator tags
+
+**Date:** 2026-06-10  
+**Topic:** Technical research for US-0020 AC-1..AC-6 — Discover tab explorer, manual confirm, majority display category, operator tag CRUD/assign/filter, optional Grafana `$tag`  
+**Query:** Resolve discovery open questions: explorer SQL vs reuse `detect_recurrence_groups`; manual confirm API vs DEC-0085 merge; majority category computation and tie-break; tag schema; list filter composition; Grafana variable pattern; regression boundaries with US-0003/DEC-0084..0086  
+**Sources:**
+- [PostgreSQL `mode()` aggregate](https://www.postgresql.org/docs/17/functions-aggregate.html) — arbitrary tie-break; requires explicit `GROUP BY` + `RANK` for deterministic policy
+- [Stack Overflow — mode tiebreaker](https://stackoverflow.com/questions/66715271/tiebreaker-criterion-of-the-mode-in-postgres) — do not rely on `ORDER BY` inside `mode()` alone
+- [SQL Habit — recurring payments with LAG](https://www.sqlhabit.com/blog/how-to-detect-recurring-payments-with-sql) — `LAG` + `HAVING COUNT(*) > 1` explorer anti-pattern reference (diverges from shared recurrence core)
+- [PostgreSQL junction / tag schema patterns](https://www.grizzlypeaksoftware.com/library/postgresql-schema-design-patterns-for-web-applications-iqohhdbg) — many-to-many with composite PK + reverse index
+- Code: `backend/src/recurrence/detect.rs` (`detect_recurrence_groups`, `RecurrenceGroup.category_ids`), `backend/src/subscriptions/{detection.rs,repository.rs,service.rs}`, `backend/src/api/subscriptions.rs`, `backend/migrations/003_subscriptions.sql`, `frontend/src/pages/SubscriptionsPage.tsx`, `grafana/provisioning/dashboards/analytics/{subscriptions.json,cashflow.json}`
+- Prior: [R-0080 § Subscriptions](research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake), [R-0009](research.md#r-0009--subscription-detection-engine-patterns--confidence-scoring), [R-0012](research.md#r-0012--subscription-persistence-schema-candidates-confirmed-rejections-events), **DEC-0084**, **DEC-0085**, **DEC-0086**, **DEC-0087** (category catalog), US-0003, US-0018
+
+**Findings:**
+
+### 1. Explorer query (AC-1)
+
+**Current gap:** No discover API or UI; detection runs only on sync via `DetectionPipeline::run_candidates` (`detection.rs`).
+
+**Recommendation — reuse Rust recurrence core, not ad-hoc SQL:**
+
+| Step | Contract |
+|------|----------|
+| Load | `load_expense_transactions(window_days)` with **SQL push-down** for `account_id` + `date >= cutoff` (same `SubscriptionsConfig.detection_window_days`, default 365) |
+| Group | `detect_recurrence_groups(&txs, &RecurrenceConfig::default())` — preserves **DEC-0084** `payee_key()` normalization, cadence stability, confidence tiers (R-0009) |
+| Filter | Post-group: `payee_key` / `display_name` `ILIKE` (case-insensitive substring); **interval bucket** match with **DEC-0086** `interval_matches` (±3d); optional **amount band** on `median_amount` (stretch — defer if over sprint cap) |
+| Exclude | Drop if fingerprint ∈ `confirmed_fps` ∪ `rejection_fps`; drop if `(payee_key, interval_days)` ∈ confirmed/rejected payee-interval maps (same loads as `run_detection`) |
+| Cap | Sort by `confidence_pct` DESC, `transaction_ids.len()` DESC; **LIMIT 50**; response documents cap in API meta |
+
+**New API sketch:** `GET /api/v1/subscriptions/discover?account_id=&payee=&interval_days=&amount_min=&amount_max=&limit=50`
+
+```json
+{
+  "candidates": [{
+    "payee_key": "netflix",
+    "display_name": "Netflix P3E460",
+    "interval_days": 30,
+    "median_amount": "-12.99",
+    "confidence_pct": 95,
+    "transaction_count": 8,
+    "transaction_ids": ["ff-…"],
+    "account_ids": ["114"]
+  }],
+  "meta": { "limit": 50, "truncated": false, "window_days": 365 }
+}
+```
+
+**Alternatives:**
+
+| Option | Verdict |
+|--------|---------|
+| Ad-hoc SQL `GROUP BY payee_key, account_id HAVING COUNT(*) >= 3` | **Reject** — diverges from detection cadence/tolerance; duplicates R-0009 logic; harder to keep DEC-0084/0086 aligned |
+| Re-run full detection and filter pending only | **Reject** — misses merchants below auto-emit threshold or not yet synced to pending |
+| Separate `/discover` route | **Accept** — keeps list API stable; Discover tab isolated (PO surface map) |
+
+**Interval UI buckets → days (research defaults):**
+
+| UI label | Target `interval_days` | Match |
+|----------|------------------------|-------|
+| Weekly | 7 | `interval_matches(7, detected)` |
+| Biweekly | 14 | `interval_matches(14, detected)` |
+| Monthly | 30 | `interval_matches(30, detected)` |
+| Quarterly | 90 | `interval_matches(90, detected)` |
+| Custom | user int | exact `interval_matches(custom, detected)` |
+
+**Risks:** 365d window + full mirror load without `account_id` filter may scan large tx sets — **require** account filter in UI default or enforce max window when unfiltered; false negatives when &lt;3 txs (by design per R-0009).
+
+### 2. Manual confirm API vs DEC-0085 merge (AC-2, AC-6)
+
+**Current gap:** `POST /api/v1/subscriptions/:id/confirm` only transitions **`pending` → `confirmed`** (`repository.rs` L576 `WHERE status = 'pending'`). Explorer candidates have **no pattern row**.
+
+**Recommendation — new confirm-from-discover endpoint:**
+
+`POST /api/v1/subscriptions/discover/confirm`
+
+```json
+{
+  "payee_key": "netflix",
+  "interval_days": 30,
+  "median_amount": -12.99,
+  "transaction_ids": ["ff-1", "ff-2", "ff-3"],
+  "kind": "subscription"
+}
+```
+
+**Server flow (single transaction):**
+
+1. Build `RecurrenceGroup` from payload + mirror validation (tx ids exist, same payee_key after normalization).
+2. `fingerprint = compute_fingerprint(payee_key, interval_days, median_amount)`.
+3. If `(payee_key, interval_days)` matches **confirmed** map → **`merge_confirmed_pattern`** (DEC-0085/0086): refresh row, link txs, **no** `new_detection` alert.
+4. Else if matches **rejected** payee-interval → **409** with body explaining prior rejection (operator must clear rejection first — architecture gate).
+5. Else **INSERT** `subscription_patterns` as **`confirmed`** directly (skip pending), link txs, set `confirmed_at`, compute `display_category_id` (§3).
+6. **Do not** emit `new_detection` alert for manual confirm (operator-initiated).
+
+**Alternatives:**
+
+| Option | Verdict |
+|--------|---------|
+| Insert pending then call existing confirm | **Reject** — spurious pending card + alert noise; violates AC-2 "without auto-detection-only path" |
+| Extend `confirm_pattern` to accept explorer payload | **Reject** — overloads id-based route; breaks REST clarity |
+| Payee+interval already confirmed → 409 | **Reject** — conflicts with DEC-0085 merge semantics and BUG-0015 fix |
+
+**Risks:** payload tampering with wrong `transaction_ids` — validate all txs share normalized payee and fall within interval tolerance; merge fingerprint UNIQUE conflict → same fail-safe as detection (log + 409).
+
+### 3. Majority display category (AC-3, AC-5)
+
+**Current gap:** `subscription_patterns` has no `display_category_id`; `RecurrenceGroup.category_ids` collected in detection but unused for display; `classify.rs` uses categories only for standing-order heuristics.
+
+**Recommendation — compute at confirm time; store on pattern:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `display_category_id` | `TEXT NULL REFERENCES categories(firefly_id)` | Firefly category id; NULL when all linked txs uncategorized |
+
+**Algorithm (deterministic — do not use bare `mode()` for tie-break):**
+
+```sql
+WITH linked AS (
+  SELECT t.category_id, t.date
+  FROM subscription_pattern_transactions spt
+  JOIN transactions t ON t.firefly_id = spt.transaction_firefly_id
+  WHERE spt.pattern_id = $1 AND t.category_id IS NOT NULL
+),
+ranked AS (
+  SELECT category_id,
+         COUNT(*) AS cnt,
+         MAX(date) AS last_date,
+         RANK() OVER (ORDER BY COUNT(*) DESC, MAX(date) DESC) AS rnk
+  FROM linked
+  GROUP BY category_id
+)
+SELECT category_id FROM ranked WHERE rnk = 1 LIMIT 1;
+```
+
+Rust equivalent on `group.category_ids` + `transaction_dates` at confirm time — same policy.
+
+**Miscategorization (operator 1-of-12 example):** pure mode sufficient — no singleton exclusion rule for MVP. Optional future: when `N >= 6` and top share &lt; 50%, show UI warning — **defer**.
+
+**Recompute on sync:** when `merge_confirmed_pattern` links new txs, **optionally** refresh `display_category_id` — architecture gate; **research default: recompute on merge only** (not every sync tick) to keep confirm-time semantics stable unless new txs arrive.
+
+**Display:** resolve name via `GET /api/v1/categories` (DEC-0087); tooltip: *"Display category is the most common category among linked transactions; ties broken by most recent charge."*
+
+**Alternatives:**
+
+| Option | Verdict |
+|--------|---------|
+| `mode() WITHIN GROUP (ORDER BY category_id)` | **Reject** for tie-break — PostgreSQL picks arbitrarily ([docs](https://www.postgresql.org/docs/17/functions-aggregate.html)) |
+| Operator override column | **Defer** (stretch) — AC-3 satisfied by computed default |
+| Write category back to Firefly txs | **Reject** — violates read-only contract (AC-5) |
+
+**Risks:** majority NULL when operator never categorizes in Firefly — show "Uncategorized" badge (US-0018 `__uncategorized__` labeling); category deleted in Firefly but id remains in mirror — JOIN catalog with fallback to raw id.
+
+### 4. Operator tag schema (AC-4, AC-5)
+
+**Recommendation — global operator tags, product DB only:**
+
+```sql
+CREATE TABLE operator_tags (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name       TEXT NOT NULL,
+    slug       TEXT NOT NULL UNIQUE,  -- lowercase trimmed, spaces → hyphen
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE subscription_pattern_tags (
+    pattern_id UUID NOT NULL REFERENCES subscription_patterns(id) ON DELETE CASCADE,
+    tag_id     UUID NOT NULL REFERENCES operator_tags(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (pattern_id, tag_id)
+);
+
+CREATE INDEX idx_subscription_pattern_tags_tag ON subscription_pattern_tags(tag_id);
+```
+
+| Operation | Contract |
+|-----------|----------|
+| Create | `POST /api/v1/subscription-tags` `{ "name": "luxus" }` → slug dedupe |
+| Rename | `PATCH /api/v1/subscription-tags/:id` |
+| Delete | **Hard delete** tag row; `ON DELETE CASCADE` junction — assignments removed; confirmed patterns unaffected |
+| Assign | `PUT /api/v1/subscriptions/:id/tags` `{ "tag_ids": ["…"] }` — replace set (idempotent) |
+| List filter | `GET /api/v1/subscriptions?tag=luxus` — join `subscription_pattern_tags` + `operator_tags.slug`; composable with `status`, `kind`, future `account_id` |
+
+**Alternatives:**
+
+| Option | Verdict |
+|--------|---------|
+| Soft-delete tags (`deleted_at`) | **Reject for MVP** — low volume; complicates unique name constraint |
+| Per-account tag namespace | **Reject** — PO global operator MVP |
+| Firefly tag sync | **Reject** — AC-5 |
+
+**Risks:** tag delete without confirmation — document in UI; slug collision on rename — enforce UNIQUE on slug; list API join cost — acceptable at household scale (&lt;500 patterns).
+
+### 5. List API filter composition (AC-4)
+
+Extend `ListQuery`:
+
+| Param | Behavior |
+|-------|----------|
+| `status` | unchanged |
+| `kind` | unchanged |
+| `tag` | slug match; AND with status/kind |
+| `account_id` | patterns having ≥1 linked tx on account (subquery on `subscription_pattern_transactions` ⋈ `transactions`) — **optional P2** if sprint tight; not required for Discover (discover has own account filter) |
+
+### 6. Grafana `$tag` variable (stretch)
+
+**Current:** `subscriptions.json` `templating.list` is **empty** — no variables.
+
+**Recommendation (if capacity):** mirror **DEC-0087 / cashflow `$category`** pattern:
+
+```sql
+SELECT '' AS __value, 'All tags' AS __text
+UNION ALL
+SELECT t.slug AS __value, t.name AS __text
+FROM operator_tags t
+ORDER BY 2
+```
+
+Panel filter example:
+
+```sql
+… FROM subscription_patterns p
+WHERE p.status = 'confirmed'
+  AND ('${tag}' = '' OR EXISTS (
+    SELECT 1 FROM subscription_pattern_tags spt
+    JOIN operator_tags ot ON ot.id = spt.tag_id
+    WHERE spt.pattern_id = p.id AND ot.slug = '${tag}'
+  ))
+```
+
+**Alternatives:** defer all Grafana work — **acceptable** (AC does not require); SPA tag filter independent per DEC-0089 precedent.
+
+**Risks:** provisioning reload operator gate (**GRAFANA_PROVISIONING_RELOAD**); empty tag table → variable still works with "All tags" only.
+
+### 7. UI surface map (AC-1..AC-6)
+
+| Surface | Research contract |
+|---------|-------------------|
+| Discover tab | New `Tab = "discover"` on `SubscriptionsPage`; search form + results table; reuse confirm modal (kind override) |
+| Manual confirm | Calls `discover/confirm`; toast on merge vs create |
+| Majority badge | On confirmed rows + detail drawer; `CategoryFilter` read-only display |
+| Tag manager | Modal or drawer section; CRUD list |
+| Tag chips | Detail drawer multi-select; filter chips on All / Standing tabs |
+| Regression | No changes to `DetectionPipeline` skip order; pending tab + alert dedup untouched; OIDC smoke deferred per prior stories |
+
+### Decision gates (carry to `/architecture`)
+
+| Gate | Research recommendation | Alternative |
+|------|-------------------------|-------------|
+| Explorer engine | Reuse `detect_recurrence_groups` + post-filters | Ad-hoc SQL GROUP BY |
+| Discover route | `GET /discover` + `POST /discover/confirm` | Extend pending confirm only |
+| Manual confirm state | Direct `confirmed` insert | Pending intermediate |
+| DEC-0085 on manual | **Merge** when payee+interval exists | 409 duplicate |
+| Rejected payee-interval manual | 409 until operator clears | Silent override |
+| Majority algorithm | `COUNT` + `RANK` (cnt DESC, last_date DESC); NULLs excluded | `mode()`; operator override |
+| Majority refresh | Recompute on merge when new txs linked | Every sync; confirm-only forever |
+| `display_category_id` | Column on `subscription_patterns` | Join table |
+| Tag tables | `operator_tags` + `subscription_pattern_tags` | JSON array on pattern |
+| Tag delete | Hard delete + CASCADE | Soft delete |
+| Tag assign API | `PUT …/tags` replace set | PATCH per tag |
+| List `?tag=` | Slug filter on list API | Client-only filter |
+| Result cap | 50 | Paginated |
+| Amount band filter | Stretch / P2 | Required in AC-1 |
+| Grafana `$tag` | Stretch if ≤12 tasks | Defer post-MVP |
+| Alert on manual confirm | **No** `new_detection` | Emit alert |
+
+### Risks (summary)
+
+| Risk | Mitigation |
+|------|------------|
+| Explorer perf on full 365d mirror | Push `account_id` to SQL; cap 50; share detection window config |
+| Manual confirm bypasses rejection maps | Enforce payee-interval rejection check (409) |
+| DEC-0085 merge + display category drift | Recompute majority on merge |
+| `mode()` tie-break ambiguity | Use explicit RANK policy |
+| Tag delete surprise | Confirm dialog in tag manager |
+| Detection regression | No changes to `run_candidates` ordering; add tests for skip maps |
+| Grafana stretch slips sprint | Defer; document in architecture as P2 |
+
+**Linked:** US-0020, US-0003, US-0018, R-0080, R-0009, R-0012, DEC-0084, DEC-0085, DEC-0086, DEC-0087, DEC-0089  
+**Confidence:** high (code audit + PostgreSQL/Grafana patterns); medium on majority refresh-on-merge policy and amount-band priority  
+**Status:** fulfilled — released S0019 via **DEC-0098**..**DEC-0103** (`0.20.0-us0020`, 2026-06-10); extends [R-0080 § Subscriptions](research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake); retain for traceability
 
 ---

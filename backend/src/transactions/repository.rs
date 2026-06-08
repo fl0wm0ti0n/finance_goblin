@@ -1,7 +1,10 @@
 use chrono::NaiveDate;
 use sqlx::PgPool;
 
-use super::types::{CategoryAggregate, CategoryMatch, MonthAggregate, PeriodSummary, RawTransactionRow};
+use super::types::{
+    CategoryAggregate, CategoryMatch, ExpenseSeriesCategory, ExpenseSeriesMonth, MonthAggregate,
+    PeriodSummary, RawTransactionRow, CATEGORY_CATALOG_CAP,
+};
 
 const CATEGORY_SEARCH_LIMIT: i64 = 10;
 
@@ -190,6 +193,149 @@ impl TransactionsRepository {
                 month,
                 total_outflow: outflow,
                 total_inflow: inflow,
+                transaction_count: count,
+            })
+            .collect())
+    }
+
+    pub async fn list_categories_catalog(
+        &self,
+        search: Option<&str>,
+    ) -> Result<(Vec<(String, String)>, bool), sqlx::Error> {
+        let rows = if let Some(keyword) = search {
+            let pattern = format!("%{keyword}%");
+            let total: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*)::bigint FROM categories WHERE name ILIKE $1",
+            )
+            .bind(&pattern)
+            .fetch_one(&self.pool)
+            .await?;
+
+            let truncated = total > CATEGORY_CATALOG_CAP;
+            let fetched: Vec<(String, String)> = sqlx::query_as(
+                r#"
+                SELECT firefly_id, COALESCE(name, '')
+                FROM categories
+                WHERE name ILIKE $1
+                ORDER BY name ASC
+                LIMIT $2
+                "#,
+            )
+            .bind(&pattern)
+            .bind(CATEGORY_CATALOG_CAP)
+            .fetch_all(&self.pool)
+            .await?;
+            (fetched, truncated)
+        } else {
+            let total: i64 =
+                sqlx::query_scalar("SELECT COUNT(*)::bigint FROM categories")
+                    .fetch_one(&self.pool)
+                    .await?;
+            let truncated = total > CATEGORY_CATALOG_CAP;
+            let fetched: Vec<(String, String)> = sqlx::query_as(
+                r#"
+                SELECT firefly_id, COALESCE(name, '')
+                FROM categories
+                ORDER BY name ASC
+                LIMIT $1
+                "#,
+            )
+            .bind(CATEGORY_CATALOG_CAP)
+            .fetch_all(&self.pool)
+            .await?;
+            (fetched, truncated)
+        };
+
+        Ok(rows)
+    }
+
+    pub async fn category_exists(&self, firefly_id: &str) -> Result<bool, sqlx::Error> {
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM categories WHERE firefly_id = $1",
+        )
+        .bind(firefly_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(count > 0)
+    }
+
+    pub async fn category_name(&self, firefly_id: &str) -> Result<Option<String>, sqlx::Error> {
+        sqlx::query_scalar("SELECT name FROM categories WHERE firefly_id = $1")
+            .bind(firefly_id)
+            .fetch_optional(&self.pool)
+            .await
+    }
+
+    pub async fn expense_series_by_month(
+        &self,
+        category: ExpenseSeriesCategory<'_>,
+        start: NaiveDate,
+        end: NaiveDate,
+    ) -> Result<Vec<ExpenseSeriesMonth>, sqlx::Error> {
+        let rows: Vec<(String, f64, f64, i64)> = match category {
+            ExpenseSeriesCategory::Uncategorized => sqlx::query_as(
+                r#"
+                WITH month_spine AS (
+                    SELECT generate_series(
+                        date_trunc('month', $1::date),
+                        date_trunc('month', $2::date),
+                        '1 month'::interval
+                    ) AS month_start
+                )
+                SELECT
+                    to_char(m.month_start, 'YYYY-MM') AS month,
+                    COALESCE(SUM(CASE WHEN t.amount::float8 < 0 THEN ABS(t.amount::float8) ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN t.amount::float8 > 0 THEN t.amount::float8 ELSE 0 END), 0),
+                    COUNT(t.*)::bigint
+                FROM month_spine m
+                LEFT JOIN transactions t
+                    ON date_trunc('month', t.date) = m.month_start
+                   AND t.date >= $1 AND t.date <= $2
+                   AND t.category_id IS NULL
+                GROUP BY m.month_start
+                ORDER BY m.month_start
+                "#,
+            )
+            .bind(start)
+            .bind(end)
+            .fetch_all(&self.pool)
+            .await?,
+            ExpenseSeriesCategory::MirrorId(category_id) => sqlx::query_as(
+                r#"
+                WITH month_spine AS (
+                    SELECT generate_series(
+                        date_trunc('month', $1::date),
+                        date_trunc('month', $2::date),
+                        '1 month'::interval
+                    ) AS month_start
+                )
+                SELECT
+                    to_char(m.month_start, 'YYYY-MM') AS month,
+                    COALESCE(SUM(CASE WHEN t.amount::float8 < 0 THEN ABS(t.amount::float8) ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN t.amount::float8 > 0 THEN t.amount::float8 ELSE 0 END), 0),
+                    COUNT(t.*)::bigint
+                FROM month_spine m
+                LEFT JOIN transactions t
+                    ON date_trunc('month', t.date) = m.month_start
+                   AND t.date >= $1 AND t.date <= $2
+                   AND t.category_id = $3
+                GROUP BY m.month_start
+                ORDER BY m.month_start
+                "#,
+            )
+            .bind(start)
+            .bind(end)
+            .bind(category_id)
+            .fetch_all(&self.pool)
+            .await?,
+        };
+
+        Ok(rows
+            .into_iter()
+            .map(|(month, outflow, inflow, count)| ExpenseSeriesMonth {
+                month,
+                outflow_eur: outflow,
+                inflow_eur: inflow,
                 transaction_count: count,
             })
             .collect())

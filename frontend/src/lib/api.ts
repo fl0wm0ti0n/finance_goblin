@@ -145,6 +145,12 @@ export interface TriggerResponse {
   status: string;
 }
 
+export interface SubscriptionTag {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export interface SubscriptionPattern {
   id: string;
   fingerprint: string;
@@ -159,7 +165,93 @@ export interface SubscriptionPattern {
   last_seen_at: string;
   confirmed_at?: string | null;
   rejected_at?: string | null;
+  display_category_id?: string | null;
   transaction_count?: number;
+  tags?: SubscriptionTag[];
+}
+
+export interface DiscoverCandidate {
+  payee_key: string;
+  display_name: string;
+  interval_days: number;
+  median_amount: number;
+  confidence_pct: number;
+  transaction_count: number;
+  transaction_ids: string[];
+  account_ids: string[];
+}
+
+export interface DiscoverResponse {
+  candidates: DiscoverCandidate[];
+  meta: { limit: number; truncated: boolean; window_days: number };
+}
+
+export interface DiscoverConfirmResponse {
+  pattern: SubscriptionPattern;
+  merged: boolean;
+}
+
+export interface OperatorTag {
+  id: string;
+  name: string;
+  slug: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export function fetchDiscover(params: {
+  account_id: string;
+  payee?: string;
+  interval_days?: number;
+  limit?: number;
+}): Promise<DiscoverResponse> {
+  const qs = new URLSearchParams({ account_id: params.account_id });
+  if (params.payee) qs.set("payee", params.payee);
+  if (params.interval_days != null) qs.set("interval_days", String(params.interval_days));
+  if (params.limit != null) qs.set("limit", String(params.limit));
+  return apiFetch<DiscoverResponse>(`/api/v1/subscriptions/discover?${qs}`);
+}
+
+export function confirmDiscoverCandidate(body: {
+  payee_key: string;
+  interval_days: number;
+  median_amount: number;
+  transaction_ids: string[];
+  kind?: string;
+}): Promise<DiscoverConfirmResponse> {
+  return apiFetch<DiscoverConfirmResponse>("/api/v1/subscriptions/discover/confirm", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function fetchOperatorTags(): Promise<OperatorTag[]> {
+  return apiFetch<OperatorTag[]>("/api/v1/subscription-tags");
+}
+
+export function createOperatorTag(name: string): Promise<OperatorTag> {
+  return apiFetch<OperatorTag>("/api/v1/subscription-tags", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function renameOperatorTag(id: string, name: string): Promise<OperatorTag> {
+  return apiFetch<OperatorTag>(`/api/v1/subscription-tags/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteOperatorTag(id: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/subscription-tags/${id}`, { method: "DELETE" });
+}
+
+export function assignSubscriptionTags(id: string, tagIds: string[]): Promise<SubscriptionTag[]> {
+  return apiFetch<SubscriptionTag[]>(`/api/v1/subscriptions/${id}/tags`, {
+    method: "PUT",
+    body: JSON.stringify({ tag_ids: tagIds }),
+  });
 }
 
 export interface SubscriptionAlert {
@@ -378,6 +470,53 @@ export interface SavingsSuggestion {
   interval_days: number;
 }
 
+export interface GoalStats {
+  plan_id: string;
+  version_id: string;
+  target_balance_eur: string;
+  target_date: string;
+  goal_account_id: string | null;
+  monthly_delta_vs_baseline: string;
+  yearly_rollup: { year: number; planned_net_sum: string }[];
+  projected_balance_at_target: string | null;
+  gap_eur: string | null;
+  required_monthly_savings_eur: string | null;
+  on_track: boolean;
+  beyond_horizon: boolean;
+  computed_at: string | null;
+  household_fallback: boolean;
+}
+
+export interface CategorySavingsSuggestion {
+  category_id: string;
+  category_name: string;
+  avg_monthly_outflow_eur: string;
+  transaction_count: number;
+  suggested_reduction_eur: string;
+  evidence_summary: string;
+}
+
+export interface CategorySavingsResponse {
+  suggestions: CategorySavingsSuggestion[];
+  meta: { months: number; limit: number; ranking: string };
+}
+
+export function fetchGoalStats(planId: string, versionId?: string): Promise<GoalStats> {
+  const qs = versionId ? `?version_id=${encodeURIComponent(versionId)}` : "";
+  return apiFetch<GoalStats>(`/api/v1/plans/${planId}/goal-stats${qs}`);
+}
+
+export function fetchCategorySavingsSuggestions(
+  planId: string,
+  months = 6,
+  limit = 10,
+): Promise<CategorySavingsResponse> {
+  const params = new URLSearchParams({ months: String(months), limit: String(limit) });
+  return apiFetch<CategorySavingsResponse>(
+    `/api/v1/plans/${planId}/category-savings-suggestions?${params}`,
+  );
+}
+
 export interface AccountWealthRow {
   firefly_id: string;
   name: string;
@@ -499,6 +638,61 @@ export interface AlertRow {
   dismissed_at?: string | null;
   resolved_at?: string | null;
   stale: boolean;
+}
+
+export const UNCATEGORIZED_CATEGORY_ID = "__uncategorized__";
+
+export interface CategoryCatalogItem {
+  id: string;
+  name: string;
+}
+
+export interface CategoryCatalogResponse {
+  categories: CategoryCatalogItem[];
+  truncated?: boolean;
+}
+
+export interface ExpenseSeriesMonth {
+  month: string;
+  outflow_eur: number;
+  inflow_eur: number;
+  transaction_count: number;
+}
+
+export interface ExpenseSeriesSummary {
+  mom_delta_pct: number;
+  best_month: string;
+  worst_month: string;
+}
+
+export interface ExpenseSeriesResponse {
+  category_id: string;
+  category_name?: string;
+  category_label?: string;
+  uncategorized?: boolean;
+  months: ExpenseSeriesMonth[];
+  summary: ExpenseSeriesSummary;
+  meta: { period_start: string; period_end: string };
+  transaction_count: number;
+}
+
+export function fetchCategories(search?: string): Promise<CategoryCatalogResponse> {
+  const q = search?.trim();
+  const suffix = q && q.length >= 2 ? `?q=${encodeURIComponent(q)}` : "";
+  return apiFetch<CategoryCatalogResponse>(`/api/v1/categories${suffix}`);
+}
+
+export function fetchCategoryExpenseSeries(
+  categoryId: string,
+  months = 12,
+  end?: string,
+): Promise<ExpenseSeriesResponse> {
+  const params = new URLSearchParams({
+    category_id: categoryId,
+    months: String(months),
+  });
+  if (end) params.set("end", end);
+  return apiFetch<ExpenseSeriesResponse>(`/api/v1/categories/expense-series?${params}`);
 }
 
 export function entityCountEntries(counts: EntityCounts | undefined): { entity: string; count: number }[] {

@@ -201,27 +201,27 @@
 
 ## US-0018 — Category filters & expense trend analytics
 
-- [ ] **AC-1 Category filter contract:** Shared category filter (single or multi) available on `/forecast` monthly view, `/planning` compare context, `/wealth` firefly breakdown, and at least **two** embedded Grafana analytics dashboards via variable or filter panel
-- [ ] **AC-2 Monthly series API:** `GET` category expense API returns per-month EUR outflow (and inflow where scoped) for selected `category_id`(s) over configurable window (default 12 months, max 24)
-- [ ] **AC-3 Trend chart UI:** React category trend chart renders month labels with EUR amounts (e.g. Jan €300, Feb €250); supports at least one category; empty-state when mirror has no categorized rows in period
-- [ ] **AC-4 Performance insight:** UI surfaces month-over-month change and best/worst month indicator for selected category in period (table or chart annotation)
-- [ ] **AC-5 Mirror fidelity:** Series uses Firefly-synced `category_id` on mirror transactions; uncategorized bucket explicit — not silent zero
-- [ ] **AC-6 Regression:** OIDC-enabled US-0010 external profile smoke pass; read-only Firefly preserved; US-0015 bucket mapping unchanged
+- [x] **AC-1 Category filter contract:** Shared category filter (single or multi) available on `/forecast` monthly view, `/planning` compare context, `/wealth` firefly breakdown, and at least **two** embedded Grafana analytics dashboards via variable or filter panel
+- [x] **AC-2 Monthly series API:** `GET` category expense API returns per-month EUR outflow (and inflow where scoped) for selected `category_id`(s) over configurable window (default 12 months, max 24)
+- [x] **AC-3 Trend chart UI:** React category trend chart renders month labels with EUR amounts (e.g. Jan €300, Feb €250); supports at least one category; empty-state when mirror has no categorized rows in period
+- [x] **AC-4 Performance insight:** UI surfaces month-over-month change and best/worst month indicator for selected category in period (table or chart annotation)
+- [x] **AC-5 Mirror fidelity:** Series uses Firefly-synced `category_id` on mirror transactions; uncategorized bucket explicit — not silent zero
+- [x] **AC-6 Regression:** OIDC-enabled US-0010 external profile smoke pass; read-only Firefly preserved; US-0015 bucket mapping unchanged
 
 ## US-0019 — Goal-driven planning with per-plan stats & AI savings suggestions
 
-- [ ] **AC-1 Goal plan type:** Operator creates plan with **target balance** + **target date** (e.g. €10 000 in 5 months); plan persists and appears in Scenarios list
-- [ ] **AC-2 Per-plan statistics:** Dedicated stats for **selected plan only** — monthly delta vs baseline, yearly rollup, projected balance at target date — not household-wide aggregates on plan detail view
-- [ ] **AC-3 Category adjustments:** Plan builder accepts category-scoped spend changes (e.g. reduce "crypto" category); adjustments affect compare/PVA for that plan after recompute
-- [ ] **AC-4 AI savings suggestions:** AI proposes reducible expense categories/lines with evidence summary; operator **selects** suggestions to add as plan adjustments — no silent auto-apply
-- [ ] **AC-5 Privacy:** AI path uses aggregate/category signals only (`allow_raw_transactions=false`); audit log per US-0006 patterns
-- [ ] **AC-6 Regression:** US-0014 onboarding/templates still work; OIDC external profile smoke pass
+- [x] **AC-1 Goal plan type:** Operator creates plan with **target balance** + **target date** (e.g. €10 000 in 5 months); plan persists and appears in Scenarios list
+- [x] **AC-2 Per-plan statistics:** Dedicated stats for **selected plan only** — monthly delta vs baseline, yearly rollup, projected balance at target date — not household-wide aggregates on plan detail view
+- [x] **AC-3 Category adjustments:** Plan builder accepts category-scoped spend changes (e.g. reduce "crypto" category); adjustments affect compare/PVA for that plan after recompute
+- [x] **AC-4 AI savings suggestions:** AI proposes reducible expense categories/lines with evidence summary; operator **selects** suggestions to add as plan adjustments — no silent auto-apply
+- [x] **AC-5 Privacy:** AI path uses aggregate/category signals only (`allow_raw_transactions=false`); audit log per US-0006 patterns
+- [x] **AC-6 Regression:** US-0014 onboarding/templates still work; OIDC external profile smoke pass
 
 ## US-0020 — Subscription manual discovery, majority category & operator tags
 
-- [ ] **AC-1 Manual search:** `/subscriptions` (or discovery-named surface) filters potential candidates by **account**, **title/payee** text, and **repeating interval** (months); results paginated or capped with documented limit
-- [ ] **AC-2 Operator confirm:** Operator can confirm a searched candidate into confirmed subscriptions without auto-detection-only path
-- [ ] **AC-3 Majority category:** Confirmed subscription **display category** defaults to **mode category** of constituent transactions; tie-break rule documented in UI or tooltip
-- [ ] **AC-4 Operator tags:** CRUD for operator-defined tags (e.g. luxus, important); assign multiple tags per subscription; filter subscription list by tag
-- [ ] **AC-5 Storage contract:** Tags and majority-category metadata in product DB — no Firefly write-back
-- [ ] **AC-6 Regression:** US-0003/US-0008 detection and alert dedup unchanged; OIDC external profile smoke pass
+- [x] **AC-1 Manual search:** `/subscriptions` (or discovery-named surface) filters potential candidates by **account**, **title/payee** text, and **repeating interval** (months); results paginated or capped with documented limit
+- [x] **AC-2 Operator confirm:** Operator can confirm a searched candidate into confirmed subscriptions without auto-detection-only path
+- [x] **AC-3 Majority category:** Confirmed subscription **display category** defaults to **mode category** of constituent transactions; tie-break rule documented in UI or tooltip
+- [x] **AC-4 Operator tags:** CRUD for operator-defined tags (e.g. luxus, important); assign multiple tags per subscription; filter subscription list by tag
+- [x] **AC-5 Storage contract:** Tags and majority-category metadata in product DB — no Firefly write-back
+- [x] **AC-6 Regression:** US-0003/US-0008 detection and alert dedup unchanged; OIDC external profile smoke pass

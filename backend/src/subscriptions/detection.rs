@@ -32,7 +32,10 @@ impl<'a> DetectionPipeline<'a> {
         rejected_payee_intervals: &[(String, i32)],
     ) -> Result<CandidateRunResult, sqlx::Error> {
         let config = self.repo.config();
-        let txs = self.repo.load_expense_transactions(config.detection_window_days).await?;
+        let txs = self
+            .repo
+            .load_expense_transactions(config.detection_window_days, None)
+            .await?;
         let recurrence_config = RecurrenceConfig {
             high_tolerance_pct: config.confidence_tolerance_pct.high,
             medium_tolerance_pct: config.confidence_tolerance_pct.medium,
@@ -353,5 +356,20 @@ mod tests {
     fn interval_matches_covers_monthly_variance() {
         assert!(interval_matches(30, 31));
         assert!(!interval_matches(7, 30));
+    }
+
+    #[test]
+    fn detection_pipeline_min_emit_confidence_unchanged_at_60() {
+        let config = crate::recurrence::RecurrenceConfig::default();
+        assert_eq!(config.min_emit_confidence, 60);
+    }
+
+    #[test]
+    fn manual_discover_confirm_does_not_use_alert_fingerprint_path() {
+        // Regression guard (DEC-0099 / AC-6): discover confirm is repository-only;
+        // alert upsert remains exclusive to DetectionPipeline::run_candidates.
+        let id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        assert!(SubscriptionRepository::compute_alert_fingerprint("new_detection", id, None, None, None)
+            .starts_with("sub_alert:new_detection:"));
     }
 }

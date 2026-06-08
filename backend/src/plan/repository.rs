@@ -6,10 +6,13 @@ use uuid::Uuid;
 
 use crate::config::PlansConfig;
 
+use super::overlay::CategoryRemoveCaps;
 use super::types::{
-    ActivePlanInfo, AdjustmentRow, CompareVersionMetrics, DailyNetPoint, PlanAdjustment,
-    PlanListItem, PlanRow, PlanVsActualRow, VersionRow,
+    ActivePlanInfo, AdjustmentDirection, AdjustmentRow, AdjustmentTarget, CompareVersionMetrics,
+    DailyNetPoint, PlanAdjustment, PlanListItem, PlanRow, PlanVsActualRow, VersionRow,
 };
+use crate::transactions::repository::TransactionsRepository;
+use crate::transactions::types::ExpenseSeriesCategory;
 
 #[derive(Debug, thiserror::Error)]
 pub enum PlanRepoError {
@@ -49,18 +52,26 @@ impl PlanRepository {
         &self,
         name: &str,
         template: &str,
+        target_balance_eur: Option<f64>,
+        target_date: Option<NaiveDate>,
+        goal_account_id: Option<&str>,
     ) -> Result<(PlanRow, VersionRow), PlanRepoError> {
         let mut tx = self.pool.begin().await?;
 
         let plan: PlanRow = sqlx::query_as(
             r#"
-            INSERT INTO plans (name, template)
-            VALUES ($1, $2::plan_template)
-            RETURNING id, name, template::text AS template, is_active
+            INSERT INTO plans (name, template, target_balance_eur, target_date, goal_account_id)
+            VALUES ($1, $2::plan_template, $3, $4, $5)
+            RETURNING id, name, template::text AS template, is_active,
+                      target_balance_eur::float8 AS target_balance_eur,
+                      target_date, goal_account_id
             "#,
         )
         .bind(name)
         .bind(template)
+        .bind(target_balance_eur)
+        .bind(target_date)
+        .bind(goal_account_id)
         .fetch_one(&mut *tx)
         .await?;
 
@@ -119,12 +130,102 @@ impl PlanRepository {
 
     pub async fn get_plan(&self, plan_id: Uuid) -> Result<PlanRow, PlanRepoError> {
         sqlx::query_as(
-            "SELECT id, name, template::text AS template, is_active FROM plans WHERE id = $1",
+            r#"
+            SELECT id, name, template::text AS template, is_active,
+                   target_balance_eur::float8 AS target_balance_eur,
+                   target_date, goal_account_id
+            FROM plans WHERE id = $1
+            "#,
         )
         .bind(plan_id)
         .fetch_optional(&self.pool)
         .await?
         .ok_or(PlanRepoError::NotFound)
+    }
+
+    pub async fn default_goal_account_id(
+        &self,
+        reporting_currency: &str,
+    ) -> Result<Option<String>, PlanRepoError> {
+        Ok(sqlx::query_scalar(
+            r#"
+            SELECT firefly_id FROM accounts
+            WHERE type = 'asset' AND currency = $1 AND COALESCE(balance::float8, 0) > 0
+            ORDER BY balance::float8 DESC NULLS LAST
+            LIMIT 1
+            "#,
+        )
+        .bind(reporting_currency)
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
+    pub async fn account_exists(&self, firefly_id: &str) -> Result<bool, PlanRepoError> {
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*)::bigint FROM accounts WHERE firefly_id = $1 AND type = 'asset'",
+        )
+        .bind(firefly_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(count > 0)
+    }
+
+    pub async fn fetch_yearly_rollup(
+        &self,
+        version_id: Uuid,
+        computation_id: Uuid,
+    ) -> Result<Vec<(i32, f64)>, PlanRepoError> {
+        let rows: Vec<(i32, f64)> = sqlx::query_as(
+            r#"
+            SELECT EXTRACT(YEAR FROM ts)::int AS yr,
+                   COALESCE(SUM(planned_net::float8), 0)
+            FROM plan_daily_cashflow
+            WHERE version_id = $1 AND computation_id = $2
+            GROUP BY 1
+            ORDER BY 1
+            "#,
+        )
+        .bind(version_id)
+        .bind(computation_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    pub async fn fetch_projected_balance_at_date(
+        &self,
+        version_id: Uuid,
+        computation_id: Uuid,
+        target_date: NaiveDate,
+    ) -> Result<Option<f64>, PlanRepoError> {
+        let row: Option<(f64,)> = sqlx::query_as(
+            r#"
+            SELECT planned_balance::float8
+            FROM plan_daily_cashflow
+            WHERE version_id = $1 AND computation_id = $2
+              AND ts::date <= $3::date
+            ORDER BY ts DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(version_id)
+        .bind(computation_id)
+        .bind(target_date)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|(b,)| b))
+    }
+
+    pub async fn computation_computed_at(
+        &self,
+        computation_id: Uuid,
+    ) -> Result<Option<DateTime<Utc>>, PlanRepoError> {
+        Ok(sqlx::query_scalar(
+            "SELECT computed_at FROM plan_computations WHERE id = $1",
+        )
+        .bind(computation_id)
+        .fetch_optional(&self.pool)
+        .await?)
     }
 
     pub async fn rename_plan(&self, plan_id: Uuid, name: &str) -> Result<(), PlanRepoError> {
@@ -747,11 +848,13 @@ impl PlanRepository {
         let month_start = NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap();
         let adjustments = self.load_adjustments(version.id).await?;
         let confirmed = self.confirmed_for_overlay().await?;
+        let category_caps = self.category_remove_caps(&adjustments).await?;
         let monthly_delta = super::overlay::monthly_overlay_delta_sum(
             &adjustments,
             &confirmed,
             month_start,
             today,
+            &category_caps,
         );
 
         let balance_rows: Vec<(NaiveDate, f64)> = sqlx::query_as(
@@ -793,6 +896,41 @@ impl PlanRepository {
         Ok(metrics)
     }
 
+    pub async fn category_remove_caps(
+        &self,
+        adjustments: &[PlanAdjustment],
+    ) -> Result<CategoryRemoveCaps, PlanRepoError> {
+        let tx_repo = TransactionsRepository::new(self.pool.clone());
+        let today = Utc::now().date_naive();
+        let (start, end) = last_n_calendar_months_window(today, 3);
+        let mut caps = CategoryRemoveCaps::new();
+
+        for adj in adjustments {
+            if adj.target_type != AdjustmentTarget::Category
+                || adj.direction != AdjustmentDirection::RemoveOutflow
+            {
+                continue;
+            }
+            let Some(cat) = &adj.target_key else {
+                continue;
+            };
+            if caps.contains_key(cat) {
+                continue;
+            }
+            let months = tx_repo
+                .expense_series_by_month(ExpenseSeriesCategory::MirrorId(cat), start, end)
+                .await?;
+            let total: f64 = months.iter().map(|m| m.outflow_eur).sum();
+            let avg = if months.is_empty() {
+                0.0
+            } else {
+                total / months.len() as f64
+            };
+            caps.insert(cat.clone(), avg);
+        }
+        Ok(caps)
+    }
+
     pub async fn build_plan_vs_actual_rows(
         &self,
         version_id: Uuid,
@@ -828,6 +966,14 @@ impl PlanRepository {
             })
             .collect())
     }
+}
+
+fn last_n_calendar_months_window(today: NaiveDate, months: u32) -> (NaiveDate, NaiveDate) {
+    let total = today.year() as i32 * 12 + today.month() as i32 - 1 - months as i32 + 1;
+    let y = total.div_euclid(12);
+    let m = (total.rem_euclid(12) + 1) as u32;
+    let start = NaiveDate::from_ymd_opt(y, m, 1).unwrap_or(today);
+    (start, today)
 }
 
 #[derive(Debug, sqlx::FromRow)]

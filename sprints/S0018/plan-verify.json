@@ -1,0 +1,154 @@
+{
+  "sprint": "S0018",
+  "story_id": "US-0019",
+  "orchestrator_run_id": "auto-20260608-us0019-001",
+  "verified_at": "2026-06-09T17:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0019",
+  "tasks_source": "sprints/S0018/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#US-0019",
+  "decision_alignment": {
+    "decision_ids": ["DEC-0091", "DEC-0092", "DEC-0093", "DEC-0094", "DEC-0095", "DEC-0096", "DEC-0097"],
+    "aligned": true,
+    "research_basis": ["R-0084", "R-0080"],
+    "contract_elements_covered": [
+      "goal_balance enum + target_balance_eur, target_date, goal_account_id columns (T-0186, DEC-0091)",
+      "POST /api/v1/plans goal_balance branch + Goal balance template card (T-0187, DEC-0091, DEC-0095)",
+      "GET /api/v1/plans/{id}/goal-stats service + target-date SQL + beyond_horizon (T-0188, DEC-0092)",
+      "goal-stats route + GoalStatsStrip per selected plan only (T-0189, DEC-0092, DEC-0096)",
+      "Category remove_outflow cap via expense_series 3-mo avg (T-0190, DEC-0093, DEC-0087)",
+      "goal_account_id projection fork in plan/project.rs (T-0191, DEC-0095)",
+      "GET category-savings-suggestions deterministic ranking + fixed-bucket exclusion (T-0192, DEC-0094)",
+      "CategorySavingsModal checkbox apply + audit log — no auto-apply (T-0193, DEC-0094, DEC-0097)",
+      "docs/user-guides/US-0019.md operator workflow (T-0194)",
+      "US-0014 template grid + DEC-0089 compare actuals regression (T-0195, DEC-0096, DEC-0089)",
+      "Optional get_category_savings tool wraps same service (T-0196 P2, DEC-0097)",
+      "UAT OIDC smoke AC-1..AC-6 template + operator gates (T-0197)"
+    ],
+    "frozen_boundaries_respected": [
+      "DEC-0096 PVA household active-plan scope unchanged — no per-plan PVA endpoint",
+      "DEC-0089 compare CategoryTrendChart actuals-only — regression in T-0195",
+      "DEC-0007 / US-0015 forecast bucket mapping unchanged — no project.rs bucket_inference edits",
+      "Read-only Firefly — no write-back in sprint scope",
+      "DEC-0097 REST primary — T-0196 optional does not block MVP",
+      "No PMT/interest feasibility — 0% interest gap copy per DEC-0092"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "T-0186 → T-0187; T-0186 → (T-0188 ∥ T-0190 → T-0191); T-0188 + T-0187 → T-0189; T-0190 → T-0192 → T-0193; T-0194 → T-0195 → T-0197; T-0196 optional after T-0192",
+    "notes": "S1 schema before stats/overlay/savings; docs/regression after integrations; BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC before omniflow smoke"
+  },
+  "test_coverage": {
+    "migration_types": "T-0186 — enum + columns; validation helpers",
+    "plans_api": "T-0187 — goal_balance create 422 guards; default goal_account_id",
+    "goal_stats_service": "T-0188 — monthly delta, yearly rollup, projected balance, beyond_horizon",
+    "goal_stats_ui": "T-0189 — GoalStatsStrip Scenarios + Compare; 404 non-goal",
+    "overlay_cap": "T-0190 — remove_outflow cap; zero mirror warning",
+    "projection_fork": "T-0191 — goal_account_id scoped recompute",
+    "savings_api": "T-0192 — ranking, fixed exclusion, aggregate-only response",
+    "savings_modal": "T-0193 — checkbox apply; audit log; no auto-apply",
+    "operator_docs": "T-0194 — docs/user-guides/US-0019.md",
+    "regression": "T-0195 — US-0014 onboarding; DEC-0089 compare widget",
+    "ai_tool_optional": "T-0196 — get_category_savings P2",
+    "uat_smoke": "T-0197 — OIDC US-0010 external profile template",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Operator creates plan with target balance + target date; plan persists and appears in Scenarios list",
+      "tasks": ["T-0186", "T-0187", "T-0197"],
+      "covered": true,
+      "notes": "goal_balance migration + create API + template card; UAT-1 smoke"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "Dedicated stats for selected plan only — monthly delta vs baseline, yearly rollup, projected balance at target date",
+      "tasks": ["T-0188", "T-0189", "T-0197"],
+      "covered": true,
+      "notes": "goal-stats API + GoalStatsStrip; DEC-0096 PVA household unchanged"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Plan builder accepts category-scoped spend changes; adjustments affect compare/PVA for that plan after recompute",
+      "tasks": ["T-0190", "T-0191", "T-0197"],
+      "covered": true,
+      "notes": "overlay cap + goal_account projection; existing add-line UX from US-0014"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "AI proposes reducible expense categories/lines with evidence; operator selects suggestions to add — no silent auto-apply",
+      "tasks": ["T-0192", "T-0193", "T-0197"],
+      "covered": true,
+      "notes": "Deterministic REST ranking per DEC-0094; modal checkbox apply per DEC-0097"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "AI path uses aggregate/category signals only; audit log per US-0006 patterns",
+      "tasks": ["T-0192", "T-0193", "T-0196", "T-0197"],
+      "covered": true,
+      "notes": "REST aggregate-only; audit on adjustment create; T-0196 optional chat wrapper"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "US-0014 onboarding/templates still work; OIDC external profile smoke pass",
+      "tasks": ["T-0194", "T-0195", "T-0197"],
+      "covered": true,
+      "notes": "Regression tests + UAT template; operator gate BACKEND_FRONTEND_DEPLOY"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC operator gates required before omniflow smoke — documented in T-0197"
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "T-0194 user guide has no direct AC row — architecture D1 support task; non-blocking"
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "T-0196 get_category_savings P2 optional — REST + modal satisfy AC-4/AC-5 without chat path"
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "AC-4 AI wording implemented as deterministic REST ranking (DEC-0094) — no LLM ranking"
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "AC-3 plan-builder category lines use existing US-0014 add-adjustment UX + O1/O2 backend path"
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_count": 6,
+    "covered_count": 6,
+    "blocking_covered_count": 6,
+    "gap_count": 0,
+    "task_count": 12,
+    "mandatory_task_count": 11,
+    "optional_task_ids": ["T-0196"],
+    "task_ids": ["T-0186", "T-0187", "T-0188", "T-0189", "T-0190", "T-0191", "T-0192", "T-0193", "T-0194", "T-0195", "T-0196", "T-0197"],
+    "tasks_without_acceptance_ref": ["T-0194"],
+    "tasks_without_acceptance_ref_blocking": false,
+    "dec_0091_aligned": true,
+    "dec_0092_aligned": true,
+    "dec_0093_aligned": true,
+    "dec_0094_aligned": true,
+    "dec_0095_aligned": true,
+    "dec_0096_aligned": true,
+    "dec_0097_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true,
+    "execute_ready_caveat": null
+  },
+  "notes": "QA plan-verify 2026-06-09: sprints/S0018/tasks.md (T-0186..T-0197) aligns with docs/product/acceptance.md § US-0019 (AC-1..AC-6) and architecture § US-0019 / DEC-0091..0097; 12/12 tasks mapped; 6/6 acceptance rows covered; 0 gaps. Approved for /execute."
+}

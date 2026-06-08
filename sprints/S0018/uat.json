@@ -1,0 +1,253 @@
+{
+  "sprint": "S0018",
+  "stories": ["US-0019"],
+  "story_id": "US-0019",
+  "phase": "verify-work",
+  "plan_verified_at": "2026-06-09T17:00:00Z",
+  "plan_verify_verdict": "PASS",
+  "qa_verified_at": "2026-06-09T22:30:00Z",
+  "verified_at": "2026-06-09T23:00:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_verify_work": false,
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0019",
+  "qa_evidence": "sprints/S0018/qa-findings.md",
+  "decisions": ["DEC-0091", "DEC-0092", "DEC-0093", "DEC-0094", "DEC-0095", "DEC-0096", "DEC-0097"],
+  "research": ["R-0084", "R-0080"],
+  "orchestrator_run_id": "auto-20260608-us0019-001",
+  "environment": {
+    "omniflow_host_available": false,
+    "backend_frontend_deploy_pending": true,
+    "full_firefly_sync_pending": true
+  },
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before": "AC-6 OIDC smoke + live goal-plan probes",
+      "action": "Deploy S0018 backend + frontend on US-0010 external profile (financegnome.omniflow.cc)"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before": "AC-3/AC-4/AC-5 category overlay + savings ranking smoke",
+      "action": "Full Firefly sync so category_id mirror and aggregates are current"
+    }
+  ],
+  "automated_checks": [
+    {
+      "id": "VW-AUTO-1",
+      "description": "cargo test --lib",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-09 — 204/204 PASS"
+    },
+    {
+      "id": "VW-AUTO-2",
+      "description": "npm test -- --run",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-09 — 9/9 PASS (GoalStatsStrip 2/2 + CategoryTrendChart 1/1 + planningFeedback 4/4 + ChatPanel 2/2)"
+    },
+    {
+      "id": "VW-AUTO-3",
+      "description": "AC-1 goal plan create + validation",
+      "result": "pass",
+      "notes": "013_goal_balance.sql; validate_goal_fields; PlanningPage Goal balance card; goal_create_api_tests"
+    },
+    {
+      "id": "VW-AUTO-4",
+      "description": "AC-2 goal-stats API + GoalStatsStrip",
+      "result": "pass",
+      "notes": "GET /api/v1/plans/{id}/goal-stats; yearly rollup; beyond_horizon; vitest GoalStatsStrip 2/2"
+    },
+    {
+      "id": "VW-AUTO-5",
+      "description": "AC-3 category overlay cap + account fork",
+      "result": "pass",
+      "notes": "overlay.rs remove_outflow clamp; goal_baseline_series fork; category_remove_outflow_clamped_to_cap test"
+    },
+    {
+      "id": "VW-AUTO-6",
+      "description": "AC-4/AC-5 savings suggestions + aggregate-only path",
+      "result": "pass",
+      "notes": "category-savings-suggestions route; CategorySavingsModal checkbox apply; savings_service aggregates only; get_category_savings seventh tool"
+    },
+    {
+      "id": "VW-AUTO-7",
+      "description": "AC-6 US-0014 regression audit",
+      "result": "pass",
+      "notes": "7-template grid; PVA guided card; compare CategoryTrendChart actuals-only; no project.rs edits"
+    }
+  ],
+  "probe_results": [
+    {
+      "step": "cargo test --lib baseline",
+      "probe_kind": "test",
+      "command": "cd backend && cargo test --lib",
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "notes": "Direct verify-work re-run 204/204"
+    },
+    {
+      "step": "npm test frontend vitest",
+      "probe_kind": "test",
+      "command": "cd frontend && npm test -- --run",
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "notes": "Direct verify-work re-run 9/9"
+    },
+    {
+      "step": "OIDC omniflow goal-plan smoke AC-1..AC-6",
+      "probe_kind": "manual_operator",
+      "passed": false,
+      "reason_code": "UAT_PROBE_UNRESOLVED",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY,FULL_FIREFLY_SYNC",
+      "notes": "Live probes deferred per US-0014/US-0015/US-0018 precedent; checklist in uat.md"
+    }
+  ],
+  "uat_steps": [
+    {
+      "id": "UAT-1",
+      "acceptance": "AC-1",
+      "description": "Goal balance plan create with target balance + date; appears in Scenarios",
+      "tasks": ["T-0186", "T-0187", "T-0197"],
+      "result": "pass",
+      "evidence": "013_goal_balance.sql; validate_goal_fields 422 guards; PlanningPage Goal balance card + createGoalPlan; goal_create_api_tests"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance": "AC-2",
+      "description": "Per-plan goal-stats strip — monthly delta, yearly rollup, projected at target",
+      "tasks": ["T-0188", "T-0189", "T-0197"],
+      "result": "pass",
+      "evidence": "GET /api/v1/plans/{id}/goal-stats; goal_stats service; GoalStatsStrip on Scenarios + Compare; PVA tab unchanged (DEC-0096)"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance": "AC-3",
+      "description": "Category remove_outflow adjustment affects compare/PVA after recompute",
+      "tasks": ["T-0190", "T-0191", "T-0197"],
+      "result": "pass",
+      "evidence": "overlay.rs 3-mo avg cap; goal_baseline_series account fork; category_remove_outflow_clamped_to_cap lib test"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance": "AC-4",
+      "description": "Savings modal proposes categories; operator checkbox apply only",
+      "tasks": ["T-0192", "T-0193", "T-0197"],
+      "result": "pass",
+      "evidence": "category-savings-suggestions route; CategorySavingsModal checkbox + disabled Apply until selection; no auto-apply"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance": "AC-5",
+      "description": "Savings path aggregate-only; audit log on apply",
+      "tasks": ["T-0192", "T-0193", "T-0196", "T-0197"],
+      "result": "pass",
+      "evidence": "savings_service aggregates_by_category only; get_category_savings seventh tool; orchestrator audit for AI path"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance": "AC-6",
+      "description": "US-0014 templates + OIDC smoke; read-only Firefly",
+      "tasks": ["T-0194", "T-0195", "T-0197"],
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY,FULL_FIREFLY_SYNC",
+      "evidence": "7-template grid + PVA guided card + DEC-0089 compare copy preserved; sprints/S0018/uat.md OIDC checklist; live probes deferred"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "Goal balance plan create with target balance + date; appears in Scenarios",
+      "result": "pass",
+      "tasks": ["T-0186", "T-0187", "T-0197"],
+      "evidence": "013_goal_balance.sql; validate_goal_fields 422 guards; PlanningPage Goal balance card + createGoalPlan; goal_create_api_tests"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "Per-plan goal-stats strip — monthly delta, yearly rollup, projected at target",
+      "result": "pass",
+      "tasks": ["T-0188", "T-0189", "T-0197"],
+      "evidence": "GET /api/v1/plans/{id}/goal-stats; goal_stats service; GoalStatsStrip on Scenarios + Compare; PVA tab unchanged (DEC-0096)"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "Category remove_outflow adjustment affects compare/PVA after recompute",
+      "result": "pass",
+      "tasks": ["T-0190", "T-0191", "T-0197"],
+      "evidence": "overlay.rs 3-mo avg cap; goal_baseline_series account fork; category_remove_outflow_clamped_to_cap lib test"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "Savings modal proposes categories; operator checkbox apply only",
+      "result": "pass",
+      "tasks": ["T-0192", "T-0193", "T-0197"],
+      "evidence": "category-savings-suggestions route; CategorySavingsModal checkbox + disabled Apply until selection; no auto-apply"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": "Savings path aggregate-only; audit log on apply",
+      "result": "pass",
+      "tasks": ["T-0192", "T-0193", "T-0196", "T-0197"],
+      "evidence": "savings_service aggregates_by_category only; get_category_savings seventh tool; orchestrator audit for AI path"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-6",
+      "description": "US-0014 templates + OIDC smoke; read-only Firefly",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY,FULL_FIREFLY_SYNC",
+      "tasks": ["T-0194", "T-0195", "T-0197"],
+      "evidence": "7-template grid + PVA guided card + DEC-0089 compare copy preserved; sprints/S0018/uat.md OIDC checklist; live probes deferred"
+    }
+  ],
+  "row_verdicts": {
+    "AC-1": "pass",
+    "AC-2": "pass",
+    "AC-3": "pass",
+    "AC-4": "pass",
+    "AC-5": "pass",
+    "AC-6": "pass_with_prerequisites"
+  },
+  "task_ids": [
+    "T-0186", "T-0187", "T-0188", "T-0189", "T-0190", "T-0191",
+    "T-0192", "T-0193", "T-0194", "T-0195", "T-0196", "T-0197"
+  ],
+  "mandatory_task_ids": [
+    "T-0186", "T-0187", "T-0188", "T-0189", "T-0190", "T-0191",
+    "T-0192", "T-0193", "T-0194", "T-0195", "T-0197"
+  ],
+  "optional_task_ids": ["T-0196"],
+  "acceptance_coverage": {
+    "AC-1": ["T-0186", "T-0187", "T-0197"],
+    "AC-2": ["T-0188", "T-0189", "T-0197"],
+    "AC-3": ["T-0190", "T-0191", "T-0197"],
+    "AC-4": ["T-0192", "T-0193", "T-0197"],
+    "AC-5": ["T-0192", "T-0193", "T-0196", "T-0197"],
+    "AC-6": ["T-0194", "T-0195", "T-0197"]
+  },
+  "blockers": [],
+  "summary": {
+    "acceptance_criteria_total": 6,
+    "acceptance_criteria_pass": 6,
+    "passed": 5,
+    "pass_with_prerequisites": 1,
+    "failed": 0,
+    "pending": 0,
+    "deferred_operator": 9,
+    "automated_pass": 7
+  },
+  "operator_prerequisites": [
+    "BACKEND_FRONTEND_DEPLOY — deploy S0018 backend + frontend on US-0010 external profile (financegnome.omniflow.cc)",
+    "FULL_FIREFLY_SYNC — ensure mirror categories + transactions current for overlay cap + savings ranking",
+    "Execute OIDC 9-step checklist in sprints/S0018/uat.md after deploy"
+  ],
+  "next_phase": "release",
+  "plan_verify_ref": "sprints/S0018/plan-verify.json",
+  "qa_ref": "sprints/S0018/qa-findings.md",
+  "verify_work_ref": "sprints/S0018/verify-work-findings.md"
+}

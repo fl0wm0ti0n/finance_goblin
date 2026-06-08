@@ -31,24 +31,45 @@ Canonical queue state:
 
 ## Latest finalized release pointer
 
+- **Latest released sprint:** S0019
+- **Latest sprint notes:** [handoffs/releases/S0019-release-notes.md](releases/S0019-release-notes.md)
+- **Latest sprint date:** 2026-06-10
+- **Latest sprint story:** US-0020
+- **Sprint release version:** `0.20.0-us0020`
+- **Open stories:** (empty — intake bundle backlog drain complete)
+- **Open bug queue:** (empty — defect drain complete)
+
 - **Latest released quick task:** Q0023 / BUG-0015 (2026-06-07)
 - **Latest quick-task notes:** [handoffs/releases/Q0023-release-notes.md](releases/Q0023-release-notes.md)
 - **Bug status:** DONE; acceptance AU–AW checked (runtime operator-deferred)
 - **Release version:** `bug0015-q0023`
-- **Open stories:** (empty — backlog drain complete for current scope)
-- **Open bug queue:** (empty — defect drain complete)
-
-- **Latest released sprint:** S0016
-- **Latest sprint notes:** [handoffs/releases/S0016-release-notes.md](releases/S0016-release-notes.md)
-- **Latest sprint date:** 2026-06-06
-- **Latest sprint story:** US-0015
-- **Sprint release version:** `0.16.0-us0015`
 
 ## Unreleased queue visibility
 
 No rows with `status=unreleased` or `status=blocked`. See `handoffs/release_queue.md` for full queue.
 
-## Latest operator summary (Run/Connect/Verify) — BUG-0015 / Q0023
+## Latest operator summary (Run/Connect/Verify) — US-0020 / S0019
+
+- **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai`
+- **Verify:** `cd backend && cargo test --lib` (213/213); `cd frontend && npm test -- --run` (9/9); operator 8-step OIDC checklist per `sprints/S0019/uat.md` after deploy gates
+- **Endpoint:** `https://financegnome.omniflow.cc`
+- **Full steps:** [handoffs/releases/S0019-release-notes.md](releases/S0019-release-notes.md)
+
+## Prior operator summary — US-0019 / S0018
+
+- **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai`
+- **Verify:** `cd backend && cargo test --lib` (204/204); `cd frontend && npm test -- --run` (9/9); operator 9-step OIDC checklist per `sprints/S0018/uat.md` after deploy gates
+- **Endpoint:** `https://financegnome.omniflow.cc`
+- **Full steps:** [handoffs/releases/S0018-release-notes.md](releases/S0018-release-notes.md)
+
+## Prior operator summary — US-0018 / S0017
+
+- **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai grafana`
+- **Verify:** `cd backend && cargo test --lib` (193/193); `cd frontend && npm test -- --run` (7/7); operator 10-step OIDC checklist per `sprints/S0017/uat.md` after deploy gates
+- **Endpoint:** `https://financegnome.omniflow.cc`
+- **Full steps:** [handoffs/releases/S0017-release-notes.md](releases/S0017-release-notes.md)
+
+## Prior operator summary — BUG-0015 / Q0023
 
 - **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai`
 - **Verify:** `cd backend && cargo test --lib` (187/187); operator 10-step rebuild smoke per `sprints/quick/Q0023/uat.json` after deploy gates
@@ -71,6 +92,9 @@ No rows with `status=unreleased` or `status=blocked`. See `handoffs/release_queu
 
 ## Historical references
 
+- S0019 / US-0020: `handoffs/releases/S0019-release-notes.md`
+- S0018 / US-0019: `handoffs/releases/S0018-release-notes.md`
+- S0017 / US-0018: `handoffs/releases/S0017-release-notes.md`
 - Q0023 / BUG-0015: `handoffs/releases/Q0023-release-notes.md`
 - Q0022 / BUG-0014: `handoffs/releases/Q0022-release-notes.md`
 - Q0021 / US-0017: `handoffs/releases/Q0021-release-notes.md`

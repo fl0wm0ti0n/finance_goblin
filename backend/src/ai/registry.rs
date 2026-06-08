@@ -3,19 +3,20 @@ use std::sync::Arc;
 use serde_json::Value;
 
 use super::tools::{
-    GetBudgetStatusTool, GetForecastTool, GetPortfolioTool, GetSubscriptionsTool,
-    GetTransactionsTool, SimulatePlanTool,
+    GetBudgetStatusTool, GetCategorySavingsTool, GetForecastTool, GetPortfolioTool,
+    GetSubscriptionsTool, GetTransactionsTool, SimulatePlanTool,
 };
 use super::tools::AiTool;
 use super::types::{ToolContext, ToolError};
 
-pub const TOOL_NAMES: [&str; 6] = [
+pub const TOOL_NAMES: [&str; 7] = [
     "get_transactions",
     "get_subscriptions",
     "get_forecast",
     "get_budget_status",
     "get_portfolio",
     "simulate_plan",
+    "get_category_savings",
 ];
 
 pub struct ToolRegistry {
@@ -31,6 +32,7 @@ impl ToolRegistry {
             Arc::new(GetBudgetStatusTool),
             Arc::new(GetPortfolioTool),
             Arc::new(SimulatePlanTool),
+            Arc::new(GetCategorySavingsTool),
         ];
         Self { tools }
     }
@@ -77,9 +79,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn registry_has_six_tools_matching_migration() {
+    fn registry_has_seven_tools_including_category_savings() {
         let reg = ToolRegistry::build();
-        assert_eq!(reg.tools().len(), 6);
+        assert_eq!(reg.tools().len(), 7);
         for name in TOOL_NAMES {
             assert!(reg.get(name).is_some(), "missing tool {name}");
         }

@@ -1,5 +1,11 @@
 # Summary — Sprint S0001
 
+## Context pack (refresh 2026-06-09)
+
+- **Latest release:** US-0018 / S0017 (`0.18.0-us0018`, 2026-06-09) — category filters & expense trend analytics; DEC-0087..0090
+- **Open backlog:** US-0019, US-0020 — backlog drain active; next discovery US-0019
+- **S0001 status:** CLOSED / released (`0.1.0-us0001`) — foundation segment complete
+
 ## Context pack (refresh 2026-05-31)
 
 - **Status:** CLOSED / released (`0.1.0-us0001`)

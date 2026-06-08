@@ -12,6 +12,14 @@ import {
 const WealthChart = lazy(() =>
   import("../components/wealth/WealthChart").then((m) => ({ default: m.WealthChart })),
 );
+const CategoryFilter = lazy(() =>
+  import("../components/category/CategoryFilter").then((m) => ({ default: m.CategoryFilter })),
+);
+const CategoryTrendChart = lazy(() =>
+  import("../components/category/CategoryTrendChart").then((m) => ({
+    default: m.CategoryTrendChart,
+  })),
+);
 
 type Tab = "overview" | "crypto";
 
@@ -23,6 +31,7 @@ function isStale(lastSync: string | null | undefined): boolean {
 
 export function WealthPage() {
   const [tab, setTab] = useState<Tab>("overview");
+  const [categoryId, setCategoryId] = useState("");
 
   const breakdownQuery = useQuery({
     queryKey: ["wealth"],
@@ -160,6 +169,24 @@ export function WealthPage() {
               <Link to="/planning">Adjust on Planning →</Link>
             </div>
           )}
+
+          <div className="card" style={{ marginTop: "1rem" }}>
+            <h2>Category spending</h2>
+            <p style={{ fontSize: "0.9rem", color: "#475569" }}>
+              Mirror actuals for a single category — net worth and crypto totals above remain
+              household-level.
+            </p>
+            <Suspense fallback={<p>Loading category filter…</p>}>
+              <CategoryFilter value={categoryId} onChange={setCategoryId} allowAll={false} />
+            </Suspense>
+            {categoryId && (
+              <div style={{ marginTop: "1rem" }}>
+                <Suspense fallback={<p>Loading trend…</p>}>
+                  <CategoryTrendChart categoryId={categoryId} title="Category spending trend" />
+                </Suspense>
+              </div>
+            )}
+          </div>
 
           <div className="card" style={{ marginTop: "1rem" }}>
             <h2>Account breakdown</h2>

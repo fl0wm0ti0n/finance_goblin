@@ -102,6 +102,22 @@ pub struct DetectionResult {
 }
 
 #[derive(Debug, Clone, sqlx::FromRow, Serialize)]
+pub struct OperatorTagRow {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OperatorTagSummary {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow, Serialize)]
 pub struct PatternRow {
     pub id: Uuid,
     pub fingerprint: String,
@@ -116,6 +132,7 @@ pub struct PatternRow {
     pub last_seen_at: chrono::NaiveDate,
     pub confirmed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub rejected_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub display_category_id: Option<String>,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
@@ -141,7 +158,46 @@ pub struct PatternDetailRow {
     pub last_seen_at: chrono::NaiveDate,
     pub confirmed_at: Option<chrono::DateTime<chrono::Utc>>,
     pub rejected_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub display_category_id: Option<String>,
     pub transaction_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiscoverCandidate {
+    pub payee_key: String,
+    pub display_name: String,
+    pub interval_days: i32,
+    pub median_amount: f64,
+    pub confidence_pct: i16,
+    pub transaction_count: usize,
+    pub transaction_ids: Vec<String>,
+    pub account_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiscoverMeta {
+    pub limit: usize,
+    pub truncated: bool,
+    pub window_days: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DiscoverResponse {
+    pub candidates: Vec<DiscoverCandidate>,
+    pub meta: DiscoverMeta,
+}
+
+#[derive(Debug, Clone)]
+pub enum ConfirmFromDiscoverError {
+    RejectedPayeeInterval,
+    FingerprintConflict,
+    InvalidTransactions(String),
+}
+
+#[derive(Debug, Clone)]
+pub struct ConfirmFromDiscoverResult {
+    pub pattern: PatternRow,
+    pub merged: bool,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow, Serialize)]

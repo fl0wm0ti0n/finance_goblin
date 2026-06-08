@@ -1,4 +1,5 @@
 mod budget;
+mod category_savings;
 mod forecast;
 mod portfolio;
 mod simulate;
@@ -6,6 +7,7 @@ mod subscriptions;
 mod transactions;
 
 pub use budget::GetBudgetStatusTool;
+pub use category_savings::GetCategorySavingsTool;
 pub use forecast::GetForecastTool;
 pub use portfolio::GetPortfolioTool;
 pub use simulate::SimulatePlanTool;

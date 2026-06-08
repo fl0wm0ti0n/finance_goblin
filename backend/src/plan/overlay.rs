@@ -8,12 +8,16 @@ use super::types::{
 
 const HORIZON_DAYS: i64 = 730;
 
+/// Per-category average monthly outflow cap for `remove_outflow` (DEC-0093).
+pub type CategoryRemoveCaps = HashMap<String, f64>;
+
 /// Map plan adjustments to daily net-cashflow deltas keyed by calendar date.
 pub fn build_overlay_deltas(
     adjustments: &[PlanAdjustment],
     confirmed_subs: &[ConfirmedSubscription],
     start: NaiveDate,
     end: NaiveDate,
+    category_remove_caps: &CategoryRemoveCaps,
 ) -> HashMap<NaiveDate, f64> {
     let mut deltas: HashMap<NaiveDate, f64> = HashMap::new();
     let mut sorted: Vec<_> = adjustments.to_vec();
@@ -29,7 +33,22 @@ pub fn build_overlay_deltas(
             continue;
         }
 
-        let signed_amount = adj.amount * adj.direction.signed_multiplier();
+        let mut effective_amount = adj.amount;
+        if adj.target_type == AdjustmentTarget::Category
+            && adj.direction == AdjustmentDirection::RemoveOutflow
+        {
+            if let Some(cat) = &adj.target_key {
+                let cap = category_remove_caps.get(cat).copied().unwrap_or(0.0);
+                effective_amount = effective_amount.min(cap);
+            } else {
+                effective_amount = 0.0;
+            }
+            if effective_amount <= 0.0 {
+                continue;
+            }
+        }
+
+        let signed_amount = effective_amount * adj.direction.signed_multiplier();
         let effective_end = adj.effective_to.unwrap_or(end);
 
         let mut date = start;
@@ -145,6 +164,7 @@ pub fn monthly_overlay_delta_sum(
     confirmed_subs: &[ConfirmedSubscription],
     month_start: NaiveDate,
     today: NaiveDate,
+    category_remove_caps: &CategoryRemoveCaps,
 ) -> f64 {
     if adjustments.is_empty() {
         return 0.0;
@@ -154,8 +174,32 @@ pub fn monthly_overlay_delta_sum(
     if effective_end < month_start {
         return 0.0;
     }
-    let overlay = build_overlay_deltas(adjustments, confirmed_subs, month_start, effective_end);
+    let overlay = build_overlay_deltas(
+        adjustments,
+        confirmed_subs,
+        month_start,
+        effective_end,
+        category_remove_caps,
+    );
     overlay.values().sum()
+}
+
+/// Build 3-month average outflow caps for category remove_outflow lines.
+pub fn build_category_remove_caps<F>(adjustments: &[PlanAdjustment], avg_for: F) -> CategoryRemoveCaps
+where
+    F: Fn(&str) -> f64,
+{
+    let mut caps = CategoryRemoveCaps::new();
+    for adj in adjustments {
+        if adj.target_type == AdjustmentTarget::Category
+            && adj.direction == AdjustmentDirection::RemoveOutflow
+        {
+            if let Some(cat) = &adj.target_key {
+                caps.entry(cat.clone()).or_insert_with(|| avg_for(cat));
+            }
+        }
+    }
+    caps
 }
 
 #[cfg(test)]
@@ -195,7 +239,7 @@ mod tests {
             start,
         )];
 
-        let deltas = build_overlay_deltas(&adjustments, &[], start, end);
+        let deltas = build_overlay_deltas(&adjustments, &[], start, end, &CategoryRemoveCaps::new());
         assert!(deltas.get(&start).copied().unwrap_or(0.0).abs() > 299.0);
         assert!(deltas.get(&NaiveDate::from_ymd_opt(2026, 2, 15).unwrap()).is_some());
     }
@@ -211,7 +255,7 @@ mod tests {
             start,
         )];
 
-        let deltas = build_overlay_deltas(&adjustments, &[], start, end);
+        let deltas = build_overlay_deltas(&adjustments, &[], start, end, &CategoryRemoveCaps::new());
         assert_eq!(deltas.get(&start).copied(), Some(50.0));
         assert_eq!(
             deltas.get(&NaiveDate::from_ymd_opt(2026, 1, 8).unwrap()).copied(),
@@ -230,7 +274,7 @@ mod tests {
             start,
         )];
 
-        let deltas = build_overlay_deltas(&adjustments, &[], start, end);
+        let deltas = build_overlay_deltas(&adjustments, &[], start, end, &CategoryRemoveCaps::new());
         assert_eq!(deltas.len(), 1);
         assert!(deltas.get(&start).copied().unwrap_or(0.0) < -999.0);
     }
@@ -239,7 +283,7 @@ mod tests {
     fn monthly_overlay_delta_sum_zero_when_no_adjustments() {
         let today = NaiveDate::from_ymd_opt(2026, 6, 15).unwrap();
         let month_start = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
-        let sum = monthly_overlay_delta_sum(&[], &[], month_start, today);
+        let sum = monthly_overlay_delta_sum(&[], &[], month_start, today, &CategoryRemoveCaps::new());
         assert_eq!(sum, 0.0);
     }
 
@@ -253,11 +297,49 @@ mod tests {
             AdjustmentFrequency::Monthly,
             month_start,
         )];
-        let sum = monthly_overlay_delta_sum(&adjustments, &[], month_start, today);
+        let sum = monthly_overlay_delta_sum(&adjustments, &[], month_start, today, &CategoryRemoveCaps::new());
         assert!(
             sum < -299.0 && sum > -301.0,
             "leasing overlay delta expected ~-300, got {sum}"
         );
+    }
+
+    #[test]
+    fn category_remove_outflow_clamped_to_cap() {
+        let start = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2026, 6, 30).unwrap();
+        let mut adjustment = adj(
+            AdjustmentDirection::RemoveOutflow,
+            200.0,
+            AdjustmentFrequency::Monthly,
+            start,
+        );
+        adjustment.target_type = AdjustmentTarget::Category;
+        adjustment.target_key = Some("entertainment".into());
+
+        let mut caps = CategoryRemoveCaps::new();
+        caps.insert("entertainment".into(), 85.5);
+
+        let deltas = build_overlay_deltas(&[adjustment], &[], start, end, &caps);
+        let total: f64 = deltas.values().sum();
+        assert!(total > 84.0 && total < 86.0, "expected ~85.5 cap, got {total}");
+    }
+
+    #[test]
+    fn category_remove_zero_cap_produces_no_overlay() {
+        let start = NaiveDate::from_ymd_opt(2026, 6, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2026, 6, 30).unwrap();
+        let mut adjustment = adj(
+            AdjustmentDirection::RemoveOutflow,
+            100.0,
+            AdjustmentFrequency::Monthly,
+            start,
+        );
+        adjustment.target_type = AdjustmentTarget::Category;
+        adjustment.target_key = Some("new_cat".into());
+
+        let deltas = build_overlay_deltas(&[adjustment], &[], start, end, &CategoryRemoveCaps::new());
+        assert!(deltas.is_empty());
     }
 
     #[test]
@@ -279,7 +361,7 @@ mod tests {
             interval_days: 30,
         }];
 
-        let deltas = build_overlay_deltas(&[adjustment], &subs, start, end);
+        let deltas = build_overlay_deltas(&[adjustment], &subs, start, end, &CategoryRemoveCaps::new());
         assert!(!deltas.is_empty());
         assert!(deltas.values().any(|v| *v > 12.0));
     }

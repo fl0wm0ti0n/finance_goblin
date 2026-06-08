@@ -1,5 +1,274 @@
 # TL -> Dev Handoff
 
+## sprint-plan-20260610-s0019-us0020 — US-0020 subscription discover sprint
+
+**From:** Tech Lead  
+**To:** Dev (`/execute`) / QA (`/plan-verify`) / Operator (V1)  
+**Date:** 2026-06-10  
+**Work item:** US-0020 (story)  
+**Sprint:** **S0019**  
+**Orchestrator run:** `auto-20260608-us0020-001`  
+**Next phase:** `/plan-verify` (role: qa)
+
+### Summary
+
+Sprint **S0019** formalizes architecture **DEC-0098** (discover explorer), **DEC-0099** (manual confirm-from-discover), **DEC-0100** (majority display category), **DEC-0101** (tag schema), **DEC-0102** (tag assign/filter), **DEC-0103** (Grafana `$tag` P2 optional) — twelve tasks (11 mandatory + 1 optional P2); no split (12 = `SPRINT_MAX_TASKS` 12). Vertical slice: S1 migration + discover → S2 confirm → S3 majority → S4/S5 tags → S6 docs/regression.
+
+**Decisions:** **DEC-0098**..**DEC-0103** (+ **DEC-0084**, **DEC-0085**, **DEC-0086**, **DEC-0087**)  
+**Research:** **R-0085**, **R-0080**  
+**Architecture ref:** `docs/engineering/architecture.md` § **US-0020**  
+**Sprint ref:** `sprints/S0019/sprint.md`, `sprints/S0019/tasks.md`, `sprints/S0019/sprint.json`
+
+### Execute order (frozen)
+
+| Order | Task | Primary files | Acceptance |
+|-------|------|---------------|------------|
+| 1 | **T-0198** | `migrations/`, `subscriptions/types.rs` | AC-5 |
+| 2 | **T-0199** | `subscriptions/discovery.rs`, `api/subscriptions.rs` | AC-1 |
+| 3 | **T-0200** | `SubscriptionsPage.tsx` | AC-1 |
+| 4 | **T-0201** | `repository.rs`, `service.rs`, `api/subscriptions.rs` | AC-2 |
+| 5 | **T-0202** | `repository.rs` | AC-3, AC-5 |
+| 6 | **T-0203** | `SubscriptionsPage.tsx` | AC-3 |
+| 7 | **T-0204** | `api/subscription_tags.rs` | AC-4, AC-5 |
+| 8 | **T-0205** | `api/subscriptions.rs` | AC-4 |
+| 9 | **T-0206** | `SubscriptionsPage.tsx` | AC-4 |
+| 10 | **T-0207** | `docs/user-guides/US-0020.md` | user guide |
+| 11 | **T-0208** | `subscriptions/` tests, `uat.md` | AC-6 |
+| 12 | **T-0209** | `uat.md`, `uat.json` | AC-6 |
+| (opt) | **T-0210** | `subscriptions.json` | DEC-0103 P2 |
+
+### Acceptance mapping
+
+| Row | Tasks | Verify |
+|-----|-------|--------|
+| **AC-1** | T-0199, T-0200, T-0209 | Discover search: account + payee + interval; cap 50 |
+| **AC-2** | T-0201, T-0209 | Manual confirm without auto-detection-only path |
+| **AC-3** | T-0202, T-0203, T-0209 | Majority category badge + tie-break tooltip |
+| **AC-4** | T-0204, T-0205, T-0206, T-0209 | Tag CRUD; multi-assign; list filter |
+| **AC-5** | T-0198, T-0202, T-0204, T-0209 | Product DB overlay; no Firefly write-back |
+| **AC-6** | T-0207, T-0208, T-0209 | US-0003/US-0008 regression; OIDC smoke |
+
+`fresh_context_marker`: `sprint-plan-20260610-us0020-tl-fresh`  
+`runtime_proof_id`: `runtime-proof-sprint-plan-20260610-us0020-001`  
+`phase_boundary`: sprint-plan → plan-verify
+
+---
+
+## architecture-20260610-us0020 — US-0020 subscription discover, category & tags
+
+**From:** Tech Lead  
+**To:** Sprint-plan  
+**Date:** 2026-06-10  
+**Story:** US-0020  
+**Orchestrator run:** `auto-20260608-us0020-001`  
+**Next phase:** `/sprint-plan`
+
+### Summary
+
+[R-0085](docs/engineering/research.md#r-0085--us-0020-subscription-discover-majority-category--operator-tags) **14 core gates resolved** (+ amount band + Grafana stretch) — discover explorer reusing recurrence core, manual confirm-from-discover with DEC-0085 merge, RANK majority `display_category_id`, operator tag schema + assign/filter APIs. Builds on US-0003 detection + **DEC-0084**..**DEC-0086** + US-0018 **DEC-0087** category catalog.
+
+### Decisions
+
+| ID | Topic | Contract |
+|----|-------|----------|
+| **DEC-0098** | Discover explorer | Reuse `detect_recurrence_groups`; GET `/discover`; cap 50; amount P2 |
+| **DEC-0099** | Manual confirm | POST `/discover/confirm`; direct confirmed; merge; 409 rejection; no alert |
+| **DEC-0100** | Majority category | `display_category_id`; RANK tie-break; recompute on merge |
+| **DEC-0101** | Tag schema | `operator_tags` + junction; hard delete |
+| **DEC-0102** | Tag assign/filter | PUT replace set; `?tag=` slug |
+| **DEC-0103** | Grafana `$tag` | P2 stretch if ≤12 tasks |
+
+### Sprint recommendation
+
+**S0019** — 10 P0 + 2 P1 + 1 P2 optional (G1 Grafana) = 12 at `SPRINT_MAX_TASKS`; no split.
+
+| Slice | Tasks |
+|-------|-------|
+| S1 Discover | M1 migration partial, D1 API, D2 UI |
+| S2 Confirm | C1 discover/confirm |
+| S3 Majority | C2 compute, C3 badge |
+| S4 Tags API | T1 CRUD, T2 assign/filter |
+| S5 Tags UI | T3 manager + chips |
+| S6 Regression | R1 user guide, R2 US-0003/0008 tests, V1 smoke |
+
+**Architecture ref:** `docs/engineering/architecture.md` § **US-0020**  
+**Spec-pack:** `docs/engineering/spec-pack/US-0020-{design-concept,crs,technical-specification}.md`
+
+`fresh_context_marker`: `architecture-20260610-us0020-tl-fresh`  
+`runtime_proof_id`: `runtime-proof-architecture-20260610-us0020-001`  
+`phase_boundary`: architecture → sprint-plan
+
+---
+
+## sprint-plan-20260609-s0018-us0019 — US-0019 goal-driven planning sprint
+
+**From:** Tech Lead  
+**To:** Dev (`/execute`) / QA (`/plan-verify`) / Operator (V1)  
+**Date:** 2026-06-09  
+**Work item:** US-0019 (story)  
+**Sprint:** **S0018**  
+**Orchestrator run:** `auto-20260608-us0019-001`  
+**Next phase:** `/plan-verify` (role: qa)
+
+### Summary
+
+Sprint **S0018** formalizes architecture **DEC-0091** (goal_balance schema), **DEC-0092** (goal-stats API), **DEC-0093** (category overlay cap), **DEC-0094** (deterministic savings ranking), **DEC-0095** (goal account scope), **DEC-0096** (PVA unchanged), **DEC-0097** (REST-primary savings) — twelve tasks (11 mandatory + 1 optional P2); no split (12 = `SPRINT_MAX_TASKS` 12). Vertical slice: S1 schema → S2 stats ∥ S3 overlay → S4 savings → S5 docs/regression.
+
+**Decisions:** **DEC-0091**..**DEC-0097** (+ **DEC-0087**, **DEC-0089**, **DEC-0007**, **DEC-0032**)  
+**Research:** **R-0084**, **R-0080**  
+**Architecture ref:** `docs/engineering/architecture.md` § **US-0019**  
+**Sprint ref:** `sprints/S0018/sprint.md`, `sprints/S0018/tasks.md`, `sprints/S0018/sprint.json`
+
+### Execute order (frozen)
+
+| Order | Task | Primary files | Acceptance |
+|-------|------|---------------|------------|
+| 1 | **T-0186** | `migrations/`, `plan/types.rs` | AC-1 |
+| 2 | **T-0187** | `api/plans.rs`, `PlanningPage.tsx` | AC-1 |
+| 3 | **T-0188** | `plan/service.rs` | AC-2 |
+| 4 | **T-0189** | `api/plans.rs`, `components/plan/` | AC-2 |
+| 5 | **T-0190** | `plan/overlay.rs` | AC-3 |
+| 6 | **T-0191** | `plan/project.rs` | AC-3 |
+| 7 | **T-0192** | `plan/savings_service.rs`, `api/plans.rs` | AC-4, AC-5 |
+| 8 | **T-0193** | `PlanningPage.tsx` | AC-4, AC-5 |
+| 9 | **T-0194** | `docs/user-guides/US-0019.md` | user guide |
+| 10 | **T-0195** | `PlanningPage` tests, `uat.md` | AC-6 |
+| 11 | **T-0197** | `uat.md`, `uat.json` | AC-6 |
+| (opt) | **T-0196** | `ai/tools/` | AC-5 (DEC-0097 P2) |
+
+### Acceptance mapping
+
+| Row | Tasks | Verify |
+|-----|-------|--------|
+| **AC-1** | T-0186, T-0187, T-0197 | Goal balance template; target fields persist |
+| **AC-2** | T-0188, T-0189, T-0197 | Per-plan stats strip; not household on detail |
+| **AC-3** | T-0190, T-0191, T-0197 | Category overlay affects compare/PVA after recompute |
+| **AC-4** | T-0192, T-0193, T-0197 | Suggestions + operator select apply |
+| **AC-5** | T-0192, T-0193, T-0196, T-0197 | Aggregates only; audit log |
+| **AC-6** | T-0194, T-0195, T-0197 | US-0014 templates; OIDC smoke |
+
+`fresh_context_marker`: `sprint-plan-20260609-us0019-tl-fresh`  
+`runtime_proof_id`: `runtime-proof-sprint-plan-20260609-us0019-001`  
+`phase_boundary`: sprint-plan → plan-verify
+
+---
+
+## architecture-20260609-us0019 — US-0019 goal-driven planning architecture
+
+**From:** Tech Lead  
+**To:** Sprint-plan  
+**Date:** 2026-06-09  
+**Story:** US-0019  
+**Orchestrator run:** `auto-20260608-us0019-001`  
+**Next phase:** `/sprint-plan`
+
+### Summary
+
+[R-0084](docs/engineering/research.md#r-0084--us-0019-goal-plans-per-plan-stats-category-overlay--ai-savings) **11 gates resolved** — goal schema, per-plan stats API, category overlay caps, deterministic savings ranking, goal account defaults, feasibility copy, PVA scope, AI tool path. Builds on US-0018 **DEC-0087**..**DEC-0089** (category catalog + compare actuals-only).
+
+### Decisions
+
+| ID | Topic | Contract |
+|----|-------|----------|
+| **DEC-0091** | Goal schema | `goal_balance` template; `target_balance_eur`, `target_date`, `goal_account_id` on `plans` |
+| **DEC-0092** | Goal-stats | `GET …/goal-stats`; calendar yearly rollup; gap + required monthly copy; `beyond_horizon` |
+| **DEC-0093** | Category overlay | `remove_outflow` cap = 3-mo avg outflow; `add_outflow` household-labeled |
+| **DEC-0094** | Savings | Deterministic top-N; fixed-bucket exclusion; modal checkbox apply |
+| **DEC-0095** | Account | Optional `goal_account_id`; default max-balance asset |
+| **DEC-0096** | PVA | Household active plan unchanged |
+| **DEC-0097** | AI | REST primary; optional `get_category_savings` P2 |
+
+### Sprint-plan input
+
+Recommended **S0018** — 9 P0 + 2 P1 + 1 P2 optional (≤12 tasks): G1–G2 schema, S1–S2 goal-stats, O1–O2 overlay, A1–A2 savings modal, D1/R1 docs, V1 smoke, T1 optional tool.
+
+**Artifacts:** `docs/engineering/architecture.md` § **US-0019**; `docs/engineering/spec-pack/US-0019-*.md`; `decisions/DEC-0091.md`..`DEC-0097.md`
+
+`fresh_context_marker`: `architecture-20260609-us0019-tl-fresh`  
+`runtime_proof_id`: `runtime-proof-architecture-20260609-us0019-001`
+
+---
+
+## sprint-plan-20260608-s0017-us0018 — US-0018 category filters & expense trend analytics
+
+**From:** Tech Lead  
+**To:** Dev (`/execute`) / QA (`/plan-verify`) / Operator (V1)  
+**Date:** 2026-06-08  
+**Work item:** US-0018 (story)  
+**Sprint:** **S0017**  
+**Orchestrator run:** `auto-20260608-us0018-001`  
+**Next phase:** `/plan-verify` (role: qa)
+
+### Summary
+
+Sprint **S0017** formalizes architecture **DEC-0087** (expense-series API + `__uncategorized__`), **DEC-0088** (CategoryFilter + bar CategoryTrendChart), **DEC-0089** (forecast actuals-only + planning widget + independent Grafana `$category`), **DEC-0090** (index deferral) — eleven tasks (10 mandatory + 1 optional P2); no split (11 < `SPRINT_MAX_TASKS` 12). Vertical slice: S1 API → S2 components → S3 surfaces ∥ S4 Grafana → S5 docs/regression.
+
+**Decisions:** **DEC-0087**, **DEC-0088**, **DEC-0089**, **DEC-0090** (+ **DEC-0007**, **DEC-0032**)  
+**Research:** **R-0080**, **R-0083**  
+**Architecture ref:** `docs/engineering/architecture.md` § **US-0018**  
+**Sprint ref:** `sprints/S0017/sprint.md`, `sprints/S0017/tasks.md`, `sprints/S0017/sprint.json`
+
+### Execute order (frozen)
+
+| Order | Task | Primary files | Acceptance |
+|-------|------|---------------|------------|
+| 1 | **T-0175** | `transactions/repository.rs` | AC-2, AC-5 |
+| 2 | **T-0176** | `api/categories.rs`, `api/mod.rs` | AC-1, AC-2, AC-4, AC-5 |
+| 3 | **T-0177** | `components/category/*`, `api.ts` | AC-1, AC-3, AC-4 |
+| 4 | **T-0178** | `ForecastPage.tsx` | AC-1, AC-3, AC-4 |
+| 5 | **T-0179** | `PlanningPage.tsx` | AC-1 |
+| 6 | **T-0180** | `WealthPage.tsx` | AC-1 |
+| 7 | **T-0181** | `cashflow.json` | AC-1 |
+| 8 | **T-0182** | `budgets.json` | AC-1 |
+| 9 | **T-0183** | `docs/user-guides/US-0018.md` | user guide |
+| 10 | **T-0184** | `uat.md`, `uat.json` | AC-6 |
+| (opt) | **T-0185** | migration optional | DEC-0090 gate |
+
+### Acceptance mapping
+
+| Row | Tasks | Verify |
+|-----|-------|--------|
+| **AC-1** | T-0176..T-0182, T-0184 | Filter on forecast, planning, wealth + cashflow/budgets Grafana |
+| **AC-2** | T-0175, T-0176 | Monthly series API 12 default / 24 max |
+| **AC-3** | T-0177, T-0178 | Bar trend chart; empty-state |
+| **AC-4** | T-0176, T-0177, T-0178 | MoM + best/worst from API summary |
+| **AC-5** | T-0175, T-0176 | `__uncategorized__` explicit bucket |
+| **AC-6** | T-0184 | OIDC smoke; US-0015 unchanged; read-only Firefly |
+
+### Operator gates (before V1)
+
+1. **BACKEND_FRONTEND_DEPLOY** — S0017 backend + frontend on omniflow
+2. **Full Firefly sync** — category_id mirror current
+
+### Frozen boundaries
+
+- **Forecast household buckets unchanged** — category filter scopes actuals trend only (DEC-0089)
+- **Planning compare API unchanged** — no `category_id` query param
+- **Grafana independent** — no iframe query sync with SPA
+- **No** `project.rs` / US-0015 bucket_inference changes
+- **T-0185 optional** — index only if EXPLAIN >50 ms
+
+### Test contract
+
+- T-0175: `cargo test` spine zeros, `__uncategorized__`, 24-month cap
+- T-0176: categories API integration tests; summary fields
+- T-0177/T-0178: frontend component + ForecastPage integration
+- T-0181/T-0182: Grafana JSON provisioning valid
+- T-0184: `sprints/S0017/uat.md` OIDC smoke AC-1..AC-6 on omniflow
+
+### Artifacts created
+
+- `sprints/S0017/{sprint.md,sprint.json,tasks.md,progress.md,uat.md,uat.json}`
+- `handoffs/tl_to_dev.md` (this section)
+- `docs/product/backlog.md#US-0018` (sprint_id S0017)
+- `docs/engineering/state.md` (traceability + governance)
+
+### Prior handoff
+
+`architecture-20260608-us0018` in `handoffs/po_to_tl.md` — superseded for execute by this sprint-plan handoff.
+
+---
+
 ## sprint-plan-20260607-q0023-bug0015 — BUG-0015 confirm persistence after rebuild
 
 **From:** Tech Lead  

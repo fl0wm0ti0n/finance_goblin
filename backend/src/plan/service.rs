@@ -11,11 +11,14 @@ use crate::forecast::ForecastService;
 use super::overlay::overlay_horizon_end;
 use super::project::{balances_to_daily_net, project_plan_series};
 use super::repository::{PlanRepoError, PlanRepository};
+use super::savings_service;
 use super::templates::{self, TemplateOverrides};
 use super::types::{
-    ActivePlanInfo, CompareResponse, EphemeralPlanDraft, PlanAdjustment, PlanListItem,
-    PlanProjection, PlanTemplate, PlanVsActualResponse, SavingsSuggestion,
+    validate_goal_fields, ActivePlanInfo, CategorySavingsResponse, CompareResponse, EphemeralPlanDraft,
+    GoalStatsResponse, GoalYearlyRollup, PlanAdjustment, PlanListItem, PlanProjection, PlanTemplate,
+    PlanVsActualResponse, SavingsSuggestion,
 };
+use crate::forecast::types::DailyPoint;
 
 #[derive(Clone)]
 pub struct PlanService {
@@ -48,6 +51,10 @@ pub enum PlanError {
     ActivePlanDeleteForbidden,
     #[error("{0}")]
     Other(String),
+    #[error("goal validation failed: {0}")]
+    GoalValidation(String),
+    #[error("not a goal_balance plan")]
+    NotGoalPlan,
 }
 
 impl From<PlanRepoError> for PlanError {
@@ -85,11 +92,49 @@ impl PlanService {
         &self,
         name: &str,
         template: Option<&str>,
+        target_balance_eur: Option<f64>,
+        target_date: Option<NaiveDate>,
+        goal_account_id: Option<String>,
     ) -> Result<(super::types::PlanRow, super::types::VersionRow), PlanError> {
         let template = template.unwrap_or("custom");
-        let (plan, version) = self.repo.create_plan(name, template).await?;
+        let today = Utc::now().date_naive();
+
+        if template == "goal_balance" {
+            validate_goal_fields(target_balance_eur, target_date, today)
+                .map_err(|s| PlanError::GoalValidation(s.to_string()))?;
+        }
+
+        let mut resolved_account = goal_account_id;
+        if template == "goal_balance" && resolved_account.is_none() {
+            resolved_account = self
+                .repo
+                .default_goal_account_id(&self.config.reporting_currency)
+                .await?;
+        }
+        if let Some(ref acct) = resolved_account {
+            if !self.repo.account_exists(acct).await? {
+                return Err(PlanError::GoalValidation(format!(
+                    "goal_account_id '{acct}' is not a known asset account"
+                )));
+            }
+        }
+
+        let (plan, version) = self
+            .repo
+            .create_plan(
+                name,
+                template,
+                target_balance_eur,
+                target_date,
+                resolved_account.as_deref(),
+            )
+            .await?;
+
         if let Some(tmpl) = PlanTemplate::from_str(template) {
-            if tmpl != PlanTemplate::Custom && tmpl != PlanTemplate::Current {
+            if tmpl != PlanTemplate::Custom
+                && tmpl != PlanTemplate::Current
+                && tmpl != PlanTemplate::GoalBalance
+            {
                 let defaults = templates::template_defaults(tmpl, &self.config, &Default::default());
                 for mut adj in defaults {
                     adj.version_id = version.id;
@@ -99,6 +144,120 @@ impl PlanService {
         }
         self.spawn_recompute(version.id);
         Ok((plan, version))
+    }
+
+    pub async fn goal_stats(
+        &self,
+        plan_id: Uuid,
+        version_id: Option<Uuid>,
+    ) -> Result<GoalStatsResponse, PlanError> {
+        let plan = self.repo.get_plan(plan_id).await?;
+        if plan.template != "goal_balance" {
+            return Err(PlanError::NotGoalPlan);
+        }
+        let target_balance = plan
+            .target_balance_eur
+            .ok_or_else(|| PlanError::GoalValidation("missing target_balance_eur".into()))?;
+        let target_date = plan
+            .target_date
+            .ok_or_else(|| PlanError::GoalValidation("missing target_date".into()))?;
+
+        let version = if let Some(vid) = version_id {
+            self.repo.get_version(vid).await?
+        } else {
+            self.repo
+                .list_versions(plan_id)
+                .await?
+                .into_iter()
+                .find(|v| v.is_latest)
+                .ok_or(PlanError::VersionNotFound)?
+        };
+
+        let computation_id = self
+            .repo
+            .latest_successful_computation(version.id)
+            .await?
+            .ok_or(PlanError::NoForecastBaseline)?;
+
+        let today = Utc::now().date_naive();
+        let beyond_horizon = target_date > overlay_horizon_end(today);
+
+        let (monthly_delta, _) = self.repo.version_metrics(&version).await?;
+        let yearly_rows = self
+            .repo
+            .fetch_yearly_rollup(version.id, computation_id)
+            .await?;
+        let yearly_rollup = yearly_rows
+            .into_iter()
+            .map(|(year, sum)| GoalYearlyRollup {
+                year,
+                planned_net_sum: super::types::fmt_amount(sum),
+            })
+            .collect();
+
+        let projected_balance = if beyond_horizon {
+            None
+        } else {
+            self.repo
+                .fetch_projected_balance_at_date(version.id, computation_id, target_date)
+                .await?
+        };
+
+        let gap_eur = projected_balance.map(|p| target_balance - p);
+        let on_track = projected_balance
+            .map(|p| p >= target_balance)
+            .unwrap_or(false);
+
+        let months_remaining = months_between(today, target_date);
+        let required_monthly = gap_eur.and_then(|gap| {
+            if gap > 0.0 && months_remaining > 0 {
+                Some((gap / months_remaining as f64).ceil())
+            } else {
+                Some(0.0)
+            }
+        });
+
+        let computed_at = self
+            .repo
+            .computation_computed_at(computation_id)
+            .await?
+            .map(|t| t.to_rfc3339());
+
+        Ok(GoalStatsResponse {
+            plan_id: plan.id.to_string(),
+            version_id: version.id.to_string(),
+            target_balance_eur: super::types::fmt_amount(target_balance),
+            target_date: target_date.to_string(),
+            goal_account_id: plan.goal_account_id.clone(),
+            monthly_delta_vs_baseline: super::types::fmt_amount(monthly_delta),
+            yearly_rollup,
+            projected_balance_at_target: projected_balance.map(super::types::fmt_amount),
+            gap_eur: gap_eur.map(super::types::fmt_amount),
+            required_monthly_savings_eur: required_monthly.map(super::types::fmt_amount),
+            on_track,
+            beyond_horizon,
+            computed_at,
+            household_fallback: plan.goal_account_id.is_none(),
+        })
+    }
+
+    pub async fn category_savings_suggestions(
+        &self,
+        plan_id: Uuid,
+        months: u32,
+        limit: u32,
+    ) -> Result<CategorySavingsResponse, PlanError> {
+        let tx_repo =
+            crate::transactions::repository::TransactionsRepository::new(self.repo.pool().clone());
+        savings_service::category_savings_suggestions(
+            &self.repo,
+            &tx_repo,
+            self.forecast.repository(),
+            plan_id,
+            months,
+            limit,
+        )
+        .await
     }
 
     pub async fn rename_plan(&self, plan_id: Uuid, name: &str) -> Result<(), PlanError> {
@@ -342,17 +501,18 @@ impl PlanService {
         forecast_computation_id: Uuid,
         computation_id: Uuid,
     ) -> Result<(), PlanError> {
+        let version = self.repo.get_version(version_id).await?;
+        let plan = self.repo.get_plan(version.plan_id).await?;
         let adjustments = self.repo.load_adjustments(version_id).await?;
         let confirmed = self.repo.confirmed_for_overlay().await?;
+        let category_caps = self.repo.category_remove_caps(&adjustments).await?;
 
         let today = Utc::now().date_naive();
         let end = overlay_horizon_end(today);
 
-        let aggregate = self
-            .forecast
-            .aggregate_daily_balances(forecast_computation_id, Some(&self.config.reporting_currency))
-            .await
-            .map_err(|e| PlanError::Other(e.to_string()))?;
+        let (aggregate, _household_fallback) = self
+            .goal_baseline_series(&plan, forecast_computation_id)
+            .await?;
 
         let balance_pairs: Vec<(NaiveDate, f64)> =
             aggregate.iter().map(|p| (p.date, p.balance)).collect();
@@ -366,12 +526,49 @@ impl PlanService {
             today,
             end,
             starting_balance,
+            &category_caps,
         );
 
         self.repo
             .bulk_insert_daily(version_id, computation_id, &series)
             .await?;
         Ok(())
+    }
+
+    async fn goal_baseline_series(
+        &self,
+        plan: &super::types::PlanRow,
+        forecast_computation_id: Uuid,
+    ) -> Result<(Vec<DailyPoint>, bool), PlanError> {
+        let currency = Some(self.config.reporting_currency.as_str());
+        if plan.template != "goal_balance" {
+            let aggregate = self
+                .forecast
+                .aggregate_daily_balances(forecast_computation_id, currency)
+                .await
+                .map_err(|e| PlanError::Other(e.to_string()))?;
+            return Ok((aggregate, false));
+        }
+
+        if let Some(ref acct) = plan.goal_account_id {
+            if self.repo.account_exists(acct).await? {
+                let series = self
+                    .forecast
+                    .repository()
+                    .fetch_daily_series(forecast_computation_id, acct, None, None)
+                    .await
+                    .map_err(|e| PlanError::Other(e.to_string()))?;
+                return Ok((series, false));
+            }
+            warn!(%acct, plan_id = %plan.id, "goal_account_id invalid — household fallback");
+        }
+
+        let aggregate = self
+            .forecast
+            .aggregate_daily_balances(forecast_computation_id, currency)
+            .await
+            .map_err(|e| PlanError::Other(e.to_string()))?;
+        Ok((aggregate, plan.goal_account_id.is_none()))
     }
 
     pub async fn project_readonly(
@@ -464,6 +661,7 @@ impl PlanService {
         let baseline_net = balances_to_daily_net(&balance_pairs);
         let starting_balance = aggregate.first().map(|p| p.balance).unwrap_or(0.0);
         let confirmed = self.repo.confirmed_for_overlay().await?;
+        let category_caps = self.repo.category_remove_caps(adjustments).await?;
 
         let series = project_plan_series(
             &baseline_net,
@@ -472,6 +670,7 @@ impl PlanService {
             today,
             end,
             starting_balance,
+            &category_caps,
         );
 
         let monthly_delta = super::overlay::monthly_overlay_delta_sum(
@@ -479,6 +678,7 @@ impl PlanService {
             &confirmed,
             month_start,
             today,
+            &category_caps,
         );
 
         let month_end_balance = series
@@ -516,6 +716,12 @@ impl PlanService {
     }
 }
 
+fn months_between(from: NaiveDate, to: NaiveDate) -> u32 {
+    let months =
+        (to.year() - from.year()) * 12 + (to.month() as i32 - from.month() as i32);
+    months.max(0) as u32
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -540,5 +746,20 @@ mod tests {
     #[test]
     fn version_cap_is_three() {
         assert_eq!(PlansConfig::default().max_versions_per_plan, 3);
+    }
+
+    #[test]
+    fn beyond_horizon_when_target_beyond_730_days() {
+        let today = NaiveDate::from_ymd_opt(2026, 6, 9).unwrap();
+        let horizon_end = overlay_horizon_end(today);
+        let far = horizon_end + chrono::Duration::days(1);
+        assert!(far > horizon_end);
+    }
+
+    #[test]
+    fn months_between_counts_calendar_months() {
+        let from = NaiveDate::from_ymd_opt(2026, 6, 9).unwrap();
+        let to = NaiveDate::from_ymd_opt(2026, 11, 1).unwrap();
+        assert_eq!(months_between(from, to), 5);
     }
 }

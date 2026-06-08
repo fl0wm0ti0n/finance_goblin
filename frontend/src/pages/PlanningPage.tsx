@@ -2,6 +2,9 @@ import { lazy, Suspense, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   apiFetch,
+  CategorySavingsSuggestion,
+  fetchCategorySavingsSuggestions,
+  fetchGoalStats,
   PlanAdjustment,
   PlanCompare,
   PlanDetail,
@@ -25,6 +28,17 @@ const PlanVsActualChart = lazy(() =>
     default: m.PlanVsActualChart,
   })),
 );
+const CategoryFilter = lazy(() =>
+  import("../components/category/CategoryFilter").then((m) => ({ default: m.CategoryFilter })),
+);
+const CategoryTrendChart = lazy(() =>
+  import("../components/category/CategoryTrendChart").then((m) => ({
+    default: m.CategoryTrendChart,
+  })),
+);
+const GoalStatsStrip = lazy(() =>
+  import("../components/plan/GoalStatsStrip").then((m) => ({ default: m.GoalStatsStrip })),
+);
 
 type Tab = "scenarios" | "compare" | "plan-vs-actual";
 
@@ -34,6 +48,11 @@ const TEMPLATES = [
   { id: "savings_mode", label: "Savings mode", desc: "Remove subscriptions + optional cut" },
   { id: "house_purchase", label: "House purchase", desc: "+€500/month savings transfer" },
   { id: "allocation_target", label: "Allocation target", desc: "50/50 ETF vs crypto weights" },
+  {
+    id: "goal_balance",
+    label: "Goal balance",
+    desc: "Target balance by date (per-plan stats)",
+  },
   { id: "custom", label: "Custom", desc: "Start empty and add lines" },
 ];
 
@@ -60,6 +79,7 @@ const defaultAdjustmentForm = (): AdjustmentFormState => ({
 export function PlanningPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("scenarios");
+  const [compareCategoryId, setCompareCategoryId] = useState("");
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [newPlanName, setNewPlanName] = useState("");
@@ -74,6 +94,15 @@ export function PlanningPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<AdjustmentFormState>(defaultAdjustmentForm);
   const [deleteConfirmPlan, setDeleteConfirmPlan] = useState<PlanListItem | null>(null);
+  const [goalTargetBalance, setGoalTargetBalance] = useState("10000");
+  const [goalTargetDate, setGoalTargetDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 5);
+    return d.toISOString().slice(0, 10);
+  });
+  const [goalAccountId, setGoalAccountId] = useState("");
+  const [categorySavingsOpen, setCategorySavingsOpen] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   const plansQuery = useQuery({
     queryKey: ["plans"],
@@ -151,11 +180,36 @@ export function PlanningPage() {
 
   const templateLabel = (id: string) => TEMPLATES.find((t) => t.id === id)?.label ?? id;
 
+  const activePlanTemplate = detailQuery.data?.plan.template;
+  const isGoalPlan = activePlanTemplate === "goal_balance";
+
+  const goalStatsQuery = useQuery({
+    queryKey: ["goal-stats", activePlanId, viewingVersionId],
+    queryFn: () => fetchGoalStats(activePlanId!, viewingVersionId ?? undefined),
+    enabled: !!activePlanId && isGoalPlan,
+    retry: false,
+  });
+
+  const categorySavingsQuery = useQuery({
+    queryKey: ["category-savings", activePlanId],
+    queryFn: () => fetchCategorySavingsSuggestions(activePlanId!),
+    enabled: categorySavingsOpen && !!activePlanId && isGoalPlan,
+  });
+
   const createPlanMutation = useMutation({
-    mutationFn: (payload: { name: string; template?: string }) =>
+    mutationFn: (payload: {
+      name: string;
+      template?: string;
+      target_balance_eur?: string;
+      target_date?: string;
+      goal_account_id?: string;
+    }) =>
       apiFetch<PlanDetail>("/api/v1/plans", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          ...payload,
+          goal_account_id: payload.goal_account_id || undefined,
+        }),
       }),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["plans"] });
@@ -337,6 +391,49 @@ export function PlanningPage() {
       }),
   });
 
+  const applyCategorySavingsMutation = useMutation({
+    mutationFn: async (suggestions: CategorySavingsSuggestion[]) => {
+      if (!activePlanId || !viewingVersionId) {
+        throw new Error("No plan version selected");
+      }
+      for (const s of suggestions) {
+        await apiFetch<PlanAdjustment>(
+          `/api/v1/plans/${activePlanId}/versions/${viewingVersionId}/adjustments`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              direction: "remove_outflow",
+              amount: Number(s.suggested_reduction_eur),
+              frequency: "monthly",
+              target_type: "category",
+              target_key: s.category_id,
+              label: `Reduce ${s.category_name}`,
+              effective_from: todayIso(),
+            }),
+          },
+        );
+      }
+    },
+    onSuccess: (_data, suggestions) => {
+      queryClient.invalidateQueries({ queryKey: ["plan-version"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-compare"] });
+      queryClient.invalidateQueries({ queryKey: ["plan-vs-actual"] });
+      queryClient.invalidateQueries({ queryKey: ["goal-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["category-savings"] });
+      setCategorySavingsOpen(false);
+      setSelectedCategories([]);
+      showPlanningFeedback({
+        kind: "success",
+        message: `Applied ${suggestions.length} category savings line(s) — recompute pending`,
+      });
+    },
+    onError: (err) =>
+      showPlanningFeedback({
+        kind: "error",
+        message: formatPlanningError(err, "Could not apply category savings"),
+      }),
+  });
+
   const deleteAdjustmentMutation = useMutation({
     mutationFn: (adjustmentId: string) =>
       apiFetch<void>(
@@ -355,6 +452,39 @@ export function PlanningPage() {
         message: formatPlanningError(err, "Could not delete adjustment"),
       }),
   });
+
+  const createGoalPlan = (name: string) =>
+    createPlanMutation.mutate({
+      name,
+      template: "goal_balance",
+      target_balance_eur: goalTargetBalance,
+      target_date: goalTargetDate,
+      goal_account_id: goalAccountId.trim() || undefined,
+    });
+
+  const renderGoalFields = () => (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
+      <input
+        type="number"
+        step="0.01"
+        placeholder="Target €"
+        value={goalTargetBalance}
+        onChange={(e) => setGoalTargetBalance(e.target.value)}
+        style={{ width: "7rem" }}
+      />
+      <input
+        type="date"
+        value={goalTargetDate}
+        onChange={(e) => setGoalTargetDate(e.target.value)}
+      />
+      <input
+        placeholder="Goal account id (optional)"
+        value={goalAccountId}
+        onChange={(e) => setGoalAccountId(e.target.value)}
+        style={{ minWidth: "12rem" }}
+      />
+    </div>
+  );
 
   const empty = !plansQuery.isLoading && (plansQuery.data?.length ?? 0) === 0;
   const planStale = plansQuery.data?.find((p) => p.id === activePlanId)?.plan_stale;
@@ -483,11 +613,14 @@ export function PlanningPage() {
               <div key={t.id} className="card">
                 <strong>{t.label}</strong>
                 <p style={{ fontSize: "0.9rem", color: "#64748b" }}>{t.desc}</p>
+                {t.id === "goal_balance" && renderGoalFields()}
                 <button
                   className="btn"
                   disabled={!newPlanName.trim() || createPlanMutation.isPending}
                   onClick={() =>
-                    createPlanMutation.mutate({ name: newPlanName.trim(), template: t.id })
+                    t.id === "goal_balance"
+                      ? createGoalPlan(newPlanName.trim())
+                      : createPlanMutation.mutate({ name: newPlanName.trim(), template: t.id })
                   }
                 >
                   Create from {t.label}
@@ -573,10 +706,19 @@ export function PlanningPage() {
                   <div key={t.id} className="card">
                     <strong>{t.label}</strong>
                     <p style={{ fontSize: "0.9rem", color: "#64748b" }}>{t.desc}</p>
+                    {t.id === "goal_balance" && renderGoalFields()}
                     <button
                       className="btn"
-                      disabled={!latestVersion || viewingFrozen}
+                      disabled={
+                        t.id === "goal_balance"
+                          ? !newPlanName.trim() || createPlanMutation.isPending
+                          : !latestVersion || viewingFrozen
+                      }
                       onClick={() => {
+                        if (t.id === "goal_balance") {
+                          createGoalPlan(newPlanName.trim() || `Goal ${goalTargetDate}`);
+                          return;
+                        }
                         if (t.id === "savings_mode" && latestVersion) {
                           setSavingsTemplateVersionId(latestVersion.id);
                           setSavingsOpen(true);
@@ -590,7 +732,7 @@ export function PlanningPage() {
                         }
                       }}
                     >
-                      Apply
+                      {t.id === "goal_balance" ? "Create goal plan" : "Apply"}
                     </button>
                   </div>
                 ))}
@@ -602,6 +744,23 @@ export function PlanningPage() {
                   <button className="btn primary" onClick={() => createVersionMutation.mutate()}>
                     Create new version
                   </button>
+                </div>
+              )}
+
+              {isGoalPlan && goalStatsQuery.data && (
+                <Suspense fallback={<p>Loading goal stats…</p>}>
+                  <GoalStatsStrip stats={goalStatsQuery.data} />
+                </Suspense>
+              )}
+
+              {isGoalPlan && !viewingFrozen && (
+                <div className="card" style={{ marginBottom: "1rem" }}>
+                  <button className="btn" onClick={() => setCategorySavingsOpen(true)}>
+                    Category savings suggestions
+                  </button>
+                  <p style={{ fontSize: "0.85rem", color: "#64748b", margin: "0.5rem 0 0" }}>
+                    Ranked mirror aggregates only — select lines to apply; no auto-apply.
+                  </p>
                 </div>
               )}
 
@@ -686,6 +845,34 @@ export function PlanningPage() {
 
           {tab === "compare" && compareQuery.data && (
             <div>
+              {isGoalPlan && goalStatsQuery.data && (
+                <Suspense fallback={<p>Loading goal stats…</p>}>
+                  <GoalStatsStrip stats={goalStatsQuery.data} />
+                </Suspense>
+              )}
+              <div className="card" style={{ marginBottom: "1rem" }}>
+                <Suspense fallback={<p>Loading category filter…</p>}>
+                  <CategoryFilter
+                    value={compareCategoryId}
+                    onChange={setCompareCategoryId}
+                    label="Category (actual spending preview)"
+                  />
+                </Suspense>
+                <p style={{ fontSize: "0.85rem", color: "#64748b", margin: "0.5rem 0 0" }}>
+                  Actual spending trend only — plan compare metrics and version table below are
+                  household-level and unaffected by this filter.
+                </p>
+              </div>
+              {compareCategoryId && (
+                <div style={{ marginBottom: "1rem" }}>
+                  <Suspense fallback={<p>Loading actuals trend…</p>}>
+                    <CategoryTrendChart
+                      categoryId={compareCategoryId}
+                      title="Actual spending trend"
+                    />
+                  </Suspense>
+                </div>
+              )}
               {compareQuery.data.at_version_cap && (
                 <div className="card" style={{ marginBottom: "1rem" }}>
                   Version cap reached (v3). Archive this plan or create a new named plan for v4.
@@ -820,6 +1007,55 @@ export function PlanningPage() {
                 Delete
               </button>
               <button className="btn" onClick={() => setDeleteConfirmPlan(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {categorySavingsOpen && (
+        <div className="modal-backdrop">
+          <div className="card modal">
+            <h3>Category savings — select reductions to apply</h3>
+            <ul style={{ listStyle: "none", padding: 0 }}>
+              {(categorySavingsQuery.data?.suggestions ?? []).map((s) => (
+                <li key={s.category_id} style={{ marginBottom: "0.75rem" }}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={selectedCategories.includes(s.category_id)}
+                      onChange={(e) => {
+                        setSelectedCategories((prev) =>
+                          e.target.checked
+                            ? [...prev, s.category_id]
+                            : prev.filter((id) => id !== s.category_id),
+                        );
+                      }}
+                    />{" "}
+                    <strong>{s.category_name}</strong> — reduce €{s.suggested_reduction_eur}/mo
+                    <div style={{ fontSize: "0.85rem", color: "#64748b" }}>{s.evidence_summary}</div>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+              <button
+                className="btn primary"
+                disabled={
+                  selectedCategories.length === 0 || applyCategorySavingsMutation.isPending
+                }
+                onClick={() => {
+                  const picked =
+                    categorySavingsQuery.data?.suggestions.filter((s) =>
+                      selectedCategories.includes(s.category_id),
+                    ) ?? [];
+                  applyCategorySavingsMutation.mutate(picked);
+                }}
+              >
+                Apply selected
+              </button>
+              <button className="btn" onClick={() => setCategorySavingsOpen(false)}>
                 Cancel
               </button>
             </div>

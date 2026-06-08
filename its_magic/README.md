@@ -15,16 +15,14 @@ backend, React frontend, and provisioning under the its-magic phased workflow.
 
 Recent closed work (newest first). Full history: [`docs/product/backlog.md`](docs/product/backlog.md).
 
+- US-0018 — Category filters & expense trend analytics: shared filter, expense-series API, bar trend chart, Grafana `$category` (S0017)
+- BUG-0015 — Subscription confirm persistence after rebuild: payee normalization + payee+interval inheritance (Q0023)
+- BUG-0014 — Post-rebuild omniflow: ML banner copy, wealth crypto display, plan delete UX (Q0022)
 - US-0017 — README expansion: omniflow smoke curls, troubleshooting symptom table, per-segment Product status maintenance hooks (Q0021)
 - BUG-0013 — Omniflow analytics regression: budgets MTD cap, Bitunix crypto pricing, Grafana copy (Q0020)
 - US-0015 — AI-assisted forecast bucket mapping: config→rule→LLM cascade, monthly provenance API, AI-mapped badge (S0016)
 - US-0014 — Planning UX polish: mutation feedback, onboarding confirmations, operator-visible errors (S0015)
 - US-0013 — Production ML hardening: external stats-forecast overlay, opt-in ML sync, Compare + Grafana parity (S0014)
-- BUG-0011 — Planning mode fixes: empty-plan UX, overlay-only compare deltas, PVA 200 no_active_plan (Q0019)
-- BUG-0008 — Subscription alert dedup, reconciled unread-count API, and detection recall (Q0018)
-- US-0016 — Root README living documentation for operators and contributors (S0013)
-- BUG-0007 — AI merchant/category discovery fixed via category_search and subscription enumeration (Q0017)
-- BUG-0009 — Grafana default account selection and portfolio overview restored (Q0016)
 
 ## Quickstart
 

@@ -47,23 +47,90 @@
 - BUG-0013 architecture→sprint-plan isolation prefix → `docs/engineering/state-archive/state-pack-20260606-ai.md`
 - Q0022+BUG-0014 refresh prefix → `docs/engineering/state-archive/state-pack-20260607-c.md`, `state-pack-20260607-d.md`
 - Q0023+BUG-0015 refresh prefix → `docs/engineering/state-archive/state-pack-20260607-h.md`, `state-pack-20260607-i.md`, `state-pack-20260607-j.md`
+- US-0018 refresh prefix → `docs/engineering/state-archive/state-pack-20260608-c.md`, `state-pack-20260608-d.md`
+- US-0018 sprint-plan/arch handoff → `handoffs/archive/po-to-tl-pack-20260608-c.md`
+- Architecture US-0018 prefix → `docs/engineering/architecture-archive/architecture-pack-20260608.md`
+- US-0019 segment prefix → `docs/engineering/state-archive/state-pack-20260608-g.md`
+- US-0019 sprint-plan handoff → `handoffs/archive/po-to-tl-pack-20260608-h.md`
+- US-0020 refresh prefix → `docs/engineering/state-archive/state-pack-20260608-i.md`, `state-pack-20260608-j.md`, `state-pack-20260608-k.md`
+- US-0020 discovery/sprint-plan handoff → `handoffs/archive/po-to-tl-pack-20260608-l.md`, `po-to-tl-pack-20260608-m.md`
 
 ## Session status
 
-- **Released:** US-0001 (`0.1.0-us0001`) through US-0012 (`0.12.0-us0012`, 2026-06-03) — **12/12 segment complete**; **US-0016 (`0.13.0-us0016`, S0013, 2026-06-08)**; **US-0013 (`0.14.0-us0013`, S0014, 2026-06-08)**; **US-0014 (`0.15.0-us0014`, S0015, 2026-06-08)**; **US-0015 (`0.16.0-us0015`, S0016, 2026-06-06)**; **US-0017 (`0.17.0-us0017`, Q0021, 2026-06-09)**
+- **Released:** US-0001 (`0.1.0-us0001`) through US-0012 (`0.12.0-us0012`, 2026-06-03) — **12/12 segment complete**; **US-0016 (`0.13.0-us0016`, S0013, 2026-06-08)**; **US-0013 (`0.14.0-us0013`, S0014, 2026-06-08)**; **US-0014 (`0.15.0-us0014`, S0015, 2026-06-08)**; **US-0015 (`0.16.0-us0015`, S0016, 2026-06-06)**; **US-0017 (`0.17.0-us0017`, Q0021, 2026-06-09)**; **US-0018 (`0.18.0-us0018`, S0017, 2026-06-09)**; **US-0019 (`0.19.0-us0019`, S0018, 2026-06-09)**; **US-0020 (`0.20.0-us0020`, S0019, 2026-06-10)**
 - **Released bugs:** BUG-0001 (`Q0007`), BUG-0002 (`Q0008`), BUG-0003 (`Q0009`), BUG-0004 (`Q0011`), BUG-0005 (`Q0012`), BUG-0006 (`Q0010`), BUG-0010 (`Q0013`), BUG-0012 (`Q0014+Q0015`, 2026-06-06), BUG-0009 (`Q0016`, 2026-06-06), BUG-0007 (`Q0017`, 2026-06-08), BUG-0008 (`Q0018`, 2026-06-08), BUG-0011 (`Q0019`, 2026-06-08), BUG-0013 (`Q0020`, `bug0013-q0020`, 2026-06-09), BUG-0014 (`Q0022`, `bug0014-q0022`, 2026-06-07), **BUG-0015 (`Q0023`, `bug0015-q0023`, 2026-06-07)**
 - **Active bug:** none
 - **Active quick task:** none
-- **Active story:** none (US-0017 DONE)
-- **Active sprint:** none
+- **Active story:** none (intake bundle backlog drain complete)
+- **Active sprint:** S0019 (released `0.20.0-us0020`)
 - **Open bug queue:** (empty — defect drain complete)
-- **Open stories:** (empty — backlog drain complete for current scope)
-- **Open epics:** (empty — backlog drain complete for current scope)
-- **Phase:** **release COMPLETE** → **refresh-context**
-- **Orchestrator:** `auto-20260607-bug0015-001`
-- **AUTO_BACKLOG_DRAIN:** false
+- **Open stories:** (empty — intake bundle backlog drain complete)
+- **Open epics:** (empty — intake bundle complete)
+- **Phase:** **refresh-context COMPLETE** — idle (intake bundle backlog drain complete)
+- **Orchestrator:** `auto-20260608-us0020-001` (US-0020 segment — closed)
+- **AUTO_BACKLOG_DRAIN:** true (bundle complete — no OPEN stories)
+- **fresh_context_marker:** `refresh-context-20260610-us0020-curator-fresh`
+- **runtime_proof_id:** `runtime-proof-refresh-context-20260610-us0020-001`
 
 ## Progress snapshot
+
+**REFRESH-CONTEXT COMPLETE** (2026-06-10T23:45:00Z) — **US-0020**: triad reconciled; R-0085 + R-0080 fulfilled; rollover units=27,2; `--check` PASS; `open_stories_remaining=0`; intake bundle drain complete; **idle** — await new intake.
+
+**RELEASE PASS** (2026-06-10T23:30:00Z) — **US-0020**: **S0019** finalized `0.20.0-us0020`; gates PASS; acceptance AC-1..AC-6 checked; backlog DONE; intake bundle drain complete; operator discover/tag smoke deferred per pass-with-prerequisites; next **refresh-context**.
+
+**QA PASS** (2026-06-10T23:00:00Z) — **US-0020**: **S0019** AC-1..AC-6 code+test PASS; DEC-0098..0103 aligned; `cargo test --lib` 213/213; `npm test` 9/9; 0 blockers; operator smoke deferred; next **verify-work**.
+
+**VERIFY-WORK PASS** (2026-06-10T23:15:00Z) — **US-0020**: **S0019** UAT 6/6 (5 code PASS + AC-6 pass-with-prerequisites); `cargo test --lib` 213/213; `npm test` 9/9; 0 blockers; operator omniflow smoke deferred per BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC; next **release**.
+
+**EXECUTE COMPLETE** (2026-06-10T22:45:00Z) — **US-0020**: **S0019** T-0198..T-0210 done (12/12); `cargo test --lib` 213/213; `npm test` 9/9; operator gates BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC documented; next **qa**.
+
+**PLAN-VERIFY PASS** (2026-06-10T17:00:00Z) — **US-0020**: **S0019** audited — 6/6 AC-1..AC-6 covered by T-0198..T-0210; DEC-0098..0103 aligned; 0 gaps; execute **APPROVED**; next **execute** (dev).
+
+**SPRINT-PLAN COMPLETE** (2026-06-10T16:00:00Z) — **US-0020**: **S0019** materialized — 12 tasks T-0198..T-0209 (11 mandatory + T-0210 P2 optional); 12/12 at `SPRINT_MAX_TASKS`; **DEC-0098**..**DEC-0103**; AC-1..AC-6 traced; no split; next **plan-verify** (qa).
+
+**ARCHITECTURE COMPLETE** (2026-06-10T14:00:00Z) — **US-0020**: [R-0085](research.md#r-0085--us-0020-subscription-discover-majority-category--operator-tags) 14 gates resolved — **DEC-0098** (discover explorer), **DEC-0099** (manual confirm), **DEC-0100** (majority category), **DEC-0101** (tag schema), **DEC-0102** (tag assign/filter), **DEC-0103** (Grafana `$tag` P2); architecture § US-0020 + spec-pack; triad gate PASS; next **sprint-plan** → **S0019**.
+
+**RESEARCH COMPLETE** (2026-06-10T12:00:00Z) — **US-0020**: [R-0085](research.md#r-0085--us-0020-subscription-discover-majority-category--operator-tags) added — explorer reuses `detect_recurrence_groups`, `POST /discover/confirm` with DEC-0085 merge, RANK majority category, `operator_tags` schema, 14 architecture gates; extends R-0080; next **architecture** (tech-lead).
+
+**DISCOVERY COMPLETE** (2026-06-09T24:00:00Z) — **US-0020**: Discover tab + manual confirm + majority category + operator tags UX captured in vision/backlog; po_to_tl handoff to research; builds on US-0003 + DEC-0084..0086; R-0080 subscription/tags portion active; next **research** (tech-lead).
+
+**REFRESH-CONTEXT COMPLETE** (2026-06-09T23:45:00Z) — **US-0019**: triad reconciled; R-0084 fulfilled; rollover units=19,1; `--check` PASS; backlog drain continues — **US-0020** OPEN (last story); next **discovery** (US-0020).
+
+**RELEASE PASS** (2026-06-09T23:30:00Z) — **US-0019**: **S0018** finalized `0.19.0-us0019`; gates PASS; acceptance AC-1..AC-6 checked; Product status bullet appended; operator goal-plan smoke deferred per pass-with-prerequisites; next **refresh-context**.
+
+**VERIFY-WORK PASS** (2026-06-09T23:00:00Z) — **US-0019**: **S0018** UAT 6/6 (5 code PASS + AC-6 pass-with-prerequisites); `cargo test --lib` 204/204; `npm test` 9/9; 0 blockers; operator omniflow smoke deferred per BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC; next **release**.
+
+**QA PASS** (2026-06-09T22:30:00Z) — **US-0019**: **S0018** AC-1..AC-6 code+test PASS; DEC-0091..0097 aligned; `cargo test --lib` 204/204; `npm test` 9/9; 0 blockers; operator smoke deferred; next **verify-work**.
+
+**EXECUTE COMPLETE** (2026-06-09T22:15:00Z) — **US-0019**: **S0018** T-0186..T-0197 done (12/12); `cargo test --lib` 204/204; `npm test` 9/9; operator gates BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC documented; next **qa**.
+
+**PLAN-VERIFY PASS** (2026-06-09T17:00:00Z) — **US-0019**: **S0018** audited — 6/6 AC-1..AC-6 covered by T-0186..T-0197; DEC-0091..0097 aligned; 0 gaps; execute **APPROVED**; next **execute** (dev).
+
+**SPRINT-PLAN COMPLETE** (2026-06-09T16:00:00Z) — **US-0019**: **S0018** materialized — 12 tasks T-0186..T-0197 (11 mandatory + T-0196 P2 optional); 12/12 at `SPRINT_MAX_TASKS`; **DEC-0091**..**DEC-0097**; AC-1..AC-6 traced; no split; next **plan-verify** (qa).
+
+**ARCHITECTURE COMPLETE** (2026-06-09T14:00:00Z) — **US-0019**: [R-0084](research.md#r-0084--us-0019-goal-plans-per-plan-stats-category-overlay--ai-savings) gates resolved — **DEC-0091** (goal schema), **DEC-0092** (goal-stats API), **DEC-0093** (category overlay cap), **DEC-0094** (savings ranking), **DEC-0095** (goal account), **DEC-0096** (PVA scope), **DEC-0097** (AI tool path); architecture § US-0019 + spec-pack; triad --rollover units=5,1,2 + --check PASS + heading policy baseline_h2=7 PASS; codebase map preserved_existing; next **sprint-plan** → **S0018**.
+
+**RESEARCH COMPLETE** (2026-06-09T12:00:00Z) — **US-0019**: [R-0084](research.md#r-0084--us-0019-goal-plans-per-plan-stats-category-overlay--ai-savings) added — goal schema, target-date SQL, category overlay cap, deterministic savings ranking, account default; 11 architecture gates; next **architecture** (tech-lead).
+
+**DISCOVERY COMPLETE** (2026-06-09T01:00:00Z) — **US-0019**: goal template + per-plan stats + category overlay + AI savings UX captured in vision/backlog; po_to_tl handoff to research; triad rollover units=2,0 + `--check` PASS; next **research** (tech-lead).
+
+**REFRESH-CONTEXT COMPLETE** (2026-06-09T00:30:00Z) — **US-0018**: triad reconciled; R-0083 fulfilled; rollover units=16,2; `--check` PASS; backlog drain continues — **US-0019**, **US-0020** OPEN; next **discovery** (US-0019).
+
+**RELEASE PASS** (2026-06-09T00:00:00Z) — **US-0018**: **S0017** finalized `0.18.0-us0018`; gates PASS; acceptance AC-1..AC-6 checked; Product status bullet appended; operator category-filter smoke deferred per pass-with-prerequisites; next **refresh-context**.
+
+**VERIFY-WORK PASS** (2026-06-08T23:30:00Z) — **US-0018**: **S0017** UAT 6/6 (5 code PASS + AC-6 pass-with-prerequisites); `cargo test --lib` 193/193; `npm test` 7/7; 0 blockers; operator omniflow smoke deferred per BACKEND_FRONTEND_DEPLOY; next **release**.
+
+**QA PASS** (2026-06-08T23:20:00Z) — **US-0018**: **S0017** AC-1..AC-6 code+test PASS; DEC-0087..0090 aligned; `cargo test --lib` 193/193; `npm test` 7/7; 0 blockers; T-0185 deferred; operator smoke deferred; next **verify-work**.
+
+**EXECUTE COMPLETE** (2026-06-08T23:15:00Z) — **US-0018**: **S0017** T-0175..T-0184 done; T-0185 deferred (DEC-0090); `cargo test --lib` 193/193; `npm test` 7/7; next **qa**.
+
+**PLAN-VERIFY PASS** (2026-06-08T22:00:00Z) — **US-0018**: **S0017** audited — 6/6 AC-1..AC-6 covered by T-0175..T-0185; DEC-0087..0090 aligned; 0 gaps; execute **APPROVED**; next **execute** (dev).
+
+**SPRINT-PLAN COMPLETE** (2026-06-08T21:00:00Z) — **US-0018**: **S0017** materialized — 11 tasks T-0175..T-0185 (C1–C4, G1–G2, D1, V1, optional P1); 11/12 under `SPRINT_MAX_TASKS`; DEC-0087..0090; AC-1..AC-6 traced; next **plan-verify** (qa).
+
+**ARCHITECTURE COMPLETE** (2026-06-08T20:00:00Z) — **US-0018**: [R-0083](research.md#r-0083--us-0018-category-filters-expense-series-api--trend-analytics) gates resolved — **DEC-0087** (expense-series API + `__uncategorized__`), **DEC-0088** (single-select bar chart), **DEC-0089** (forecast actuals-only + planning widget + independent Grafana), **DEC-0090** (index deferral); architecture § US-0018 + spec-pack; triad gate PASS; next **sprint-plan** → **S0017**.
+
+**RESEARCH COMPLETE** (2026-06-08T18:56:01Z) — **US-0018**: [R-0083](research.md#r-0083--us-0018-category-filters-expense-series-api--trend-analytics) added — monthly spine SQL, catalog + expense-series API draft, Grafana `$category`, bar-default trend chart, forecast display-only filter, 7 decision gates for architecture; no new DEC (gates deferred); next **architecture**.
 
 **RELEASE PASS** (2026-06-07T14:00:00Z) — **Q0023** / **BUG-0015** finalized `bug0015-q0023`; gates PASS; acceptance AU–AW checked; Product status bullet appended; operator rebuild smoke deferred per pass-with-prerequisites; next **refresh-context**.
 
@@ -118,6 +185,9 @@
 - US-0013 operator omniflow ML smoke (UAT-1 … UAT-9 live) pending **BACKEND_COMPOSE_DEPLOY** — pass-with-prerequisites at release
 - US-0014 operator omniflow planning OIDC smoke (AC-8 live) pending **BACKEND_FRONTEND_DEPLOY** — pass-with-prerequisites at release
 - US-0015 operator omniflow forecast Monthly OIDC smoke (AC-7 live) pending **BACKEND_FRONTEND_DEPLOY** — pass-with-prerequisites at release
+- US-0018 operator omniflow category-filter smoke (AC-6 live) **pass-with-prerequisites** — pending **BACKEND_FRONTEND_DEPLOY**, **FULL_FIREFLY_SYNC**, **GRAFANA_PROVISIONING_RELOAD** per `sprints/S0017/uat.json` (verify-work PASS 2026-06-08)
+- US-0019 operator omniflow goal-plan smoke (AC-6 live) **pass-with-prerequisites** — pending **BACKEND_FRONTEND_DEPLOY**, **FULL_FIREFLY_SYNC** per `sprints/S0018/uat.json` (verify-work PASS 2026-06-09)
+- US-0020 operator omniflow discover/tag smoke (AC-6 live) **pass-with-prerequisites** — pending **BACKEND_FRONTEND_DEPLOY**, **FULL_FIREFLY_SYNC** per `sprints/S0019/uat.json` (verify-work PASS 2026-06-10)
 - BUG-0013 released (`bug0013-q0020`) — operator omniflow smoke (AI–AN live) pending **BACKEND_FRONTEND_DEPLOY**, **GRAFANA_PROVISIONING_RELOAD**, **FULL_FIREFLY_SYNC** per `sprints/quick/Q0020/uat.md`
 - BUG-0014 released (`bug0014-q0022`) — operator omniflow smoke (AO–AT live) pending **BACKEND_FRONTEND_DEPLOY**, **THREE_SERVICE_COMPOSE**, **FULL_FIREFLY_SYNC**, **GRAFANA_PROVISIONING_RELOAD**, **AP1_SQL_PROBE** per `sprints/quick/Q0022/uat.json`
 - BUG-0015 released (`bug0015-q0023`) — operator omniflow rebuild smoke (AU–AW live) pending **BACKEND_FRONTEND_DEPLOY**, **POSTGRES_PERSISTENCE_PROBE**, **FULL_FIREFLY_SYNC** per `sprints/quick/Q0023/uat.json`
@@ -151,6 +221,9 @@
 | US-0014 | S0015 | DONE / released | handoffs/releases/S0015-release-notes.md, sprints/S0015/qa-findings.md, sprints/S0015/release-findings.md, sprints/S0015/verify-work-findings.md, decisions/DEC-0077.md |
 | US-0015 | S0016 | DONE / released | handoffs/releases/S0016-release-notes.md, sprints/S0016/release-findings.md, sprints/S0016/uat.json, decisions/DEC-0078.md |
 | US-0017 | Q0021 | DONE / released | handoffs/releases/Q0021-release-notes.md, sprints/quick/Q0021/release-findings.md, sprints/quick/Q0021/uat.json, decisions/DEC-0070.md |
+| US-0018 | S0017 | DONE / released | handoffs/releases/S0017-release-notes.md, sprints/S0017/release-findings.md, sprints/S0017/uat.json, decisions/DEC-0087.md..DEC-0090.md |
+| US-0019 | S0018 | DONE / released | handoffs/releases/S0018-release-notes.md, sprints/S0018/release-findings.md, sprints/S0018/uat.json, sprints/S0018/qa-findings.md, decisions/DEC-0091.md..DEC-0097.md |
+| US-0020 | S0019 | DONE / released | handoffs/releases/S0019-release-notes.md, sprints/S0019/release-findings.md, sprints/S0019/uat.json, sprints/S0019/qa-findings.md, decisions/DEC-0098.md..DEC-0103.md |
 
 | Bug | Quick task | Status | Evidence |
 |-----|------------|--------|----------|
@@ -170,291 +243,131 @@
 | BUG-0014 | Q0022 | DONE / released | handoffs/releases/Q0022-release-notes.md, sprints/quick/Q0022/release-findings.md, sprints/quick/Q0022/uat.json, sprints/quick/Q0022/qa-findings.md, decisions/DEC-0081.md, DEC-0082.md, DEC-0083.md |
 | BUG-0015 | Q0023 | DONE / released | handoffs/releases/Q0023-release-notes.md, sprints/quick/Q0023/release-findings.md, sprints/quick/Q0023/uat.json, sprints/quick/Q0023/qa-findings.md, decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md |
 
-## Checkpoint: isolation evidence architecture 2026-06-09T23:45:00Z
+## Checkpoint: isolation evidence qa 2026-06-09T22:30:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `phase_id`: architecture
-- `role`: tech-lead
-- `isolation_scope`: artifact + repo source reads only; no host `.env` / `.env_prod` secrets read
-- `parent_segment`: auto-20260609-us0017-001 (US-0017 complete)
-- `fresh_context_marker`: architecture-20260609-bug0014-tl-fresh
-- `proof_ref`: runtime-proof-architecture-20260609-bug0014-001
-- `timestamp`: 2026-06-09T23:45:00Z
-
-## Checkpoint: sprint-plan completion for BUG-0014 Q0022 2026-06-10T00:05:00Z
-
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `phase_id`: sprint-plan
-- `role`: tech-lead
-- `fresh_context_marker`: sprint-plan-20260610-q0022-bug0014-tl-fresh
-- `timestamp`: 2026-06-10T00:05:00Z
-- `evidence_ref`: sprints/quick/Q0022/sprint.md, sprints/quick/Q0022/sprint.json, sprints/quick/Q0022/tasks.md, sprints/quick/Q0022/task.json, sprints/quick/Q0022/progress.md, sprints/quick/Q0022/uat.md, sprints/quick/Q0022/uat.json, handoffs/tl_to_dev.md (sprint-plan-20260610-q0022-bug0014), docs/product/backlog.md#BUG-0014, docs/product/acceptance.md (BUG-0014 AO–AT), docs/engineering/architecture.md (§ BUG-0014), decisions/DEC-0081.md, DEC-0082.md, DEC-0083.md
-- `active_bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `sprint_plan_run_id`: sprint-plan-20260610-q0022-bug0014
-- `task_ids`: AO1, AQ1, AQ2, AS1, AS2, AP2, AR1, V1
-- `task_count`: 8
-- `mandatory_task_count`: 5
-- `conditional_task_ids`: AP2, AR1
-- `optional_task_ids`: AS2
-- `sprint_plan_outcomes`: Q0022 created; 8 tasks mapped to acceptance AO–AT; 8/12 under SPRINT_MAX_TASKS; no split; operator gates documented; AP2/AR1 conditional
-- `decision_ids`: DEC-0081, DEC-0082, DEC-0083
-- `phase_boundary`: sprint-plan → plan-verify
-- `next_scheduled_phase`: plan-verify
-- `next_scheduled_role`: qa
-- `stop_reason`: sprint_plan_complete_handoff_plan_verify
-
-## Checkpoint: isolation evidence sprint-plan 2026-06-10T00:05:00Z
-
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `phase_id`: sprint-plan
-- `role`: tech-lead
-- `fresh_context_marker`: sprint-plan-20260610-q0022-bug0014-isolation
-- `timestamp`: 2026-06-10T00:05:00Z
-- `evidence_ref`: .cursor/commands/sprint-plan.md, .cursor/commands/quick.md, docs/engineering/phase-context.md, handoffs/po_to_tl.md#architecture-20260607-bug0014, docs/product/acceptance.md (BUG-0014), docs/product/backlog.md#BUG-0014, docs/engineering/architecture.md (§ BUG-0014), decisions/DEC-0081.md, DEC-0082.md, DEC-0083.md, .cursor/scratchpad.md (SPRINT_MAX_TASKS=12)
-- `isolation_scope`: TL sprint-plan subagent; artifact/doc audit only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; plan-verify not started
-
-## Strict runtime proof tuple (DEC-0038) — sprint-plan 2026-06-10T00:06:00Z
-
-- `runtime_proof_id`: runtime-proof-sprint-plan-20260610-bug0014-q0022-001
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `phase_id`: sprint-plan
-- `role`: tech-lead
-- `proof_issued_at`: 2026-06-10T00:06:00Z
-- `proof_ttl_seconds`: 86400
-- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; TL fresh context BUG-0014; Q0022 8 tasks AO1 AQ1 AQ2 AS1 AS2 AP2 AR1 V1; acceptance AO–AT mapped; DEC-0081 DEC-0082 DEC-0083 aligned; 8/12 under SPRINT_MAX_TASKS; AP2 AR1 conditional; no host secrets read; plan-verify not started
-- `active_bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `sprint_plan_run_id`: sprint-plan-20260610-q0022-bug0014
-- `architecture_checkpoint`: 2026-06-09T23:45:00Z
-- `decision_ids`: DEC-0081, DEC-0082, DEC-0083
-- `next_scheduled_phase`: plan-verify
-- `stop_reason`: sprint_plan_complete_handoff_plan_verify
-
-## Checkpoint: plan-verify completion for BUG-0014 Q0022 2026-06-10T01:00:00Z
-
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `phase_id`: plan-verify
-- `role`: qa
-- `fresh_context_marker`: plan-verify-20260610-q0022-bug0014-qa-fresh
-- `timestamp`: 2026-06-10T01:00:00Z
-- `evidence_ref`: sprints/quick/Q0022/plan-verify.json, sprints/quick/Q0022/sprint.json, sprints/quick/Q0022/task.json, sprints/quick/Q0022/sprint.md, sprints/quick/Q0022/tasks.md, sprints/quick/Q0022/uat.md, handoffs/plan_verify_to_execute.md, docs/product/backlog.md#BUG-0014, docs/product/acceptance.md (BUG-0014 AO–AT), docs/engineering/architecture.md (§ BUG-0014), decisions/DEC-0081.md, DEC-0082.md, DEC-0083.md
-- `active_bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `plan_verify_verdict`: PASS
-- `plan_verify_outcomes`: 6/6 acceptance rows AO–AT mapped; conditional AP2/AR1 gates documented; ops-only AO/AT/AP1 paths documented; V1 e2e smoke; 0 gaps; 0 orphans; DEC-0081/0082/0083 aligned; no scope creep beyond architecture
-- `decision_ids`: DEC-0081, DEC-0082, DEC-0083
-- `phase_boundary`: plan-verify → execute
-- `next_scheduled_phase`: execute
-- `next_scheduled_role`: dev
-- `stop_reason`: plan_verify_pass_handoff_execute
-
-## Checkpoint: isolation evidence plan-verify 2026-06-10T01:00:00Z
-
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `phase_id`: plan-verify
-- `role`: qa
-- `fresh_context_marker`: plan-verify-20260610-q0022-bug0014-isolation
-- `timestamp`: 2026-06-10T01:00:00Z
-- `evidence_ref`: sprints/quick/Q0022/plan-verify.json, handoffs/plan_verify_to_execute.md, docs/product/acceptance.md (BUG-0014), docs/engineering/architecture.md (§ BUG-0014), decisions/DEC-0081.md, DEC-0082.md, DEC-0083.md
-- `isolation_scope`: QA plan-verify subagent; artifact/doc audit only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; execute not started
-
-## Strict runtime proof tuple (DEC-0038) — plan-verify 2026-06-10T01:01:00Z
-
-- `runtime_proof_id`: runtime-proof-plan-verify-20260610-bug0014-q0022-001
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `phase_id`: plan-verify
-- `role`: qa
-- `proof_issued_at`: 2026-06-10T01:01:00Z
-- `proof_ttl_seconds`: 86400
-- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; QA fresh context BUG-0014; Q0022 8 tasks; acceptance AO–AT 6/6 covered; conditional AP2 AR1 gates documented; ops-only AO AT AP1 waived; DEC-0081 DEC-0082 DEC-0083 aligned; 0 gaps; execute not started; no host secrets read
-- `active_bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `plan_verify_verdict`: PASS
-- `sprint_plan_checkpoint`: 2026-06-10T00:05:00Z
-- `decision_ids`: DEC-0081, DEC-0082, DEC-0083
-- `next_scheduled_phase`: execute
-- `stop_reason`: plan_verify_pass_handoff_execute
-
-## Checkpoint: execute 2026-06-10T13:20:00Z
-
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `phase_id`: execute
-- `role`: dev
-- `active_bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `tasks_done`: AO1, AQ1, AQ2, AS1, AS2
-- `tasks_skipped`: AP2 (AP1_SQL_PROBE gate not met in dev), AR1 (V1 AR verify prerequisite)
-- `tasks_open`: V1
-- `test_results`: wealth lib 4/4; plan_delete 1/1; grafana_provisioning 6/6; frontend vitest 6/6
-- `handoff`: handoffs/dev_to_qa.md
-- `next_phase`: qa
-
-## Checkpoint: isolation evidence execute 2026-06-10T13:20:00Z
-
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `phase_id`: execute
-- `role`: dev
-- `fresh_context_marker`: execute-20260610-q0022-bug0014-isolation
-- `timestamp`: 2026-06-10T13:20:00Z
-- `evidence_ref`: handoffs/plan_verify_to_execute.md, sprints/quick/Q0022/tasks.md, decisions/DEC-0081.md, DEC-0082.md, DEC-0083.md, sprints/quick/Q0022/progress.md, handoffs/dev_to_qa.md
-- `isolation_scope`: Dev execute subagent; artifact/handoff reads only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; AP2/AR1 operator gates not runnable locally
-
-## Strict runtime proof tuple (DEC-0038) — execute 2026-06-10T13:21:00Z
-
-- `runtime_proof_id`: runtime-proof-execute-20260610-bug0014-q0022-001
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `phase_id`: execute
-- `role`: dev
-- `proof_issued_at`: 2026-06-10T13:21:00Z
-- `proof_ttl_seconds`: 86400
-- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; dev fresh context BUG-0014; Q0022 P0 tasks AO1 AQ1 AQ2 AS1 done; AS2 optional done; AP2 AR1 skipped gate-documented; cargo/vitest targeted PASS; no host secrets read
-- `active_bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `decision_ids`: DEC-0081, DEC-0082, DEC-0083
-- `next_scheduled_phase`: qa
-- `stop_reason`: execute_complete_handoff_qa
-
-## Checkpoint: qa BUG-0014 Q0022 2026-06-07T11:20:57Z
-
-- `orchestrator_run_id`: auto-20260607-bug0014-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
 - `phase_id`: qa
 - `role`: qa
-- `bug_id`: BUG-0014
-- `fresh_context_marker`: qa-20260607-q0022-bug0014
-- `timestamp`: 2026-06-07T11:20:57Z
-- `evidence_ref`: sprints/quick/Q0022/qa-findings.md, handoffs/qa_to_verify_work.md, handoffs/dev_to_qa.md, sprints/quick/Q0022/uat.json, sprints/quick/Q0022/uat.md, decisions/DEC-0081.md, DEC-0082.md, DEC-0083.md
-- `active_quick_task_id`: Q0022
-- `architecture_decisions`: DEC-0081, DEC-0082, DEC-0083
-- `acceptance_rows`: AO, AP, AQ, AR, AS, AT (6 rows)
-- `qa_outcomes`: AO1/AQ1/AQ2/AS1/AS2 code+test PASS; AP2/AR1 skipped gate-documented; wealth 4/4; plan_delete 1/1; grafana 6/6; frontend 6/6; cargo lib 177/177; 0 blockers
-- `qa_verdict`: PASS
-- `uat_summary`: 4 code pass, 2 skipped, 8 pass_with_prerequisites deferred
-- `next_scheduled_phase`: verify-work
-- `stop_reason`: QA_PASS — hand off to /verify-work; do not begin verify-work in this subagent
-
-## Checkpoint: isolation evidence qa 2026-06-07T11:20:57Z
-
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `phase_id`: qa
-- `role`: qa
-- `fresh_context_marker`: qa-20260607-q0022-bug0014-isolation
-- `timestamp`: 2026-06-07T11:20:57Z
-- `bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `evidence_ref`: .cursor/commands/qa.md, docs/engineering/phase-context.md, handoffs/dev_to_qa.md, sprints/quick/Q0022/uat.json, sprints/quick/Q0022/uat.md, sprints/quick/Q0022/qa-findings.md, docs/product/acceptance.md (BUG-0014 AO–AT), decisions/DEC-0081.md, DEC-0082.md, DEC-0083.md
+- `fresh_context_marker`: qa-20260609-us0019-qa-fresh
+- `timestamp`: 2026-06-09T22:30:00Z
+- `evidence_ref`: .cursor/commands/qa.md, handoffs/dev_to_qa.md, sprints/S0018/qa-findings.md, sprints/S0018/uat.json, docs/product/acceptance.md (US-0019 AC-1..AC-6), decisions/DEC-0091.md, DEC-0092.md, DEC-0093.md, DEC-0094.md, DEC-0095.md, DEC-0096.md, DEC-0097.md
+- `active_story_id`: US-0019
+- `active_sprint_id`: S0018
 - `isolation_scope`: QA fresh subagent; artifact/handoff reads only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; verify-work not started
 
-## Strict runtime proof tuple (DEC-0038) — qa 2026-06-07T11:20:57Z
+## Strict runtime proof tuple (DEC-0038) — qa 2026-06-09T22:30:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `runtime_proof_id`: runtime-proof-qa-20260607-bug0014-q0022-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
+- `runtime_proof_id`: runtime-proof-qa-20260609-us0019-001
 - `phase_id`: qa
 - `role`: qa
-- `proof_issued_at`: 2026-06-07T11:20:57Z
+- `proof_issued_at`: 2026-06-09T22:30:00Z
 - `proof_ttl_seconds`: 86400
-- `proof_hash`: 05b1b9a6b5552e51bae84f24b10af3f404dffd4b447b2ac7707ca9f810e4d2a3
-- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; QA fresh context BUG-0014; Q0022 AO1 AQ1 AQ2 AS1 AS2 PASS; AP2 AR1 skipped gate-documented; wealth 4/4 plan_delete 1/1 grafana 6/6 frontend 6/6 cargo lib 177/177; DEC-0081 DEC-0082 DEC-0083 aligned; 0 blockers; no host secrets read
-- `bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `architecture_decisions`: DEC-0081, DEC-0082, DEC-0083
+- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; QA fresh context US-0019; S0018 AC-1..AC-6 code+test PASS; DEC-0091 DEC-0092 DEC-0093 DEC-0094 DEC-0095 DEC-0096 DEC-0097 aligned; cargo lib 204/204 npm 9/9; 0 blockers; operator smoke deferred; no host secrets read
+- `active_story_id`: US-0019
+- `active_sprint_id`: S0018
+- `architecture_decisions`: DEC-0091, DEC-0092, DEC-0093, DEC-0094, DEC-0095, DEC-0096, DEC-0097
 - `qa_verdict`: PASS
 - `next_scheduled_phase`: verify-work
 - `stop_reason`: QA_PASS
 
-## Checkpoint: verify-work BUG-0014 Q0022 2026-06-07T11:22:28Z
+## Checkpoint: verify-work completion for US-0019 S0018 2026-06-09T23:00:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0014-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
 - `phase_id`: verify-work
 - `role`: qa
-- `bug_id`: BUG-0014
-- `fresh_context_marker`: verify-work-20260607-q0022-bug0014
-- `timestamp`: 2026-06-07T11:22:28Z
-- `evidence_ref`: sprints/quick/Q0022/uat.json, sprints/quick/Q0022/uat.md, handoffs/qa_to_verify_work.md, sprints/quick/Q0022/qa-findings.md, docs/product/acceptance.md (BUG-0014 AO–AT), docs/engineering/architecture.md (BUG-0014 gates)
-- `active_quick_task_id`: Q0022
-- `architecture_decisions`: DEC-0081, DEC-0082, DEC-0083, DEC-0076, DEC-0080
-- `verify_work_outcomes`: 4 code pass, 8 pass-with-prerequisites, 2 skipped; AP2/AR1 gates DEFERRED; cargo lib 177/177; grafana 6/6; plan_delete 1/1; frontend 6/6; omniflow root 401 API 404; 0 blockers
-- `verify_work_verdict`: PASS
-- `uat_summary`: ready_for_release true; operator smoke checklist 14 steps documented
+- `fresh_context_marker`: verify-work-20260609-us0019-qa-fresh
+- `timestamp`: 2026-06-09T23:00:00Z
+- `evidence_ref`: sprints/S0018/verify-work-findings.md, sprints/S0018/uat.json, sprints/S0018/uat.md, handoffs/verify_work_to_release.md, sprints/S0018/qa-findings.md, decisions/DEC-0091.md, DEC-0092.md, DEC-0093.md, DEC-0094.md, DEC-0095.md, DEC-0096.md, DEC-0097.md
+- `active_story_id`: US-0019
+- `active_sprint_id`: S0018
+- `uat_verdict`: PASS
+- `uat_passed`: 5
+- `uat_pass_with_prerequisites`: 1
+- `uat_failed`: 0
+- `test_results`: cargo test --lib 204/204 PASS; npm test --run 9/9 PASS
+- `decision_ids`: DEC-0091, DEC-0092, DEC-0093, DEC-0094, DEC-0095, DEC-0096, DEC-0097
+- `phase_boundary`: verify-work → release
 - `next_scheduled_phase`: release
+- `next_scheduled_role`: release
 - `stop_reason`: VERIFY_WORK_PASS — hand off to /release; do not begin release in this subagent
 
-## Checkpoint: isolation evidence verify-work 2026-06-07T11:22:28Z
+## Checkpoint: isolation evidence verify-work 2026-06-09T23:00:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0014-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
 - `phase_id`: verify-work
 - `role`: qa
-- `fresh_context_marker`: verify-work-20260607-q0022-bug0014-isolation
-- `timestamp`: 2026-06-07T11:22:28Z
-- `bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `evidence_ref`: handoffs/qa_to_verify_work.md, sprints/quick/Q0022/uat.json, sprints/quick/Q0022/uat.md, docs/product/acceptance.md, docs/engineering/architecture.md, handoffs/verify_work_to_release.md
-- `isolation_scope`: Verify-work fresh subagent; artifact/handoff reads only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; omniflow API probes blocked (404); local docker compose not runnable; release not started
+- `fresh_context_marker`: verify-work-20260609-us0019-qa-fresh
+- `timestamp`: 2026-06-09T23:00:00Z
+- `evidence_ref`: sprints/S0018/uat.json, sprints/S0018/uat.md, sprints/S0018/verify-work-findings.md, docs/product/acceptance.md (US-0019 AC-1..AC-6), decisions/DEC-0091.md, DEC-0092.md, DEC-0093.md, DEC-0094.md, DEC-0095.md, DEC-0096.md, DEC-0097.md
+- `active_story_id`: US-0019
+- `active_sprint_id`: S0018
+- `isolation_scope`: Verify-work fresh subagent; artifact/handoff reads only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; release not started
 
-## Strict runtime proof tuple (DEC-0038) — verify-work 2026-06-07T11:22:28Z
+## Strict runtime proof tuple (DEC-0038) — verify-work 2026-06-09T23:00:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `runtime_proof_id`: runtime-proof-verify-work-20260607-bug0014-q0022-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
+- `runtime_proof_id`: runtime-proof-verify-work-20260609-us0019-001
 - `phase_id`: verify-work
 - `role`: qa
-- `proof_issued_at`: 2026-06-07T11:22:28Z
+- `proof_issued_at`: 2026-06-09T23:00:00Z
 - `proof_ttl_seconds`: 86400
-- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; verify-work fresh context BUG-0014; Q0022 4 code pass 8 pass-with-prerequisites 2 skipped; AP2 AR1 gates DEFERRED operator-documented; cargo lib 177/177 grafana 6/6 plan_delete 1/1 frontend 6/6; omniflow root 401 API 404; DEC-0081 DEC-0082 DEC-0083 aligned; 0 blockers; no host secrets read
-- `bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `architecture_decisions`: DEC-0081, DEC-0082, DEC-0083
-- `verify_work_verdict`: PASS
+- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; verify-work fresh context US-0019; UAT 6/6 PASS (5 code + AC-6 pass-with-prerequisites); cargo lib 204/204 npm 9/9; operator gates BACKEND_FRONTEND_DEPLOY FULL_FIREFLY_SYNC documented; 0 blockers; no host secrets read
+- `active_story_id`: US-0019
+- `active_sprint_id`: S0018
+- `architecture_decisions`: DEC-0091, DEC-0092, DEC-0093, DEC-0094, DEC-0095, DEC-0096, DEC-0097
+- `uat_verdict`: PASS
 - `next_scheduled_phase`: release
 - `stop_reason`: VERIFY_WORK_PASS
 
-## Checkpoint: release BUG-0014 Q0022 2026-06-07T12:00:00Z
+## Checkpoint: release completion for US-0019 S0018 2026-06-09T23:30:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0014-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
 - `phase_id`: release
 - `role`: release
-- `bug_id`: BUG-0014
-- `fresh_context_marker`: release-20260607-q0022-bug0014
-- `timestamp`: 2026-06-07T12:00:00Z
-- `evidence_ref`: handoffs/releases/Q0022-release-notes.md, sprints/quick/Q0022/release-findings.md, sprints/quick/Q0022/uat.json, sprints/quick/Q0022/qa-findings.md, handoffs/release_queue.md
-- `active_quick_task_id`: Q0022
-- `release_version`: bug0014-q0022
-- `architecture_decisions`: DEC-0081, DEC-0082, DEC-0083
-- `acceptance_rows`: AO, AP, AQ, AR, AS, AT (checked)
-- `release_outcomes`: All gates PASS; backlog BUG-0014 DONE; acceptance AO–AT checked; queue Q0022 released; Product status bullet appended; operator gates BACKEND_FRONTEND_DEPLOY THREE_SERVICE_COMPOSE FULL_FIREFLY_SYNC GRAFANA_PROVISIONING_RELOAD AP1_SQL_PROBE pending post-release smoke; AP2/AR1 conditional deferred
-- `gate_snapshot`: check-in_test:pass(177/177); qa:pass; uat:pass-with-prerequisites(verify-work); isolation:pass; runtime_proof:pass; publish:skipped(disabled)
+- `fresh_context_marker`: release-20260609-us0019-release-fresh
+- `timestamp`: 2026-06-09T23:30:00Z
+- `evidence_ref`: handoffs/releases/S0018-release-notes.md, sprints/S0018/release-findings.md, sprints/S0018/uat.json, sprints/S0018/qa-findings.md, handoffs/release_queue.md
+- `active_story_id`: US-0019
+- `active_sprint_id`: S0018
+- `release_version`: 0.19.0-us0019
+- `architecture_decisions`: DEC-0091, DEC-0092, DEC-0093, DEC-0094, DEC-0095, DEC-0096, DEC-0097
+- `acceptance_rows`: AC-1, AC-2, AC-3, AC-4, AC-5, AC-6 (checked)
+- `release_outcomes`: All gates PASS; backlog US-0019 DONE; acceptance AC-1..AC-6 checked; queue S0018 released; Product status bullet appended; operator gates BACKEND_FRONTEND_DEPLOY FULL_FIREFLY_SYNC pending post-release smoke
+- `gate_snapshot`: check-in_test:pass(204/204 lib, 9/9 vitest); qa:pass; uat:pass-with-prerequisites(verify-work); isolation:pass; runtime_proof:pass; publish:skipped(disabled)
 - `next_scheduled_phase`: refresh-context
 - `stop_reason`: RELEASE_PASS — hand off to /refresh-context; do not begin refresh-context in this subagent
 
-## Checkpoint: isolation evidence release 2026-06-07T12:00:00Z
+## Checkpoint: isolation evidence release 2026-06-09T23:30:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0014-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
 - `phase_id`: release
 - `role`: release
-- `fresh_context_marker`: release-20260607-q0022-bug0014-isolation
-- `timestamp`: 2026-06-07T12:00:00Z
-- `bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `evidence_ref`: handoffs/releases/Q0022-release-notes.md, sprints/quick/Q0022/release-findings.md, .cursor/commands/release.md, docs/engineering/phase-context.md
+- `fresh_context_marker`: release-20260609-us0019-release-fresh
+- `timestamp`: 2026-06-09T23:30:00Z
+- `active_story_id`: US-0019
+- `active_sprint_id`: S0018
+- `evidence_ref`: handoffs/releases/S0018-release-notes.md, sprints/S0018/release-findings.md, .cursor/commands/release.md, docs/engineering/phase-context.md
 - `isolation_scope`: Release fresh subagent; artifact/handoff reads only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read
 
-## Strict runtime proof tuple (DEC-0038) — release 2026-06-07T12:00:00Z
+## Strict runtime proof tuple (DEC-0038) — release 2026-06-09T23:30:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `runtime_proof_id`: runtime-proof-release-20260607-bug0014-q0022-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
+- `runtime_proof_id`: runtime-proof-release-20260609-us0019-001
 - `phase_id`: release
 - `role`: release
-- `proof_issued_at`: 2026-06-07T12:00:00Z
+- `proof_issued_at`: 2026-06-09T23:30:00Z
 - `proof_ttl_seconds`: 86400
-- `proof_basis`: Release fresh context BUG-0014; Q0022 gates PASS; cargo test --lib 177/177; acceptance AO–AT checked; backlog DONE; operator smoke pass-with-prerequisites; DEC-0081 DEC-0082 DEC-0083; AP2 AR1 conditional deferred; publish skipped disabled; no host secrets read
-- `bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `release_version`: bug0014-q0022
+- `proof_basis`: Release fresh context US-0019; S0018 gates PASS; cargo test --lib 204/204; npm test 9/9; acceptance AC-1..AC-6 checked; backlog DONE; operator smoke pass-with-prerequisites; DEC-0091 DEC-0092 DEC-0093 DEC-0094 DEC-0095 DEC-0096 DEC-0097; publish skipped disabled; validate_doc_profile exit 0; no host secrets read
+- `active_story_id`: US-0019
+- `active_sprint_id`: S0018
+- `release_version`: 0.19.0-us0019
 - `next_scheduled_phase`: refresh-context
 - `stop_reason`: RELEASE_PASS
 
-## Checkpoint: auto phase boundary verification — release 2026-06-07T12:01:00Z
+## Checkpoint: auto phase boundary verification — release 2026-06-09T23:31:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0014-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
 - `completed_phase`: release
 - `completed_role`: release
 - `boundary_verification`: isolation evidence + strict runtime proof tuple present and valid (US-0048 / US-0056 pass); execute + qa + verify-work + release lifecycle complete
@@ -462,449 +375,501 @@
 - `next_scheduled_phase`: refresh-context
 - `next_scheduled_role`: curator
 
-## Checkpoint: refresh-context BUG-0014 Q0022 2026-06-07T13:30:00Z
+## Checkpoint: refresh-context US-0019 S0018 2026-06-09T23:45:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0014-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
 - `phase_id`: refresh-context
 - `role`: curator
-- `fresh_context_marker`: refresh-context-20260607-post-q0022-bug0014
-- `timestamp`: 2026-06-07T13:30:00Z
-- `evidence_ref`: handoffs/releases/Q0022-release-notes.md, sprints/quick/Q0022/release-findings.md, sprints/quick/Q0022/uat.json, sprints/quick/Q0022/qa-findings.md, handoffs/verify_work_to_release.md, docs/product/backlog.md#BUG-0014, docs/product/acceptance.md (BUG-0014 AO–AT), decisions/DEC-0081.md, DEC-0082.md, DEC-0083.md, docs/engineering/research.md#r-0079, handoffs/curator_refresh.md, handoffs/resume_brief.md
-- `bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `release_version`: bug0014-q0022
-- `architecture_decisions`: DEC-0081, DEC-0082, DEC-0083
-- `next_scheduled_phase`: idle
-- `stop_reason`: completed
-- `backlog_reconciled`: BUG-0014 DONE; acceptance AO–AT checked; triad pass; defect drain complete
+- `fresh_context_marker`: refresh-context-20260609-us0019-curator-fresh
+- `timestamp`: 2026-06-09T23:45:00Z
+- `evidence_ref`: handoffs/releases/S0018-release-notes.md, sprints/S0018/release-findings.md, sprints/S0018/uat.json, sprints/S0018/qa-findings.md, handoffs/verify_work_to_release.md, docs/product/backlog.md#US-0019, docs/product/acceptance.md (US-0019 AC-1..AC-6), decisions/DEC-0091.md, DEC-0092.md, DEC-0093.md, DEC-0094.md, DEC-0095.md, DEC-0096.md, DEC-0097.md, docs/engineering/research.md#r-0084, handoffs/curator_refresh.md, handoffs/resume_brief.md
+- `active_story_id`: US-0019
+- `active_sprint_id`: S0018
+- `release_version`: 0.19.0-us0019
+- `architecture_decisions`: DEC-0091, DEC-0092, DEC-0093, DEC-0094, DEC-0095, DEC-0096, DEC-0097
+- `next_scheduled_phase`: discovery
+- `next_scheduled_role`: po
+- `stop_reason`: completed (segment)
+- `backlog_reconciled`: US-0019 DONE; acceptance AC-1..AC-6 checked; triad pass
 - `open_bug_queue`: (empty)
-- `open_stories`: (empty — backlog drain complete for current scope)
-- `recommended_next_auto`: idle — operator follow-up or PO intake
-- `artifacts_updated`: docs/engineering/state.md, docs/engineering/decisions.md, docs/engineering/research.md, handoffs/resume_brief.md, handoffs/curator_refresh.md, sprints/quick/Q0022/summary.md
-- `research_review`: R-0079 fulfilled by Q0022/DEC-0081/0082/0083; retain for traceability; no prune candidates; no outdated flags
-- `triad_hot_surface`: rollover units=18 total (15 → `state-pack-20260607-c.md`; 3 → `state-pack-20260607-d.md`); boundary=contiguous prefix; retained=998 state body lines, 38/50 checkpoints; po_to_tl 496/500 lines; architecture 2728/3000 lines; `--check` PASS
+- `open_stories`: US-0020 (OPEN per backlog.md)
+- `open_stories_remaining`: 1
+- `recommended_next_auto`: discovery — US-0020 (`AUTO_BACKLOG_DRAIN=1`; last story in bundle)
+- `artifacts_updated`: docs/engineering/state.md, docs/engineering/decisions.md, docs/engineering/research.md, handoffs/resume_brief.md, handoffs/curator_refresh.md, sprints/S0018/summary.md
+- `research_review`: R-0084 fulfilled by S0018/DEC-0091..0097; R-0080 current for US-0020 (US-0018/US-0019 portions fulfilled); R-0083 fulfilled; no duplicate merge; no prune candidates; no outdated flags
+- `triad_hot_surface`: rollover units=19,1 (18 → `state-pack-20260608-g.md`; 1 → `po-to-tl-pack-20260608-h.md`); boundary=contiguous prefix; retained=987 state body lines, 50/50 checkpoints; po_to_tl 500/500 lines; architecture 2576/3000 lines; `--check` PASS
 - `codebase_map_refresh`: skipped (`CODEBASE_MAP_REFRESH_ON_ROLLOVER` unset)
 - `isolation_scope`: curator refresh-context subagent; artifact/handoff reads only; no host `.env`, `.env_prod`, or operator secret files read
 
-## Checkpoint: isolation evidence refresh-context 2026-06-07T13:30:00Z
+## Checkpoint: isolation evidence refresh-context 2026-06-09T23:45:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0014-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
 - `phase_id`: refresh-context
 - `role`: curator
-- `fresh_context_marker`: refresh-context-20260607-post-q0022-curator-fresh
-- `timestamp`: 2026-06-07T13:30:00Z
-- `evidence_ref`: handoffs/releases/Q0022-release-notes.md, sprints/quick/Q0022/uat.json, docs/product/backlog.md#BUG-0014, docs/product/acceptance.md (BUG-0014 AO–AT), decisions/DEC-0081.md, DEC-0082.md, DEC-0083.md
-- `bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
+- `fresh_context_marker`: refresh-context-20260609-us0019-curator-fresh
+- `timestamp`: 2026-06-09T23:45:00Z
+- `evidence_ref`: handoffs/releases/S0018-release-notes.md, sprints/S0018/uat.json, docs/product/backlog.md#US-0019, docs/product/acceptance.md (US-0019 AC-1..AC-6), decisions/DEC-0091.md, DEC-0092.md, DEC-0093.md, DEC-0094.md, DEC-0095.md, DEC-0096.md, DEC-0097.md
+- `active_story_id`: US-0019
+- `active_sprint_id`: S0018
 - `isolation_scope`: curator refresh-context subagent; artifact/handoff context only; no prior chat history; no host secrets read
 
-## Strict runtime proof tuple (DEC-0038) — refresh-context 2026-06-07T13:30:00Z
+## Strict runtime proof tuple (DEC-0038) — refresh-context 2026-06-09T23:45:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `runtime_proof_id`: runtime-proof-refresh-context-20260607-bug0014-q0022-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
+- `runtime_proof_id`: runtime-proof-refresh-context-20260609-us0019-001
 - `phase_id`: refresh-context
 - `role`: curator
-- `proof_issued_at`: 2026-06-07T13:30:00Z
+- `proof_issued_at`: 2026-06-09T23:45:00Z
 - `proof_ttl_seconds`: 86400
-- `proof_hash`: 0c15d20ec8173c02529f933a21861b1d8f2106d76a6fb84f661f9f92bd17ec9e
-- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; curator fresh context; BUG-0014 DONE Q0022 release PASS; acceptance AO–AT checked; triad rollover units=18 check PASS; R-0079 fulfilled DEC-0081 DEC-0082 DEC-0083; defect drain complete; operator smoke pass-with-prerequisites; no host secrets read
-- `bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `release_version`: bug0014-q0022
-- `architecture_decisions`: DEC-0081, DEC-0082, DEC-0083
-- `recommended_next_auto`: idle
-- `next_scheduled_phase`: idle
-- `stop_reason`: completed
-
-## Checkpoint: auto orchestration stop 2026-06-07T13:35:00Z
-
-- `orchestrator_run_id`: auto-20260607-bug0014-001
-- `invocation_mode`: auto
-- `segment_work_item_kind`: bug
-- `closed_bug_id`: BUG-0014
-- `active_quick_task_id`: Q0022
-- `release_version`: bug0014-q0022
-- `phases_completed`: discovery → research → architecture → sprint-plan → plan-verify → execute → qa → verify-work → release → refresh-context
-- `architecture_decisions`: DEC-0081 (holdings_all cap + unified fx_incomplete), DEC-0082 (active plan delete 409), DEC-0083 (target_type select + help)
-- `boundary_verification`: isolation evidence + strict runtime proof tuples present for all phases (US-0048 / US-0056 pass)
-- `hot_surface_gate`: PASS (triad rollover units=18 at refresh-context; --check exit 0)
-- `bug_queue_remaining`: 0 (defect drain complete)
-- `open_stories_remaining`: 0 (backlog drain complete for current scope)
-- `recommended_next_auto`: idle — operator follow-up or PO intake
-- `operator_follow_up`: Deploy Q0020+Q0022 bundle; BACKEND_FRONTEND_DEPLOY + THREE_SERVICE_COMPOSE + FULL_FIREFLY_SYNC + GRAFANA_PROVISIONING_RELOAD + AP1_SQL_PROBE; then 14-step smoke per `sprints/quick/Q0022/uat.json`; reopen AP2/AR1 only if conditional gates fail
-- `stop_reason`: completed
-
-## Checkpoint: auto orchestration materialization 2026-06-07T18:10:00Z
-
-- `orchestrator_run_id`: auto-20260607-bug0015-001
-- `invocation_mode`: auto
-- `bug_target_argv`: bug-target=BUG-0015
-- `scheduler`: bug-queue (argv selects bug scheduler; AUTO_BACKLOG_DRAIN not driving story selection)
-- `segment_work_item_kind`: bug
-- `active_bug_id`: BUG-0015
-- `bug_queue_position`: 1
-- `bug_queue_remaining`: 0
-- `backlog_drain_active`: false
-- `bug_queue_active`: true
-- `resolved_phase_plan`: discovery → research → architecture → sprint-plan → plan-verify → execute → qa → verify-work → release → refresh-context
-- `skipped_phases`: intake (completed 2026-06-07T18:00:00Z per resume_brief)
-- `requested_start_from`: (none)
-- `resolved_start_phase`: discovery
-- `resolution_source`: resume_brief
-- `resolution_status`: ok
+- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; curator fresh context; US-0019 DONE S0018 release PASS `0.19.0-us0019`; acceptance AC-1..AC-6 checked; triad rollover units=19,1 check PASS; R-0084 fulfilled DEC-0091 DEC-0092 DEC-0093 DEC-0094 DEC-0095 DEC-0096 DEC-0097; open_stories_remaining=1; operator smoke pass-with-prerequisites; no host secrets read
+- `active_story_id`: US-0019
+- `active_sprint_id`: S0018
+- `release_version`: 0.19.0-us0019
+- `architecture_decisions`: DEC-0091, DEC-0092, DEC-0093, DEC-0094, DEC-0095, DEC-0096, DEC-0097
+- `recommended_next_auto`: discovery — US-0020
 - `next_scheduled_phase`: discovery
-- `next_scheduled_role`: po
-- `phase_boundary`: segment_start → discovery
-- `intake_evidence`: handoffs/intake_evidence/intake-20260607-subscription-reconfirm.json
-- `timestamp`: 2026-06-07T18:10:00Z
+- `stop_reason`: completed (segment)
 
-## Checkpoint: discovery BUG-0015 2026-06-07T19:30:00Z
+## Checkpoint: auto orchestration segment stop 2026-06-09T23:50:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0019-001
+- `invocation_mode`: auto
+- `segment_work_item_kind`: story
+- `closed_story_id`: US-0019
+- `active_sprint_id`: S0018
+- `release_version`: 0.19.0-us0019
+- `phases_completed`: discovery → research → architecture → sprint-plan → plan-verify → execute → qa → verify-work → release → refresh-context
+- `architecture_decisions`: DEC-0091 (goal schema), DEC-0092 (goal-stats API), DEC-0093 (category overlay cap), DEC-0094 (savings ranking), DEC-0095 (goal account), DEC-0096 (PVA scope), DEC-0097 (AI tool path)
+- `boundary_verification`: isolation evidence + strict runtime proof tuples present for all phases (US-0048 / US-0056 pass)
+- `hot_surface_gate`: PASS (triad rollover units=19,1 at refresh-context; --check exit 0)
+- `bug_queue_remaining`: 0 (defect drain complete)
+- `open_stories_remaining`: 1 (US-0020 OPEN — last story in bundle)
+- `recommended_next_auto`: discovery — US-0020 (`AUTO_BACKLOG_DRAIN=1`)
+- `operator_follow_up`: Deploy US-0019 delta; **BACKEND_FRONTEND_DEPLOY** + **FULL_FIREFLY_SYNC**; goal-plan OIDC smoke per `sprints/S0018/uat.json`; bundle deploy US-0018+US-0019 for category-filter + goal-plan smoke
+- `stop_reason`: completed (segment)
+
+## Checkpoint: discovery US-0020 2026-06-09T24:00:00Z
+
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: discovery
 - `role`: po
-- `active_bug_id`: BUG-0015
-- `segment_work_item_kind`: bug
-- `isolation`: fresh PO subagent context; artifact-only inputs (backlog, intake evidence, R-0081, code audit); no prior chat history; no `.env` / `.env_prod` secrets read
-- `discovery_verdicts`:
-  - H1 fingerprint drift: **LIKELY PRIMARY** (code-confirmed mechanism)
-  - H2 DB ephemeral: **UNLIKELY sole** (ops verify gate)
-  - H3 alert/UI desync: **REFUTED primary**
-  - H4 detection re-run: **CONFIRMED mechanism, subsumed by H1**
-- `fix_boundary`: code primary (fingerprint / merchant-identity contract); ops gate (postgres persistence SQL probe)
-- `runtime_proof`: code-path trace only — `compute_fingerprint` (`detect.rs` L45–49), `upsert_pending_pattern` status CASE (`repository.rs` L144–147), `confirmed_fps` skip (`detection.rs` L43–44), sync orchestration (`sync/mod.rs` L261–264); operator DB probe deferred to research
-- `artifacts_updated`: docs/product/backlog.md (BUG-0015 discovery table), docs/product/vision.md (discovery UX note), handoffs/po_to_tl.md (discovery-20260607-bug0015), handoffs/resume_brief.md (next phase research)
-- `recommended_next_phase`: research
-- `recommended_next_role`: po or tl (research)
-- `triad_hot_surface`: discovery prepended; rollover units=2,1 → `handoffs/archive/po-to-tl-pack-20260607-g.md`; --check PASS (2026-06-07T19:30:00Z)
-- `timestamp`: 2026-06-07T19:30:00Z
+- `fresh_context_marker`: discovery-20260609-us0020-po-fresh
+- `timestamp`: 2026-06-09T24:00:00Z
+- `evidence_ref`: docs/product/backlog.md#US-0020, docs/product/acceptance.md#US-0020 (AC-1..AC-6), docs/product/vision.md US-0020 discovery section, docs/engineering/research.md#R-0080, decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md, handoffs/po_to_tl.md discovery-20260609-us0020, handoffs/intake_evidence/intake-20260607-category-planning-subscriptions.json, frontend/src/pages/SubscriptionsPage.tsx, backend/src/subscriptions/detection.rs, backend/migrations/003_subscriptions.sql
+- `active_story_id`: US-0020
+- `next_scheduled_phase`: research
+- `next_scheduled_role`: tech-lead
+- `open_stories`: US-0020 (OPEN per backlog.md)
+- `open_stories_remaining`: 1
+- `recommended_next_auto`: research — US-0020
+- `isolation_scope`: PO discovery subagent fresh context; artifact/handoff reads only; no host `.env`, `.env_prod`, or operator secret files read
 
-## Checkpoint: research BUG-0015 2026-06-07T19:30:00Z
+## Checkpoint: isolation evidence discovery 2026-06-09T24:00:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `phase_id`: discovery
+- `role`: po
+- `fresh_context_marker`: discovery-20260609-us0020-po-fresh
+- `timestamp`: 2026-06-09T24:00:00Z
+- `evidence_ref`: docs/product/vision.md, docs/product/backlog.md#US-0020, handoffs/po_to_tl.md
+- `active_story_id`: US-0020
+- `isolation_scope`: PO discovery subagent; artifact/handoff context only; no prior chat history; no host secrets read
+
+## Strict runtime proof tuple (DEC-0038) — discovery 2026-06-09T24:00:00Z
+
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `runtime_proof_id`: runtime-proof-discovery-20260609-us0020-001
+- `phase_id`: discovery
+- `role`: po
+- `proof_issued_at`: 2026-06-09T24:00:00Z
+- `proof_ttl_seconds`: 86400
+- `proof_basis`: US-0020 discovery complete — Discover tab UX, majority category, operator tags in vision/backlog; po_to_tl handoff to research; builds on US-0003 + DEC-0084..0086; R-0080 subscription/tags portion active; triad gate PASS; no host secrets read
+- `active_story_id`: US-0020
+- `recommended_next_auto`: research — US-0020
+- `next_scheduled_phase`: research
+- `triad_hot_surface`: rollover units=2,2 (2 state → `state-pack-20260608-h.md`; 2 po_to_tl → `po-to-tl-pack-20260608-j.md`, `po-to-tl-pack-20260608-k.md`); --check PASS (2026-06-09T24:00:00Z)
+
+## Checkpoint: phase boundary 2026-06-09T24:00:00Z
+
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `completed_phase`: discovery
+- `phase_boundary`: discovery → research
+- `next_scheduled_phase`: research
+- `next_scheduled_role`: tech-lead
+- `active_story_id`: US-0020
+
+## Checkpoint: isolation evidence 2026-06-10T12:00:00Z
+
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: research
 - `role`: tech-lead
-- `active_bug_id`: BUG-0015
-- `segment_work_item_kind`: bug
-- `isolation`: fresh TL subagent context; artifact-only inputs (po_to_tl discovery handoff, R-0081, backlog BUG-0015, `backend/src/recurrence/`, `subscriptions/repository.rs`, `detection.rs`, BUG-0008 DEC-0071/DEC-0072 prior art); no prior chat history; no `.env` / `.env_prod` secrets read
-- `discovery_verdicts_inherited`:
-  - H1 fingerprint drift: **LIKELY PRIMARY**
-  - H2 DB ephemeral: **UNLIKELY sole** (ops gate)
-  - H3 alert/UI desync: **REFUTED primary**
-  - H4 detection re-run: **subsumed by H1**
-- `research_recommendation`: two-layer bundle — (1) card `payee_key` normalization [R-0082]; (2) payee+interval confirm inheritance skip+merge [R-0081 §C]; fallback D skip-only
-- `research_rejects`: alert-only dedup (E) as primary; merchant table (F) MVP; reopen BUG-0008
-- `runtime_proof`: code-path trace — `compute_fingerprint` three-part hash (`detect.rs` L45–49); `upsert_pending_pattern` ON CONFLICT status CASE fingerprint-only (`repository.rs` L144–147); `confirmed_fps` exact match skip (`detection.rs` L42–44); DEC-0071 `sub_alert:new_detection:{pattern_id}` bypass on new row; `payee_key()` SEPA rules without card comma/domain collapse (`normalize.rs`); operator DB probe deferred to execute UAT
-- `artifacts_updated`: docs/engineering/research.md (R-0081 extended, R-0082 added), docs/engineering/decisions.md (context index), handoffs/po_to_tl.md (research-20260607-bug0015), handoffs/resume_brief.md (architecture next)
-- `recommended_next_phase`: architecture
-- `recommended_next_role`: tech-lead
-- `triad_hot_surface`: research prepended; --rollover units=1,0; --check PASS (2026-06-07T19:30:00Z)
-- `timestamp`: 2026-06-07T19:30:00Z
+- `fresh_context_marker`: research-20260610-us0020-tl-fresh
+- `timestamp`: 2026-06-10T12:00:00Z
+- `evidence_ref`:
+  - `docs/product/acceptance.md` US-0020 AC-1..AC-6 (read)
+  - `docs/product/backlog.md#US-0020` (read)
+  - `docs/product/vision.md` US-0020 discovery section (read)
+  - `handoffs/archive/po-to-tl-pack-20260608-i.md` (read)
+  - `docs/engineering/research.md#R-0080`, `#R-0085` (read + written)
+  - `decisions/DEC-0084.md`, `DEC-0085.md`, `DEC-0086.md`, `DEC-0087.md` (read)
+  - `backend/src/subscriptions/{detection.rs,repository.rs,service.rs}`, `backend/src/recurrence/detect.rs`, `backend/src/api/subscriptions.rs`, `backend/migrations/003_subscriptions.sql` (read)
+  - `frontend/src/pages/SubscriptionsPage.tsx`, `grafana/provisioning/dashboards/analytics/subscriptions.json` (read)
+- `active_story_id`: US-0020
+- `isolation_scope`: Research fresh subagent; artifact/handoff reads only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; no product code changed
 
-## Checkpoint: architecture BUG-0015 2026-06-07T20:00:00Z
+## Checkpoint: strict runtime proof (DEC-0038) 2026-06-10T12:00:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
-- `phase_id`: architecture
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `runtime_proof_id`: runtime-proof-research-20260610-us0020-001
+- `phase_id`: research
 - `role`: tech-lead
-- `active_bug_id`: BUG-0015
-- `segment_work_item_kind`: bug
-- `isolation`: fresh TL subagent context; artifact-only inputs (po_to_tl research handoff `handoffs/archive/po-to-tl-pack-20260607-j.md`, R-0081, R-0082, backlog BUG-0015, `normalize.rs`, `repository.rs`, `detection.rs`, `service.rs`, DEC-0071/DEC-0072 prior art); no prior chat history; no `.env` / `.env_prod` secrets read
-- `architecture_decisions`:
-  - **DEC-0084** — card billing `payee_key` normalization (Layer 1 / AU1)
-  - **DEC-0085** — payee+interval confirm inheritance skip+merge (Layer 2 / AU2–AU4)
-  - **DEC-0086** — ±3d interval tolerance + in-place fingerprint rotation on merge
-- `architecture_rejects`: alert-only dedup (E) primary; merchant table (F); normalization-only sole fix; reopen BUG-0008
-- `recommended_sprint`: /quick **Q0023** (AU1, AU2, AU3, AU4, V1 — 5/12 tasks; no split)
-- `runtime_proof`: code-path trace — `payee_key()` DEC-0072 without card rules (`normalize.rs`); `compute_fingerprint(payee_key, interval_days, median_amount)` three-part hash (`detect.rs` L42–49); `upsert_pending_pattern` ON CONFLICT status CASE fingerprint-only (`repository.rs` L144–147); `confirmed_fps.contains` exact match (`detection.rs` L42–44); `mark_stale_inactive` fingerprint-only + unwired (`detection.rs` L227–241); DEC-0071 `sub_alert:new_detection:{pattern_id}` new-row bypass; operator H2 SQL probe deferred to V1 UAT
-- `artifacts_updated`: docs/engineering/architecture.md (§ BUG-0015), docs/engineering/decisions.md (DEC-0084/0085/0086 index), decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md, handoffs/po_to_tl.md (architecture-20260607-bug0015), handoffs/resume_brief.md (sprint-plan next)
-- `recommended_next_phase`: sprint-plan
-- `recommended_next_role`: tech-lead
-- `triad_hot_surface`: architecture § BUG-0015 appended; po_to_tl prepended; state checkpoint appended; prior rollover units=1,1 → `handoffs/archive/po-to-tl-pack-20260607-j.md`, `docs/engineering/state-archive/state-pack-20260607-e.md`; --check PASS (2026-06-07T20:00:00Z)
-- `timestamp`: 2026-06-07T20:00:00Z
-
-## Checkpoint: plan-verify completion for BUG-0015 Q0023 2026-06-07T21:00:00Z (FAIL — superseded)
-
-- `orchestrator_run_id`: auto-20260607-bug0015-001
-- `phase_id`: plan-verify
-- `role`: qa
-- `fresh_context_marker`: plan-verify-20260607-q0023-bug0015-qa-fresh
-- `timestamp`: 2026-06-07T21:00:00Z
-- `superseded_by`: plan-verify PASS checkpoint 2026-06-07T21:30:00Z
-- `evidence_ref`: sprints/quick/Q0023/plan-verify.json, handoffs/plan_verify_to_execute.md, handoffs/resume_brief.md, docs/product/backlog.md#BUG-0015, docs/product/acceptance.md (BUG-0015 AU–AW), docs/engineering/architecture.md (§ BUG-0015), decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md, handoffs/archive/po-to-tl-pack-20260607-k.md
-- `active_bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `plan_verify_verdict`: FAIL
-- `plan_verify_outcomes`: 0/3 acceptance rows AU–AW verified against sprint tasks; sprint-plan artifacts missing (GAP-1/2/3); architecture DEC-0084/0085/0086 advisory aligned; execute blocked
-- `decision_ids`: DEC-0084, DEC-0085, DEC-0086
-- `phase_boundary`: plan-verify → sprint-plan (retry)
+- `proof_issued_at`: 2026-06-10T12:00:00Z
+- `proof_ttl_seconds`: 86400
+- `proof_basis`: US-0020 research complete — R-0085 explorer/confirm/majority/tags/Grafana gates; extends R-0080; web refs PostgreSQL mode/RANK, recurring SQL, tag junction; code audit detection+confirm gap confirmed; DEC-0084..0086 preserved; 14 architecture gates; no host secrets read; no product code changed
+- `active_story_id`: US-0020
+- `recommended_next_auto`: sprint-plan — US-0020
 - `next_scheduled_phase`: sprint-plan
 - `next_scheduled_role`: tech-lead
-- `stop_reason`: plan_verify_fail_sprint_plan_prerequisite
 
-## Checkpoint: isolation evidence plan-verify 2026-06-07T21:00:00Z
+## Checkpoint: architecture US-0020 2026-06-10T14:00:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
-- `phase_id`: plan-verify
-- `role`: qa
-- `fresh_context_marker`: plan-verify-20260607-q0023-bug0015-isolation
-- `timestamp`: 2026-06-07T21:00:00Z
-- `evidence_ref`: sprints/quick/Q0023/plan-verify.json, handoffs/plan_verify_to_execute.md, docs/product/acceptance.md (BUG-0015), docs/engineering/architecture.md (§ BUG-0015), decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md
-- `isolation_scope`: QA plan-verify subagent; artifact/doc audit only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; execute not started; sprint-plan artifacts absent
-
-## Strict runtime proof tuple (DEC-0038) — plan-verify 2026-06-07T21:01:00Z
-
-- `runtime_proof_id`: runtime-proof-plan-verify-20260607-bug0015-q0023-001
-- `orchestrator_run_id`: auto-20260607-bug0015-001
-- `phase_id`: plan-verify
-- `role`: qa
-- `proof_issued_at`: 2026-06-07T21:01:00Z
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `runtime_proof_id`: runtime-proof-architecture-20260610-us0020-001
+- `phase_id`: architecture
+- `role`: tech-lead
+- `proof_issued_at`: 2026-06-10T14:00:00Z
 - `proof_ttl_seconds`: 86400
-- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; QA fresh context BUG-0015; Q0023 sprint artifacts absent; 0/3 AU–AW verified; architecture advisory 3/3 aligned; DEC-0084 DEC-0085 DEC-0086 contracts expected; 3 critical gaps; execute blocked; no host secrets read
-- `active_bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `architecture_checkpoint`: 2026-06-07T20:00:00Z
-- `decision_ids`: DEC-0084, DEC-0085, DEC-0086
+- `proof_basis`: US-0020 architecture complete — R-0085 14 gates → DEC-0098..0103; discover/confirm/majority/tags contracts frozen; spec-pack US-0020; builds on US-0003 + DEC-0084..0086 + DEC-0087; S0019 recommended (12 tasks); triad gate PASS; no host secrets read; no product code changed
+- `evidence_ref`: docs/engineering/architecture.md#US-0020, docs/engineering/decisions.md DEC-0098..0103, decisions/DEC-0098.md..DEC-0103.md, docs/engineering/spec-pack/US-0020-*, docs/product/acceptance.md#US-0020, research.md#R-0085, handoffs/tl_to_dev.md architecture-20260610-us0020
+- `active_story_id`: US-0020
+- `recommended_next_auto`: sprint-plan — US-0020
 - `next_scheduled_phase`: sprint-plan
-- `stop_reason`: plan_verify_fail_sprint_plan_prerequisite
-- `superseded_by`: sprint-plan checkpoint 2026-06-07T20:30:00Z
+- `next_scheduled_role`: tech-lead
+- `triad_hot_surface`: architecture § US-0020 appended; decisions DEC-0098..0103; spec-pack created; state checkpoint; --check PASS (2026-06-10T14:00:00Z)
 
-## Checkpoint: sprint-plan BUG-0015 2026-06-07T20:30:00Z
+## Checkpoint: phase boundary 2026-06-10T14:00:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `completed_phase`: architecture
+- `phase_boundary`: architecture → sprint-plan
+- `next_scheduled_phase`: sprint-plan
+- `next_scheduled_role`: tech-lead
+- `active_story_id`: US-0020
+
+## Checkpoint: isolation evidence 2026-06-10T16:00:00Z
+
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: sprint-plan
 - `role`: tech-lead
-- `active_bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `segment_work_item_kind`: bug
-- `isolation`: fresh TL subagent context; artifact-only inputs (po_to_tl architecture handoff `handoffs/archive/po-to-tl-pack-20260607-k.md`, R-0081, R-0082, backlog BUG-0015, architecture § BUG-0015, DEC-0084/0085/0086, prior plan-verify FAIL evidence); no prior chat history; no `.env` / `.env_prod` secrets read
-- `sprint_id`: Q0023
-- `task_count`: 5
-- `tasks`: AU1, AU2, AU3, AU4, V1
-- `acceptance_rows`: AU, AV, AW
-- `decisions`: DEC-0084, DEC-0085, DEC-0086
-- `runtime_proof`: sprint artifacts materialized — `sprints/quick/Q0023/{sprint.json,task.json,sprint.md,tasks.md,progress.md,uat.md,uat.json}`; task.json maps AU1→DEC-0084, AU2–AU4→DEC-0085/0086, V1→operator gates BACKEND_FRONTEND_DEPLOY + POSTGRES_PERSISTENCE_PROBE + FULL_FIREFLY_SYNC; architecture task table 1:1; no split (5 ≤ 12)
-- `artifacts_updated`: sprints/quick/Q0023/*, handoffs/tl_to_dev.md (sprint-plan-20260607-q0023-bug0015), handoffs/po_to_tl.md (sprint-plan hot pointer), handoffs/resume_brief.md (plan-verify next), docs/product/backlog.md#BUG-0015 (sprint_id Q0023), docs/engineering/decisions.md, docs/engineering/state.md (this checkpoint)
-- `recommended_next_phase`: plan-verify
-- `recommended_next_role`: qa
-- `triad_hot_surface`: sprint-plan prepended po_to_tl + tl_to_dev; state checkpoint appended; --check PASS (2026-06-07T20:30:00Z)
-- `timestamp`: 2026-06-07T20:30:00Z
+- `fresh_context_marker`: sprint-plan-20260610-us0020-tl-fresh
+- `timestamp`: 2026-06-10T16:00:00Z
+- `evidence_ref`:
+  - `docs/product/acceptance.md` US-0020 AC-1..AC-6 (read)
+  - `docs/engineering/architecture.md` § US-0020 (read)
+  - `decisions/DEC-0098.md` through `DEC-0103.md` (read)
+  - `handoffs/tl_to_dev.md` architecture pointer (read)
+  - `.cursor/scratchpad.md` SPRINT_MAX_TASKS=12 (read)
+- `artifacts_written`:
+  - `sprints/S0019/{sprint.md,sprint.json,tasks.md,progress.md,uat.md,uat.json}` (written)
+  - `handoffs/tl_to_dev.md` sprint-plan pointer (written)
+  - `handoffs/po_to_tl.md` sprint-plan pointer (written)
+  - `docs/engineering/state.md` traceability + checkpoint (written)
+  - `docs/product/backlog.md#US-0020` sprint_id S0019 (written)
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `task_count`: 12
+- `split_decision`: no_split (12 = SPRINT_MAX_TASKS 12)
 
-## Strict runtime proof tuple (DEC-0038) — sprint-plan 2026-06-07T20:31:00Z
+## Checkpoint: strict runtime proof (DEC-0038) 2026-06-10T16:00:00Z
 
-- `runtime_proof_id`: runtime-proof-sprint-plan-20260607-bug0015-q0023-001
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: sprint-plan
 - `role`: tech-lead
-- `proof_issued_at`: 2026-06-07T20:31:00Z
+- `runtime_proof_id`: runtime-proof-sprint-plan-20260610-us0020-001
+- `proof_issued_at`: 2026-06-10T16:00:00Z
 - `proof_ttl_seconds`: 86400
-- `proof_basis`: Q0023 sprint.json task_count=5; execute_order AU1→AU2→AU3→AU4→V1; acceptance_mapping AU/AV/AW; operator_gates 3; architecture_ref architecture-20260607-bug0015; prior plan-verify GAP-1/2/3 resolved by artifact materialization
-- `active_bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `decision_ids`: DEC-0084, DEC-0085, DEC-0086
+- `proof_basis`: US-0020 sprint-plan complete — S0019 with 12 tasks T-0198..T-0209 mapped to AC-1..AC-6 and architecture slices S1–S6; DEC-0098..0103; USER_GUIDE_MODE=1 T-0207 path; no product code changed
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+
+## Checkpoint: phase boundary 2026-06-10T16:00:00Z
+
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `completed_phase`: sprint-plan
+- `phase_boundary`: sprint-plan → plan-verify
 - `next_scheduled_phase`: plan-verify
-- `stop_reason`: completed
+- `next_scheduled_role`: qa
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
 
-## Checkpoint: plan-verify completion for BUG-0015 Q0023 2026-06-07T21:30:00Z (PASS — re-run)
+## Isolation evidence (sprint-plan phase)
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `fresh_context_marker`: sprint-plan-20260610-us0020-tl-fresh
+- `runtime_proof_id`: runtime-proof-sprint-plan-20260610-us0020-001
+- `phase_boundary`: sprint-plan → plan-verify
+- `role`: tech-lead
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+
+## Isolation evidence (architecture phase)
+
+- `fresh_context_marker`: architecture-20260610-us0020-tl-fresh
+- `runtime_proof_id`: runtime-proof-architecture-20260610-us0020-001
+- `phase_boundary`: architecture → sprint-plan
+- `role`: tech-lead
+- `active_story_id`: US-0020
+
+## Checkpoint: phase boundary 2026-06-10T12:00:00Z
+
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `completed_phase`: research
+- `phase_boundary`: research → architecture
+- `next_scheduled_phase`: architecture
+- `next_scheduled_role`: tech-lead
+- `active_story_id`: US-0020
+
+## Isolation evidence (research phase)
+
+- `fresh_context_marker`: research-20260610-us0020-tl-fresh
+- `runtime_proof_id`: runtime-proof-research-20260610-us0020-001
+- `phase_boundary`: research → architecture
+- `role`: tech-lead
+- `active_story_id`: US-0020
+
+## Checkpoint: plan-verify completion for US-0020 S0019 2026-06-10T17:00:00Z
+
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: plan-verify
 - `role`: qa
-- `fresh_context_marker`: plan-verify-20260607-q0023-bug0015-qa-fresh-rerun
-- `timestamp`: 2026-06-07T21:30:00Z
-- `evidence_ref`: sprints/quick/Q0023/plan-verify.json, handoffs/plan_verify_to_execute.md, handoffs/resume_brief.md, sprints/quick/Q0023/{sprint.json,task.json,tasks.md,uat.md,uat.json}, handoffs/tl_to_dev.md (sprint-plan-20260607-q0023-bug0015), docs/product/acceptance.md (BUG-0015 AU–AW), docs/engineering/architecture.md (§ BUG-0015), decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md
-- `active_bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
+- `fresh_context_marker`: plan-verify-20260610-us0020-qa-fresh
+- `timestamp`: 2026-06-10T17:00:00Z
+- `evidence_ref`: sprints/S0019/plan-verify.json, sprints/S0019/plan-verify-findings.md, handoffs/plan_verify_to_execute.md, sprints/S0019/{sprint.json,tasks.md,sprint.md,uat.json,uat.md}, handoffs/tl_to_dev.md, docs/product/acceptance.md (US-0020 AC-1..AC-6), docs/engineering/architecture.md (§ US-0020), decisions/DEC-0098.md, DEC-0099.md, DEC-0100.md, DEC-0101.md, DEC-0102.md, DEC-0103.md
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
 - `plan_verify_verdict`: PASS
-- `plan_verify_outcomes`: 3/3 acceptance rows AU–AW verified against sprint tasks; 5/5 tasks traced; DEC-0084/0085/0086 aligned; GAP-1/2/3 resolved; execute approved
-- `decision_ids`: DEC-0084, DEC-0085, DEC-0086
+- `plan_verify_outcomes`: 6/6 acceptance criteria AC-1..AC-6 verified against sprint tasks; 12/12 tasks traced; DEC-0098/0099/0100/0101/0102/0103 aligned; 0 gaps; execute approved
+- `decision_ids`: DEC-0098, DEC-0099, DEC-0100, DEC-0101, DEC-0102, DEC-0103
 - `phase_boundary`: plan-verify → execute
 - `next_scheduled_phase`: execute
 - `next_scheduled_role`: dev
 - `stop_reason`: plan_verify_pass
-- `supersedes`: plan-verify FAIL checkpoint 2026-06-07T21:00:00Z
 
-## Checkpoint: isolation evidence plan-verify 2026-06-07T21:30:00Z (re-run)
+## Checkpoint: isolation evidence plan-verify 2026-06-10T17:00:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: plan-verify
 - `role`: qa
-- `fresh_context_marker`: plan-verify-20260607-q0023-bug0015-isolation-rerun
-- `timestamp`: 2026-06-07T21:30:00Z
-- `evidence_ref`: sprints/quick/Q0023/plan-verify.json, handoffs/plan_verify_to_execute.md, sprints/quick/Q0023/{sprint.json,task.json,tasks.md,uat.md,uat.json}, docs/product/acceptance.md (BUG-0015), decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md
-- `isolation_scope`: QA plan-verify subagent fresh context; artifact/doc audit only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; execute not started; sprint-plan artifacts present
+- `fresh_context_marker`: plan-verify-20260610-us0020-qa-fresh
+- `timestamp`: 2026-06-10T17:00:00Z
+- `evidence_ref`: sprints/S0019/plan-verify.json, sprints/S0019/plan-verify-findings.md, handoffs/plan_verify_to_execute.md, docs/product/acceptance.md (US-0020), docs/engineering/architecture.md (§ US-0020), decisions/DEC-0098.md, DEC-0099.md, DEC-0100.md, DEC-0101.md, DEC-0102.md, DEC-0103.md
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `isolation_scope`: QA plan-verify subagent fresh context; artifact/doc audit only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; execute not started
 
-## Strict runtime proof tuple (DEC-0038) — plan-verify re-run 2026-06-07T21:31:00Z
+## Strict runtime proof tuple (DEC-0038) — plan-verify 2026-06-10T17:00:00Z
 
-- `runtime_proof_id`: runtime-proof-plan-verify-20260607-bug0015-q0023-002
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `runtime_proof_id`: runtime-proof-plan-verify-20260610-us0020-001
 - `phase_id`: plan-verify
 - `role`: qa
-- `proof_issued_at`: 2026-06-07T21:31:00Z
+- `proof_issued_at`: 2026-06-10T17:00:00Z
 - `proof_ttl_seconds`: 86400
-- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; QA fresh context BUG-0015; Q0023 sprint artifacts present (8 files); 3/3 AU–AW verified; 5/5 tasks AU1–AU4+V1 traced; DEC-0084 DEC-0085 DEC-0086 contracts covered in task.json; operator_gates 3 documented; 0 gaps; execute approved; prior FAIL GAP-1/2/3 resolved; no host secrets read
-- `active_bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `architecture_checkpoint`: 2026-06-07T20:00:00Z
-- `sprint_plan_checkpoint`: 2026-06-07T20:30:00Z
-- `decision_ids`: DEC-0084, DEC-0085, DEC-0086
+- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; QA fresh context US-0020; S0019 sprint artifacts present; 6/6 AC-1..AC-6 verified; 12/12 tasks T-0198..T-0210 traced; DEC-0098 DEC-0099 DEC-0100 DEC-0101 DEC-0102 DEC-0103 aligned; 0 gaps; execute approved; no host secrets read
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `architecture_decisions`: DEC-0098, DEC-0099, DEC-0100, DEC-0101, DEC-0102, DEC-0103
 - `next_scheduled_phase`: execute
 - `stop_reason`: plan_verify_pass
-- `supersedes`: runtime-proof-plan-verify-20260607-bug0015-q0023-001
 
-## Checkpoint: execute completion for BUG-0015 Q0023 2026-06-07T22:00:00Z
+## Checkpoint: execute completion for US-0020 S0019 2026-06-10T22:45:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: execute
 - `role`: dev
-- `fresh_context_marker`: execute-20260607-q0023-bug0015-dev-fresh
-- `timestamp`: 2026-06-07T22:00:00Z
-- `evidence_ref`: handoffs/dev_to_qa.md, sprints/quick/Q0023/progress.md, handoffs/plan_verify_to_execute.md, decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md
-- `active_bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `tasks_completed`: AU1, AU2, AU3, AU4
-- `tasks_open`: V1
-- `test_results`: cargo test --lib 187/187 PASS; npm test --run 6/6 PASS
-- `decision_ids`: DEC-0084, DEC-0085, DEC-0086
+- `fresh_context_marker`: execute-20260610-us0020-dev-fresh
+- `timestamp`: 2026-06-10T22:45:00Z
+- `evidence_ref`: handoffs/dev_to_qa.md, sprints/S0019/{progress.md,summary.md,uat.md,uat.json}, docs/user-guides/US-0020.md, handoffs/plan_verify_to_execute.md, decisions/DEC-0098.md..DEC-0103.md
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `tasks_completed`: T-0198, T-0199, T-0200, T-0201, T-0202, T-0203, T-0204, T-0205, T-0206, T-0207, T-0208, T-0209, T-0210
+- `tasks_deferred`: (none)
+- `test_results`: cargo test --lib 213/213 PASS; npm test --run 9/9 PASS
+- `decision_ids`: DEC-0098, DEC-0099, DEC-0100, DEC-0101, DEC-0102, DEC-0103
 - `phase_boundary`: execute → qa
 - `next_scheduled_phase`: qa
 - `next_scheduled_role`: qa
-- `stop_reason`: execute_code_complete_v1_operator_gated
+- `stop_reason`: execute_complete_operator_gated
 
-## Checkpoint: isolation evidence execute 2026-06-07T22:00:00Z
+## Checkpoint: isolation evidence execute 2026-06-10T22:45:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: execute
 - `role`: dev
-- `fresh_context_marker`: execute-20260607-q0023-bug0015-isolation
-- `timestamp`: 2026-06-07T22:00:00Z
-- `evidence_ref`: handoffs/plan_verify_to_execute.md, sprints/quick/Q0023/task.json, handoffs/tl_to_dev.md, decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md
-- `isolation_scope`: Dev execute subagent fresh context; artifact/handoff inputs only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; V1 omniflow smoke not run
+- `fresh_context_marker`: execute-20260610-us0020-dev-fresh
+- `timestamp`: 2026-06-10T22:45:00Z
+- `evidence_ref`: handoffs/plan_verify_to_execute.md, sprints/S0019/tasks.md, handoffs/tl_to_dev.md, decisions/DEC-0098.md..DEC-0103.md
+- `isolation_scope`: Dev execute subagent fresh context; artifact/handoff inputs only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; omniflow smoke not run
 
-## Checkpoint: verify-work BUG-0015 Q0023 2026-06-07T13:44:00Z
+## Strict runtime proof tuple (DEC-0038) — execute 2026-06-10T22:45:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `runtime_proof_id`: runtime-proof-execute-20260610-us0020-001
+- `phase_id`: execute
+- `role`: dev
+- `proof_issued_at`: 2026-06-10T22:45:00Z
+- `proof_ttl_seconds`: 86400
+- `proof_basis`: US-0020 execute complete — T-0198..T-0210 done; cargo lib 213/213; npm 9/9; DEC-0098..0103; operator gates BACKEND_FRONTEND_DEPLOY FULL_FIREFLY_SYNC documented; no host secrets read
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `architecture_decisions`: DEC-0098, DEC-0099, DEC-0100, DEC-0101, DEC-0102, DEC-0103
+- `next_scheduled_phase`: qa
+- `stop_reason`: execute_complete_operator_gated
+
+## Checkpoint: qa completion for US-0020 S0019 2026-06-10T23:00:00Z
+
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `phase_id`: qa
+- `role`: qa
+- `fresh_context_marker`: qa-20260610-us0020-qa-fresh
+- `timestamp`: 2026-06-10T23:00:00Z
+- `evidence_ref`: sprints/S0019/qa-findings.md, handoffs/dev_to_qa.md, sprints/S0019/uat.json, decisions/DEC-0098.md, DEC-0099.md, DEC-0100.md, DEC-0101.md, DEC-0102.md, DEC-0103.md
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `tasks_verified_pass`: T-0198, T-0199, T-0200, T-0201, T-0202, T-0203, T-0204, T-0205, T-0206, T-0207, T-0208, T-0209, T-0210
+- `test_results`: cargo test --lib 213/213 PASS; npm test --run 9/9 PASS
+- `qa_verdict`: PASS
+- `blocking_findings`: 0
+- `decision_ids`: DEC-0098, DEC-0099, DEC-0100, DEC-0101, DEC-0102, DEC-0103
+- `phase_boundary`: qa → verify-work
+- `next_scheduled_phase`: verify-work
+- `next_scheduled_role`: qa
+- `stop_reason`: QA_PASS — hand off to /verify-work; do not begin verify-work in this subagent
+
+## Checkpoint: isolation evidence qa 2026-06-10T23:00:00Z
+
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `phase_id`: qa
+- `role`: qa
+- `fresh_context_marker`: qa-20260610-us0020-qa-fresh
+- `timestamp`: 2026-06-10T23:00:00Z
+- `evidence_ref`: .cursor/commands/qa.md, handoffs/dev_to_qa.md, sprints/S0019/qa-findings.md, sprints/S0019/uat.json, docs/product/acceptance.md (US-0020 AC-1..AC-6), decisions/DEC-0098.md, DEC-0099.md, DEC-0100.md, DEC-0101.md, DEC-0102.md, DEC-0103.md
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `isolation_scope`: QA fresh subagent; artifact/handoff reads only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; verify-work not started
+
+## Strict runtime proof tuple (DEC-0038) — qa 2026-06-10T23:00:00Z
+
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `runtime_proof_id`: runtime-proof-qa-20260610-us0020-001
+- `phase_id`: qa
+- `role`: qa
+- `proof_issued_at`: 2026-06-10T23:00:00Z
+- `proof_ttl_seconds`: 86400
+- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; QA fresh context US-0020; S0019 AC-1..AC-6 code+test PASS; DEC-0098 DEC-0099 DEC-0100 DEC-0101 DEC-0102 DEC-0103 aligned; cargo lib 213/213 npm 9/9; 0 blockers; operator smoke deferred; no host secrets read
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `architecture_decisions`: DEC-0098, DEC-0099, DEC-0100, DEC-0101, DEC-0102, DEC-0103
+- `qa_verdict`: PASS
+- `next_scheduled_phase`: verify-work
+- `stop_reason`: QA_PASS
+
+## Checkpoint: verify-work completion for US-0020 S0019 2026-06-10T23:15:00Z
+
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: verify-work
 - `role`: qa
-- `bug_id`: BUG-0015
-- `fresh_context_marker`: verify-work-20260607-q0023-bug0015
-- `timestamp`: 2026-06-07T13:44:00Z
-- `evidence_ref`: sprints/quick/Q0023/uat.json, sprints/quick/Q0023/uat.md, sprints/quick/Q0023/verify-work-findings.md, handoffs/dev_to_qa.md, handoffs/verify_work_to_release.md, docs/product/acceptance.md (BUG-0015 AU–AW), decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md
-- `active_quick_task_id`: Q0023
-- `architecture_decisions`: DEC-0084, DEC-0085, DEC-0086
-- `verify_work_outcomes`: 3 code pass, 7 pass-with-prerequisites, 0 fail; cargo lib 187/187; frontend 6/6; AU1 card_billing 4/4; omniflow root 401 API 404; 0 blockers
-- `verify_work_verdict`: PASS
-- `uat_summary`: ready_for_release true; operator smoke checklist 10 steps documented
+- `fresh_context_marker`: verify-work-20260610-us0020-qa-fresh
+- `timestamp`: 2026-06-10T23:15:00Z
+- `evidence_ref`: sprints/S0019/verify-work-findings.md, sprints/S0019/uat.json, sprints/S0019/uat.md, handoffs/verify_work_to_release.md, sprints/S0019/qa-findings.md, decisions/DEC-0098.md, DEC-0099.md, DEC-0100.md, DEC-0101.md, DEC-0102.md, DEC-0103.md
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `uat_verdict`: PASS
+- `uat_passed`: 5
+- `uat_pass_with_prerequisites`: 1
+- `uat_failed`: 0
+- `test_results`: cargo test --lib 213/213 PASS; npm test --run 9/9 PASS
+- `decision_ids`: DEC-0098, DEC-0099, DEC-0100, DEC-0101, DEC-0102, DEC-0103
+- `phase_boundary`: verify-work → release
 - `next_scheduled_phase`: release
+- `next_scheduled_role`: release
 - `stop_reason`: VERIFY_WORK_PASS — hand off to /release; do not begin release in this subagent
 
-## Checkpoint: isolation evidence verify-work 2026-06-07T13:44:00Z
+## Checkpoint: isolation evidence verify-work 2026-06-10T23:15:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: verify-work
 - `role`: qa
-- `fresh_context_marker`: verify-work-20260607-q0023-bug0015-isolation
-- `timestamp`: 2026-06-07T13:44:00Z
-- `bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `evidence_ref`: handoffs/dev_to_qa.md, sprints/quick/Q0023/uat.json, sprints/quick/Q0023/uat.md, sprints/quick/Q0023/verify-work-findings.md, handoffs/verify_work_to_release.md, docs/product/acceptance.md, decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md
-- `isolation_scope`: Verify-work fresh subagent; artifact/handoff reads only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; omniflow API probes blocked (404); release not started
+- `fresh_context_marker`: verify-work-20260610-us0020-qa-fresh
+- `timestamp`: 2026-06-10T23:15:00Z
+- `evidence_ref`: sprints/S0019/uat.json, sprints/S0019/uat.md, sprints/S0019/verify-work-findings.md, docs/product/acceptance.md (US-0020 AC-1..AC-6), decisions/DEC-0098.md, DEC-0099.md, DEC-0100.md, DEC-0101.md, DEC-0102.md, DEC-0103.md
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `isolation_scope`: Verify-work fresh subagent; artifact/handoff reads only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; release not started
 
-## Strict runtime proof tuple (DEC-0038) — verify-work 2026-06-07T13:44:00Z
+## Strict runtime proof tuple (DEC-0038) — verify-work 2026-06-10T23:15:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
-- `runtime_proof_id`: runtime-proof-verify-work-20260607-bug0015-q0023-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `runtime_proof_id`: runtime-proof-verify-work-20260610-us0020-001
 - `phase_id`: verify-work
 - `role`: qa
-- `proof_issued_at`: 2026-06-07T13:44:00Z
+- `proof_issued_at`: 2026-06-10T23:15:00Z
 - `proof_ttl_seconds`: 86400
-- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; verify-work fresh context BUG-0015; Q0023 3 code pass 7 pass-with-prerequisites 0 fail; cargo lib 187/187 frontend 6/6; omniflow root 401 API 404; DEC-0084 DEC-0085 DEC-0086 aligned; 0 blockers; no host secrets read
-- `bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `architecture_decisions`: DEC-0084, DEC-0085, DEC-0086
-- `verify_work_verdict`: PASS
+- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; verify-work fresh context US-0020; UAT 6/6 PASS (5 code + AC-6 pass-with-prerequisites); cargo lib 213/213 npm 9/9; operator gates BACKEND_FRONTEND_DEPLOY FULL_FIREFLY_SYNC documented; 0 blockers; no host secrets read
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `architecture_decisions`: DEC-0098, DEC-0099, DEC-0100, DEC-0101, DEC-0102, DEC-0103
+- `uat_verdict`: PASS
 - `next_scheduled_phase`: release
 - `stop_reason`: VERIFY_WORK_PASS
 
-## Checkpoint: qa completion for BUG-0015 Q0023 2026-06-07T22:30:00Z
+## Checkpoint: release completion for US-0020 S0019 2026-06-10T23:30:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
-- `phase_id`: qa
-- `role`: qa
-- `fresh_context_marker`: qa-20260607-q0023-bug0015-fresh
-- `timestamp`: 2026-06-07T22:30:00Z
-- `evidence_ref`: sprints/quick/Q0023/qa-findings.md, handoffs/qa_to_verify_work.md, sprints/quick/Q0023/uat.json, handoffs/dev_to_qa.md, decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md
-- `active_bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `tasks_verified_pass`: AU1, AU2, AU3, AU4
-- `tasks_deferred`: V1
-- `test_results`: cargo test --lib 187/187 PASS; npm test --run 6/6 PASS; card_billing 4/4; interval_matches 2/2; build_active_payee 1/1
-- `qa_verdict`: PASS
-- `blocking_findings`: 0
-- `decision_ids`: DEC-0084, DEC-0085, DEC-0086
-- `phase_boundary`: qa → verify-work
-- `next_scheduled_phase`: verify-work
-- `next_scheduled_role`: verify-work
-- `stop_reason`: qa_pass_v1_operator_gated
-
-## Checkpoint: isolation evidence qa 2026-06-07T22:30:00Z
-
-- `orchestrator_run_id`: auto-20260607-bug0015-001
-- `phase_id`: qa
-- `role`: qa
-- `fresh_context_marker`: qa-20260607-q0023-bug0015-isolation
-- `timestamp`: 2026-06-07T22:30:00Z
-- `evidence_ref`: handoffs/dev_to_qa.md, sprints/quick/Q0023/{uat.md,task.json,progress.md}, decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md, backend/src/{recurrence/normalize.rs,subscriptions/repository.rs,subscriptions/detection.rs,subscriptions/service.rs}
-- `isolation_scope`: QA subagent fresh context; artifact/handoff inputs only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; V1 omniflow smoke not run; tests re-run independently in QA sandbox
-
-## Checkpoint: release BUG-0015 Q0023 2026-06-07T14:00:00Z
-
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: release
 - `role`: release
-- `bug_id`: BUG-0015
-- `fresh_context_marker`: release-20260607-q0023-bug0015
-- `timestamp`: 2026-06-07T14:00:00Z
-- `evidence_ref`: handoffs/releases/Q0023-release-notes.md, sprints/quick/Q0023/release-findings.md, sprints/quick/Q0023/uat.json, sprints/quick/Q0023/qa-findings.md, handoffs/verify_work_to_release.md, docs/product/backlog.md#BUG-0015, docs/product/acceptance.md (BUG-0015 AU–AW), README.md (Product status BUG-0015 bullet), decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md
-- `active_quick_task_id`: Q0023
-- `release_version`: bug0015-q0023
-- `architecture_decisions`: DEC-0084, DEC-0085, DEC-0086
-- `acceptance_rows`: AU, AV, AW (checked)
-- `release_outcomes`: All gates PASS; backlog BUG-0015 DONE; acceptance AU–AW checked; queue Q0023 released; Product status bullet appended; operator gates BACKEND_FRONTEND_DEPLOY POSTGRES_PERSISTENCE_PROBE FULL_FIREFLY_SYNC pending post-release smoke; V1 runtime deferred
-- `gate_snapshot`: check-in_test:pass(187/187); qa:pass; uat:pass-with-prerequisites(verify-work); isolation:pass; runtime_proof:pass; publish:skipped(disabled)
+- `fresh_context_marker`: release-20260610-us0020-release-fresh
+- `timestamp`: 2026-06-10T23:30:00Z
+- `evidence_ref`: handoffs/releases/S0019-release-notes.md, sprints/S0019/release-findings.md, sprints/S0019/uat.json, sprints/S0019/qa-findings.md, handoffs/release_queue.md
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `release_version`: 0.20.0-us0020
+- `architecture_decisions`: DEC-0098, DEC-0099, DEC-0100, DEC-0101, DEC-0102, DEC-0103
+- `acceptance_rows`: AC-1, AC-2, AC-3, AC-4, AC-5, AC-6 (checked)
+- `release_outcomes`: All gates PASS; backlog US-0020 DONE; acceptance AC-1..AC-6 checked; queue S0019 released; Product status bullet appended; intake bundle backlog drain complete; operator gates BACKEND_FRONTEND_DEPLOY FULL_FIREFLY_SYNC pending post-release smoke
+- `gate_snapshot`: check-in_test:pass(213/213 lib, 9/9 vitest); qa:pass; uat:pass-with-prerequisites(verify-work); isolation:pass; runtime_proof:pass; publish:skipped(disabled)
 - `next_scheduled_phase`: refresh-context
 - `stop_reason`: RELEASE_PASS — hand off to /refresh-context; do not begin refresh-context in this subagent
 
-## Checkpoint: isolation evidence release 2026-06-07T14:00:00Z
+## Checkpoint: isolation evidence release 2026-06-10T23:30:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: release
 - `role`: release
-- `fresh_context_marker`: release-20260607-q0023-bug0015-isolation
-- `timestamp`: 2026-06-07T14:00:00Z
-- `bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `evidence_ref`: handoffs/releases/Q0023-release-notes.md, sprints/quick/Q0023/release-findings.md, .cursor/commands/release.md, docs/engineering/phase-context.md
-- `isolation_scope`: Release fresh subagent; artifact/handoff reads only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read; refresh-context not started
+- `fresh_context_marker`: release-20260610-us0020-release-fresh
+- `timestamp`: 2026-06-10T23:30:00Z
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `evidence_ref`: handoffs/releases/S0019-release-notes.md, sprints/S0019/release-findings.md, .cursor/commands/release.md, docs/engineering/phase-context.md
+- `isolation_scope`: Release fresh subagent; artifact/handoff reads only; no prior chat history; no host `.env`, `.env_prod`, or operator secret files read
 
-## Strict runtime proof tuple (DEC-0038) — release 2026-06-07T14:00:00Z
+## Strict runtime proof tuple (DEC-0038) — release 2026-06-10T23:30:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
-- `runtime_proof_id`: runtime-proof-release-20260607-bug0015-q0023-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `runtime_proof_id`: runtime-proof-release-20260610-us0020-001
 - `phase_id`: release
 - `role`: release
-- `proof_issued_at`: 2026-06-07T14:00:00Z
+- `proof_issued_at`: 2026-06-10T23:30:00Z
 - `proof_ttl_seconds`: 86400
-- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; Release fresh context BUG-0015; cargo test --lib 187/187; acceptance AU–AW checked; backlog DONE; operator smoke pass-with-prerequisites; DEC-0084 DEC-0085 DEC-0086; publish skipped disabled; no host secrets read
-- `bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `release_version`: bug0015-q0023
-- `architecture_decisions`: DEC-0084, DEC-0085, DEC-0086
+- `proof_basis`: Release fresh context US-0020; S0019 gates PASS; cargo test --lib 213/213; npm test 9/9; acceptance AC-1..AC-6 checked; backlog DONE; intake bundle drain complete; operator smoke pass-with-prerequisites; DEC-0098 DEC-0099 DEC-0100 DEC-0101 DEC-0102 DEC-0103; publish skipped disabled; validate_doc_profile exit 0; no host secrets read
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `release_version`: 0.20.0-us0020
 - `next_scheduled_phase`: refresh-context
 - `stop_reason`: RELEASE_PASS
 
-## Checkpoint: auto phase boundary verification — release 2026-06-07T14:01:00Z
+## Checkpoint: auto phase boundary verification — release 2026-06-10T23:31:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `completed_phase`: release
 - `completed_role`: release
 - `boundary_verification`: isolation evidence + strict runtime proof tuple present and valid (US-0048 / US-0056 pass); execute + qa + verify-work + release lifecycle complete
@@ -912,110 +877,66 @@
 - `next_scheduled_phase`: refresh-context
 - `next_scheduled_role`: curator
 
-## Checkpoint: refresh-context BUG-0015 Q0023 2026-06-07T14:00:00Z
+## Checkpoint: refresh-context US-0020 S0019 2026-06-10T23:45:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: refresh-context
 - `role`: curator
-- `fresh_context_marker`: refresh-context-20260607-post-q0023-bug0015
-- `timestamp`: 2026-06-07T14:00:00Z
-- `evidence_ref`: handoffs/verify_work_to_release.md, sprints/quick/Q0023/verify-work-findings.md, sprints/quick/Q0023/uat.json, sprints/quick/Q0023/qa-findings.md, docs/product/backlog.md#BUG-0015, docs/product/acceptance.md (BUG-0015 AU–AW), decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md, docs/engineering/research.md#r-0081, docs/engineering/research.md#r-0082, handoffs/curator_refresh.md, handoffs/resume_brief.md
-- `bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `release_version`: bug0015-q0023
-- `architecture_decisions`: DEC-0084, DEC-0085, DEC-0086
+- `fresh_context_marker`: refresh-context-20260610-us0020-curator-fresh
+- `timestamp`: 2026-06-10T23:45:00Z
+- `evidence_ref`: handoffs/releases/S0019-release-notes.md, sprints/S0019/release-findings.md, sprints/S0019/uat.json, sprints/S0019/qa-findings.md, handoffs/verify_work_to_release.md, docs/product/backlog.md#US-0020, docs/product/acceptance.md (US-0020 AC-1..AC-6), decisions/DEC-0098.md, DEC-0099.md, DEC-0100.md, DEC-0101.md, DEC-0102.md, DEC-0103.md, docs/engineering/research.md#r-0085, docs/engineering/research.md#r-0080, handoffs/curator_refresh.md, handoffs/resume_brief.md
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `release_version`: 0.20.0-us0020
+- `architecture_decisions`: DEC-0098, DEC-0099, DEC-0100, DEC-0101, DEC-0102, DEC-0103
+- `open_stories_remaining`: 0
+- `backlog_drain_complete`: true
 - `next_scheduled_phase`: idle
-- `stop_reason`: completed
-- `backlog_reconciled`: BUG-0015 DONE; acceptance AU–AW checked; triad pass; defect drain complete
-- `open_bug_queue`: (empty)
-- `open_stories`: (empty — backlog drain complete for current scope)
-- `recommended_next_auto`: idle — operator follow-up or PO intake
-- `artifacts_updated`: docs/engineering/state.md, docs/engineering/decisions.md, docs/engineering/research.md, handoffs/resume_brief.md, handoffs/curator_refresh.md, sprints/quick/Q0023/summary.md
-- `research_review`: R-0081 fulfilled by Q0023/DEC-0084/0085/0086; R-0082 fulfilled by DEC-0084; retain for traceability; no duplicate merge; no prune candidates; no outdated flags set
-- `triad_hot_surface`: rollover units=17 total (11 → `state-pack-20260607-h.md`; 3 → `state-pack-20260607-i.md`; 2 → `state-pack-20260607-j.md`; 1 → `handoffs/archive/po-to-tl-pack-20260607-l.md`); boundary=contiguous prefix; retained=984 state body lines, 35/50 checkpoints; po_to_tl 496/500 lines; architecture 2935/3000 lines; `--check` PASS
-- `codebase_map_refresh`: skipped (`CODEBASE_MAP_REFRESH_ON_ROLLOVER` unset)
-- `isolation_scope`: curator refresh-context subagent; artifact/handoff reads only; no host `.env`, `.env_prod`, or operator secret files read
+- `stop_reason`: completed (segment + backlog drain complete)
 
-## Checkpoint: isolation evidence refresh-context 2026-06-07T14:00:00Z
+## Checkpoint: isolation evidence refresh-context 2026-06-10T23:45:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `phase_id`: refresh-context
 - `role`: curator
-- `fresh_context_marker`: refresh-context-20260607-post-q0023-curator-fresh
-- `timestamp`: 2026-06-07T14:00:00Z
-- `evidence_ref`: handoffs/verify_work_to_release.md, sprints/quick/Q0023/uat.json, docs/product/backlog.md#BUG-0015, docs/product/acceptance.md (BUG-0015 AU–AW), decisions/DEC-0084.md, DEC-0085.md, DEC-0086.md
-- `bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
+- `fresh_context_marker`: refresh-context-20260610-us0020-curator-fresh
+- `timestamp`: 2026-06-10T23:45:00Z
+- `evidence_ref`: handoffs/releases/S0019-release-notes.md, sprints/S0019/uat.json, docs/product/backlog.md#US-0020, docs/product/acceptance.md (US-0020 AC-1..AC-6), decisions/DEC-0098.md, DEC-0099.md, DEC-0100.md, DEC-0101.md, DEC-0102.md, DEC-0103.md
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
 - `isolation_scope`: curator refresh-context subagent; artifact/handoff context only; no prior chat history; no host secrets read
 
-## Strict runtime proof tuple (DEC-0038) — refresh-context 2026-06-07T14:00:00Z
+## Strict runtime proof tuple (DEC-0038) — refresh-context 2026-06-10T23:45:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
-- `runtime_proof_id`: runtime-proof-refresh-context-20260607-bug0015-q0023-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
+- `runtime_proof_id`: runtime-proof-refresh-context-20260610-us0020-001
 - `phase_id`: refresh-context
 - `role`: curator
-- `proof_issued_at`: 2026-06-07T14:00:00Z
+- `proof_issued_at`: 2026-06-10T23:45:00Z
 - `proof_ttl_seconds`: 86400
-- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; curator fresh context; BUG-0015 DONE Q0023 release PASS; acceptance AU–AW checked; triad rollover units=12 check PASS; R-0081 R-0082 fulfilled DEC-0084 DEC-0085 DEC-0086; defect drain complete; operator smoke pass-with-prerequisites; no host secrets read
-- `bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `release_version`: bug0015-q0023
-- `architecture_decisions`: DEC-0084, DEC-0085, DEC-0086
-- `recommended_next_auto`: idle
-- `next_scheduled_phase`: idle
-- `stop_reason`: completed
+- `proof_basis`: SHA-256 sorted-key JSON per DEC-0038; curator fresh context; US-0020 DONE S0019 release PASS `0.20.0-us0020`; acceptance AC-1..AC-6 checked; triad rollover units=27,2 check PASS; R-0085 R-0080 fulfilled DEC-0098 DEC-0099 DEC-0100 DEC-0101 DEC-0102 DEC-0103; open_stories_remaining=0; intake bundle drain complete; operator smoke pass-with-prerequisites; no host secrets read
+- `active_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `release_version`: 0.20.0-us0020
+- `architecture_decisions`: DEC-0098, DEC-0099, DEC-0100, DEC-0101, DEC-0102, DEC-0103
+- `open_stories_remaining`: 0
+- `stop_reason`: completed (segment + backlog drain complete)
 
-## Checkpoint: auto orchestration stop 2026-06-07T14:05:00Z
+## Checkpoint: auto orchestration segment stop 2026-06-10T23:50:00Z
 
-- `orchestrator_run_id`: auto-20260607-bug0015-001
+- `orchestrator_run_id`: auto-20260608-us0020-001
 - `invocation_mode`: auto
-- `segment_work_item_kind`: bug
-- `closed_bug_id`: BUG-0015
-- `active_quick_task_id`: Q0023
-- `release_version`: bug0015-q0023
+- `segment_work_item_kind`: story
+- `closed_story_id`: US-0020
+- `active_sprint_id`: S0019
+- `release_version`: 0.20.0-us0020
 - `phases_completed`: discovery → research → architecture → sprint-plan → plan-verify → execute → qa → verify-work → release → refresh-context
-- `architecture_decisions`: DEC-0084 (card payee_key normalization), DEC-0085 (payee+interval confirm inheritance), DEC-0086 (±3d tolerance + fingerprint rotation)
+- `architecture_decisions`: DEC-0098 (discover explorer), DEC-0099 (manual confirm), DEC-0100 (majority category), DEC-0101 (tag schema), DEC-0102 (tag assign/filter), DEC-0103 (Grafana `$tag` P2)
 - `boundary_verification`: isolation evidence + strict runtime proof tuples present for all phases (US-0048 / US-0056 pass)
-- `hot_surface_gate`: PASS (triad rollover units=17 at refresh-context; --check exit 0)
+- `hot_surface_gate`: PASS (triad rollover units=27,2 at refresh-context; --check exit 0)
 - `bug_queue_remaining`: 0 (defect drain complete)
-- `open_stories_remaining`: 0 (backlog drain complete for current scope)
-- `recommended_next_auto`: idle — operator follow-up or PO intake
-- `operator_follow_up`: Deploy Q0020+Q0022+Q0023 bundle; **BACKEND_FRONTEND_DEPLOY** + **POSTGRES_PERSISTENCE_PROBE** + **FULL_FIREFLY_SYNC**; then 10-step rebuild smoke per `sprints/quick/Q0023/uat.json` `operator_smoke_checklist`
-- `stop_reason`: completed
-
-## Checkpoint: auto phase plan materialization 2026-06-07T15:30:00Z
-
-- `orchestrator_run_id`: auto-20260607-resume-001
-- `invocation_mode`: auto
-- `bug_target_argv`: bug-target=BUG-0014, bug-target=BUG-0015
-- `bug_queue_active`: true
-- `backlog_drain_active`: false
-- `resolved_phase_plan`: intake → discovery → research → architecture → sprint-plan → plan-verify → execute → qa → verify-work → release → refresh-context
-- `skipped_phases`: (none)
-- `AUTO_PHASE_PLAN`: full (default)
-- `AUTO_BACKLOG_DRAIN`: 1 (scratchpad; story scheduler inactive — bug-target argv selects bug scheduler)
-- `AUTO_BUG_QUEUE`: 0 (scratchpad; overridden by bug-target argv)
-- `AUTO_FLOW_MODE`: full_autonomy
-
-## Checkpoint: auto resume resolution fail 2026-06-07T15:30:00Z
-
-- `orchestrator_run_id`: auto-20260607-resume-001
-- `resolution_source`: argument
-- `requested_bug_targets`: BUG-0014, BUG-0015
-- `resolved_bug_target`: BUG-0014
-- `bug_target_status`: DONE
-- `resume_error_code`: AUTO_BUG_TARGET_NOT_OPEN
-- `resume_error_summary`: BUG-0014 status DONE (released bug0014-q0022 / Q0022 2026-06-07); BUG-0015 also DONE (bug0015-q0023 / Q0023 2026-06-07); open bug queue empty
-- `fix`: Use `/auto` without bug-target for backlog drain (US-0018+ OPEN), or `/quick` for new defect intake; operator smoke per Q0022/Q0023 uat.json
-
-## Checkpoint: auto orchestration stop 2026-06-07T15:30:00Z
-
-- `orchestrator_run_id`: auto-20260607-resume-001
-- `invocation_mode`: auto
-- `segment_work_item_kind`: bug
-- `active_bug_id`: (none — materialization blocked)
-- `bug_queue_remaining`: 0
-- `open_stories_remaining`: 3 (US-0018, US-0019, US-0020 OPEN per backlog.md)
-- `phases_spawned`: 0
-- `stop_reason`: missing_input
-- `recommended_next_auto`: `/auto` (no bug-target) with AUTO_BACKLOG_DRAIN=1 for US-0018; or operator deploy + omniflow smoke for released bugs
+- `open_stories_remaining`: 0 (intake bundle backlog drain complete)
+- `intake_bundle`: intake-20260607-category-planning-subscriptions (US-0018, US-0019, US-0020 — all DONE)
+- `recommended_next_auto`: idle — await new intake
+- `operator_follow_up`: Deploy US-0018+US-0019+US-0020 delta; **BACKEND_FRONTEND_DEPLOY** + **FULL_FIREFLY_SYNC**; discover/tag OIDC smoke per `sprints/S0019/uat.json`; category-filter smoke per `sprints/S0017/uat.json`; goal-plan smoke per `sprints/S0018/uat.json`
+- `stop_reason`: completed (segment + backlog drain complete)

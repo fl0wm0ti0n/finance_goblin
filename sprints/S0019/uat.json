@@ -1,0 +1,310 @@
+{
+  "sprint": "S0019",
+  "stories": ["US-0020"],
+  "story_id": "US-0020",
+  "phase": "verify-work",
+  "plan_verified_at": "2026-06-10T17:00:00Z",
+  "plan_verify_verdict": "PASS",
+  "execute_at": "2026-06-10T22:45:00Z",
+  "qa_verified_at": "2026-06-10T23:00:00Z",
+  "verified_at": "2026-06-10T23:15:00Z",
+  "status": "pass",
+  "verdict": "PASS",
+  "ready_for_verify_work": false,
+  "ready_for_release": true,
+  "acceptance_source": "docs/product/acceptance.md#US-0020",
+  "qa_evidence": "sprints/S0019/qa-findings.md",
+  "decisions": ["DEC-0098", "DEC-0099", "DEC-0100", "DEC-0101", "DEC-0102", "DEC-0103"],
+  "research": ["R-0085", "R-0080"],
+  "orchestrator_run_id": "auto-20260608-us0020-001",
+  "environment": {
+    "omniflow_host_available": false,
+    "backend_frontend_deploy_pending": true,
+    "full_firefly_sync_pending": true
+  },
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before": "AC-6 OIDC smoke + live discover/tag probes",
+      "action": "Deploy S0019 backend + frontend on US-0010 external profile (financegnome.omniflow.cc)"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before": "AC-1/AC-3 discover + majority category smoke",
+      "action": "Full Firefly sync so mirror transactions and category_id are current"
+    }
+  ],
+  "automated_checks": [
+    {
+      "id": "VW-AUTO-1",
+      "description": "cargo test --lib",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-10 — 213/213 PASS"
+    },
+    {
+      "id": "VW-AUTO-2",
+      "description": "npm test -- --run",
+      "result": "pass",
+      "notes": "verify-work re-run 2026-06-10 — 9/9 PASS"
+    },
+    {
+      "id": "VW-AUTO-3",
+      "description": "AC-1 discover search + cap 50",
+      "result": "pass",
+      "notes": "discovery.rs run_discover; GET /discover; SubscriptionsPage Discover tab"
+    },
+    {
+      "id": "VW-AUTO-4",
+      "description": "AC-2 confirm from discover + DEC-0085 merge",
+      "result": "pass",
+      "notes": "repository.rs confirm_from_discover; POST /discover/confirm; no new_detection alert"
+    },
+    {
+      "id": "VW-AUTO-5",
+      "description": "AC-3 majority display category + tie-break",
+      "result": "pass",
+      "notes": "majority_category_id RANK + latest-date; display_category_id; badge + tooltip UI"
+    },
+    {
+      "id": "VW-AUTO-6",
+      "description": "AC-4 tag CRUD + assign + filter",
+      "result": "pass",
+      "notes": "subscription_tags.rs PATCH rename; PUT assign; ?tag= slug filter; tag manager UI"
+    },
+    {
+      "id": "VW-AUTO-7",
+      "description": "AC-5 product DB storage; no Firefly write-back",
+      "result": "pass",
+      "notes": "014_us0020_display_category_tags.sql; app tables only"
+    },
+    {
+      "id": "VW-AUTO-8",
+      "description": "AC-6 US-0003/US-0008 regression audit",
+      "result": "pass",
+      "notes": "run_candidates unchanged; manual_discover_confirm_does_not_use_alert_fingerprint_path; pending confirm/reject preserved"
+    }
+  ],
+  "probe_results": [
+    {
+      "step": "cargo test --lib baseline",
+      "probe_kind": "test",
+      "command": "cd backend && cargo test --lib",
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "notes": "Direct verify-work re-run 213/213"
+    },
+    {
+      "step": "npm test frontend vitest",
+      "probe_kind": "test",
+      "command": "cd frontend && npm test -- --run",
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "notes": "Direct verify-work re-run 9/9"
+    },
+    {
+      "step": "OIDC omniflow discover/tag smoke AC-1..AC-6",
+      "probe_kind": "manual_operator",
+      "passed": false,
+      "reason_code": "UAT_PROBE_UNRESOLVED",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY,FULL_FIREFLY_SYNC",
+      "notes": "Live probes deferred per US-0018/US-0019 precedent; checklist in uat.md"
+    }
+  ],
+  "acceptance_criteria": [
+    {
+      "id": "AC-1",
+      "description": "Manual search by account, payee, interval; capped results",
+      "uat_id": "UAT-1",
+      "tasks": ["T-0199", "T-0200", "T-0209"],
+      "result": "pass"
+    },
+    {
+      "id": "AC-2",
+      "description": "Operator confirm searched candidate without auto-detection-only path",
+      "uat_id": "UAT-2",
+      "tasks": ["T-0201", "T-0209"],
+      "result": "pass"
+    },
+    {
+      "id": "AC-3",
+      "description": "Majority display category with documented tie-break",
+      "uat_id": "UAT-3",
+      "tasks": ["T-0202", "T-0203", "T-0209"],
+      "result": "pass"
+    },
+    {
+      "id": "AC-4",
+      "description": "Tag CRUD; multi-assign; filter list by tag",
+      "uat_id": "UAT-4",
+      "tasks": ["T-0204", "T-0205", "T-0206", "T-0209"],
+      "result": "pass"
+    },
+    {
+      "id": "AC-5",
+      "description": "Product DB storage; no Firefly write-back",
+      "uat_id": "UAT-5",
+      "tasks": ["T-0198", "T-0202", "T-0204", "T-0209"],
+      "result": "pass"
+    },
+    {
+      "id": "AC-6",
+      "description": "US-0003/US-0008 regression; OIDC external smoke",
+      "uat_id": "UAT-6",
+      "tasks": ["T-0207", "T-0208", "T-0209"],
+      "result": "pass_with_prerequisites"
+    }
+  ],
+  "uat_steps": [
+    {
+      "id": "UAT-1",
+      "ac": "AC-1",
+      "acceptance": "AC-1",
+      "description": "Discover tab filters by account, payee, interval; results capped at 50",
+      "tasks": ["T-0199", "T-0200", "T-0209"],
+      "result": "pass",
+      "evidence": "discovery.rs run_discover limit.min(50); GET /discover; SubscriptionsPage Discover tab"
+    },
+    {
+      "id": "UAT-2",
+      "ac": "AC-2",
+      "acceptance": "AC-2",
+      "description": "Confirm discover candidate → confirmed subscription (no pending-only path)",
+      "tasks": ["T-0201", "T-0209"],
+      "result": "pass",
+      "evidence": "confirm_from_discover direct confirmed insert; POST /discover/confirm; DEC-0085 merge; DEC-0099 no upsert_alert"
+    },
+    {
+      "id": "UAT-3",
+      "ac": "AC-3",
+      "acceptance": "AC-3",
+      "description": "Majority display category badge + tie-break tooltip on confirmed row",
+      "tasks": ["T-0202", "T-0203", "T-0209"],
+      "result": "pass",
+      "evidence": "majority_category_id RANK + latest-date tie-break; display_category_id; badge + tooltip UI"
+    },
+    {
+      "id": "UAT-4",
+      "ac": "AC-4",
+      "acceptance": "AC-4",
+      "description": "Tag CRUD; assign multiple tags; filter All tab by tag slug",
+      "tasks": ["T-0204", "T-0205", "T-0206", "T-0209"],
+      "result": "pass",
+      "evidence": "subscription_tags.rs CRUD PATCH rename; PUT assign; ?tag= filter; tag manager + chips"
+    },
+    {
+      "id": "UAT-5",
+      "ac": "AC-5",
+      "acceptance": "AC-5",
+      "description": "Tags + display_category in product DB; no Firefly write-back",
+      "tasks": ["T-0198", "T-0202", "T-0204", "T-0209"],
+      "result": "pass",
+      "evidence": "014_us0020_display_category_tags.sql; operator_tags + subscription_pattern_tags; no Firefly mutation paths"
+    },
+    {
+      "id": "UAT-6",
+      "ac": "AC-6",
+      "acceptance": "AC-6",
+      "description": "US-0003 pending confirm + US-0008 alert dedup unchanged; OIDC smoke",
+      "tasks": ["T-0207", "T-0208", "T-0209"],
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY,FULL_FIREFLY_SYNC",
+      "evidence": "run_candidates unchanged; manual_discover_confirm_does_not_use_alert_fingerprint_path; sprints/S0019/uat.md OIDC checklist; live probes deferred"
+    }
+  ],
+  "steps": [
+    {
+      "id": "UAT-1",
+      "acceptance_id": "AC-1",
+      "description": "Discover tab filters by account, payee, interval; results capped at 50",
+      "result": "pass",
+      "tasks": ["T-0199", "T-0200", "T-0209"],
+      "evidence": "discovery.rs run_discover limit.min(50); GET /discover; SubscriptionsPage Discover tab"
+    },
+    {
+      "id": "UAT-2",
+      "acceptance_id": "AC-2",
+      "description": "Confirm discover candidate → confirmed subscription (no pending-only path)",
+      "result": "pass",
+      "tasks": ["T-0201", "T-0209"],
+      "evidence": "confirm_from_discover direct confirmed insert; POST /discover/confirm; DEC-0085 merge; DEC-0099 no upsert_alert"
+    },
+    {
+      "id": "UAT-3",
+      "acceptance_id": "AC-3",
+      "description": "Majority display category badge + tie-break tooltip on confirmed row",
+      "result": "pass",
+      "tasks": ["T-0202", "T-0203", "T-0209"],
+      "evidence": "majority_category_id RANK + latest-date tie-break; display_category_id; badge + tooltip UI"
+    },
+    {
+      "id": "UAT-4",
+      "acceptance_id": "AC-4",
+      "description": "Tag CRUD; assign multiple tags; filter All tab by tag slug",
+      "result": "pass",
+      "tasks": ["T-0204", "T-0205", "T-0206", "T-0209"],
+      "evidence": "subscription_tags.rs CRUD PATCH rename; PUT assign; ?tag= filter; tag manager + chips"
+    },
+    {
+      "id": "UAT-5",
+      "acceptance_id": "AC-5",
+      "description": "Tags + display_category in product DB; no Firefly write-back",
+      "result": "pass",
+      "tasks": ["T-0198", "T-0202", "T-0204", "T-0209"],
+      "evidence": "014_us0020_display_category_tags.sql; operator_tags + subscription_pattern_tags; no Firefly mutation paths"
+    },
+    {
+      "id": "UAT-6",
+      "acceptance_id": "AC-6",
+      "description": "US-0003 pending confirm + US-0008 alert dedup unchanged; OIDC smoke",
+      "result": "pass_with_prerequisites",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY,FULL_FIREFLY_SYNC",
+      "tasks": ["T-0207", "T-0208", "T-0209"],
+      "evidence": "run_candidates unchanged; manual_discover_confirm_does_not_use_alert_fingerprint_path; sprints/S0019/uat.md OIDC checklist; live probes deferred"
+    }
+  ],
+  "row_verdicts": {
+    "AC-1": "pass",
+    "AC-2": "pass",
+    "AC-3": "pass",
+    "AC-4": "pass",
+    "AC-5": "pass",
+    "AC-6": "pass_with_prerequisites"
+  },
+  "task_ids": [
+    "T-0198", "T-0199", "T-0200", "T-0201", "T-0202", "T-0203",
+    "T-0204", "T-0205", "T-0206", "T-0207", "T-0208", "T-0209", "T-0210"
+  ],
+  "mandatory_task_ids": [
+    "T-0198", "T-0199", "T-0200", "T-0201", "T-0202", "T-0203",
+    "T-0204", "T-0205", "T-0206", "T-0207", "T-0208", "T-0209"
+  ],
+  "optional_task_ids": ["T-0210"],
+  "acceptance_coverage": {
+    "AC-1": ["T-0199", "T-0200", "T-0209"],
+    "AC-2": ["T-0201", "T-0209"],
+    "AC-3": ["T-0202", "T-0203", "T-0209"],
+    "AC-4": ["T-0204", "T-0205", "T-0206", "T-0209"],
+    "AC-5": ["T-0198", "T-0202", "T-0204", "T-0209"],
+    "AC-6": ["T-0207", "T-0208", "T-0209"]
+  },
+  "blockers": [],
+  "summary": {
+    "acceptance_criteria_total": 6,
+    "acceptance_criteria_pass": 6,
+    "passed": 5,
+    "pass_with_prerequisites": 1,
+    "failed": 0,
+    "pending": 0,
+    "deferred_operator": 8,
+    "automated_pass": 8
+  },
+  "operator_prerequisites": [
+    "BACKEND_FRONTEND_DEPLOY — deploy S0019 backend + frontend on US-0010 external profile (financegnome.omniflow.cc)",
+    "FULL_FIREFLY_SYNC — ensure mirror transactions + categories current for discover + majority category",
+    "Execute OIDC 8-step checklist in sprints/S0019/uat.md after deploy"
+  ],
+  "next_phase": "release",
+  "plan_verify_ref": "sprints/S0019/plan-verify.json",
+  "qa_ref": "sprints/S0019/qa-findings.md",
+  "verify_work_ref": "sprints/S0019/verify-work-findings.md"
+}

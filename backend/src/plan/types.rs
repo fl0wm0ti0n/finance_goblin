@@ -11,6 +11,7 @@ pub enum PlanTemplate {
     HousePurchase,
     Custom,
     AllocationTarget,
+    GoalBalance,
 }
 
 impl PlanTemplate {
@@ -22,6 +23,7 @@ impl PlanTemplate {
             Self::HousePurchase => "house_purchase",
             Self::Custom => "custom",
             Self::AllocationTarget => "allocation_target",
+            Self::GoalBalance => "goal_balance",
         }
     }
 
@@ -33,6 +35,7 @@ impl PlanTemplate {
             "house_purchase" => Some(Self::HousePurchase),
             "custom" => Some(Self::Custom),
             "allocation_target" => Some(Self::AllocationTarget),
+            "goal_balance" => Some(Self::GoalBalance),
             _ => None,
         }
     }
@@ -166,6 +169,9 @@ pub struct PlanRow {
     pub name: String,
     pub template: String,
     pub is_active: bool,
+    pub target_balance_eur: Option<f64>,
+    pub target_date: Option<NaiveDate>,
+    pub goal_account_id: Option<String>,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -324,4 +330,85 @@ pub struct EphemeralPlanDraft {
 
 pub fn fmt_amount(value: f64) -> String {
     format!("{:.2}", value)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GoalYearlyRollup {
+    pub year: i32,
+    pub planned_net_sum: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct GoalStatsResponse {
+    pub plan_id: String,
+    pub version_id: String,
+    pub target_balance_eur: String,
+    pub target_date: String,
+    pub goal_account_id: Option<String>,
+    pub monthly_delta_vs_baseline: String,
+    pub yearly_rollup: Vec<GoalYearlyRollup>,
+    pub projected_balance_at_target: Option<String>,
+    pub gap_eur: Option<String>,
+    pub required_monthly_savings_eur: Option<String>,
+    pub on_track: bool,
+    pub beyond_horizon: bool,
+    pub computed_at: Option<String>,
+    pub household_fallback: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CategorySavingsSuggestion {
+    pub category_id: String,
+    pub category_name: String,
+    pub avg_monthly_outflow_eur: String,
+    pub transaction_count: i64,
+    pub suggested_reduction_eur: String,
+    pub evidence_summary: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CategorySavingsMeta {
+    pub months: u32,
+    pub limit: u32,
+    pub ranking: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CategorySavingsResponse {
+    pub suggestions: Vec<CategorySavingsSuggestion>,
+    pub meta: CategorySavingsMeta,
+}
+
+pub fn validate_goal_fields(
+    target_balance_eur: Option<f64>,
+    target_date: Option<NaiveDate>,
+    today: NaiveDate,
+) -> Result<(), &'static str> {
+    let balance = target_balance_eur.ok_or("target_balance_eur is required for goal_balance")?;
+    if balance <= 0.0 {
+        return Err("target_balance_eur must be positive");
+    }
+    let date = target_date.ok_or("target_date is required for goal_balance")?;
+    if date < today {
+        return Err("target_date must be today or later");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod goal_types_tests {
+    use super::*;
+
+    #[test]
+    fn validate_goal_fields_rejects_past_date() {
+        let today = NaiveDate::from_ymd_opt(2026, 6, 9).unwrap();
+        let err = validate_goal_fields(Some(1000.0), Some(today - chrono::Duration::days(1)), today);
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn validate_goal_fields_accepts_valid() {
+        let today = NaiveDate::from_ymd_opt(2026, 6, 9).unwrap();
+        assert!(validate_goal_fields(Some(10000.0), Some(today + chrono::Duration::days(30)), today).is_ok());
+    }
 }

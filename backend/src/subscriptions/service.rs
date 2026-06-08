@@ -78,7 +78,7 @@ impl SubscriptionService {
         status: Option<&str>,
         kind: Option<&str>,
     ) -> Result<Vec<serde_json::Value>, SubscriptionError> {
-        let rows = self.repo.list_patterns(status, kind).await?;
+        let rows = self.repo.list_patterns(status, kind, None).await?;
         Ok(rows
             .into_iter()
             .map(|r| {

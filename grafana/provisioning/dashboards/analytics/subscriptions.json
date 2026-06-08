@@ -18,7 +18,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT COUNT(*)::bigint AS value FROM subscription_patterns WHERE status = 'confirmed'",
+          "rawSql": "SELECT COUNT(*)::bigint AS value FROM subscription_patterns sp WHERE sp.status = 'confirmed' AND ('${tag}' = '' OR EXISTS (SELECT 1 FROM subscription_pattern_tags spt JOIN operator_tags ot ON ot.id = spt.tag_id WHERE spt.pattern_id = sp.id AND ot.slug = '${tag}'))",
           "refId": "A"
         }
       ],
@@ -34,7 +34,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT COALESCE(SUM(ABS(current_amount) * CASE WHEN interval_days <= 8 THEN 4.33 WHEN interval_days <= 16 THEN 2.165 WHEN interval_days <= 32 THEN 1 WHEN interval_days <= 95 THEN 0.33 WHEN interval_days >= 350 THEN 0.0833 ELSE 1 END), 0)::numeric AS value FROM subscription_patterns WHERE status = 'confirmed'",
+          "rawSql": "SELECT COALESCE(SUM(ABS(sp.current_amount) * CASE WHEN sp.interval_days <= 8 THEN 4.33 WHEN sp.interval_days <= 16 THEN 2.165 WHEN sp.interval_days <= 32 THEN 1 WHEN sp.interval_days <= 95 THEN 0.33 WHEN sp.interval_days >= 350 THEN 0.0833 ELSE 1 END), 0)::numeric AS value FROM subscription_patterns sp WHERE sp.status = 'confirmed' AND ('${tag}' = '' OR EXISTS (SELECT 1 FROM subscription_pattern_tags spt JOIN operator_tags ot ON ot.id = spt.tag_id WHERE spt.pattern_id = sp.id AND ot.slug = '${tag}'))",
           "refId": "A"
         }
       ],
@@ -94,7 +94,18 @@
   "refresh": "30s",
   "schemaVersion": 39,
   "tags": ["analytics", "subscriptions"],
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      {
+        "name": "tag",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+        "query": "SELECT '' AS __value, 'All tags' AS __text UNION ALL SELECT ot.slug AS __value, ot.name AS __text FROM operator_tags ot ORDER BY 2",
+        "refresh": 1,
+        "sort": 1
+      }
+    ]
+  },
   "time": { "from": "now-90d", "to": "now" },
   "timepicker": {},
   "timezone": "browser",

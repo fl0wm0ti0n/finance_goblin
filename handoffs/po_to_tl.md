@@ -1,3 +1,7 @@
+## discovery-20260609-us0020 — US-0020 subscription discover, category & tags (hot pointer)
+**From:** PO **To:** Tech Lead **Story:** US-0020 **Run:** `auto-20260608-us0020-001` **Next:** `/architecture` — **DONE**; see architecture pointer above. **Full:** `handoffs/archive/po-to-tl-pack-20260608-i.md` · [R-0080](docs/engineering/research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake) · US-0003 **DEC-0084**..**DEC-0086**
+## discovery-20260608-us0018 — US-0018 category filters & trend analytics (hot pointer)
+**From:** PO **To:** Tech Lead **Story:** US-0018 **Run:** `auto-20260608-us0018-001` **Next:** `/architecture` — **DONE**; see architecture pointer above. **Full:** `handoffs/archive/po-to-tl-pack-20260608.md` · [R-0080](docs/engineering/research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake) · [R-0083](docs/engineering/research.md#r-0083--us-0018-category-filters-expense-series-api--trend-analytics)
 ## architecture-20260607-bug0014 — BUG-0014 post-rebuild omniflow architecture (hot pointer)
 
 **From:** Tech Lead  

@@ -8,921 +8,6 @@ Flow Finance AI is a self-hosted analytics layer on Firefly III. **US-0001** del
 
 ---
 
-## US-0010 — External Firefly/Postgres & Traefik deployment on omniflow host
-
-**Status:** architecture complete (2026-06-02)  
-**Research:** R-0052, R-0053 (extends R-0004, R-0005)  
-**Decisions:** DEC-0056  
-**Depends on:** US-0001 Compose profiles, external DB wiring, Grafana provisioning
-
-### System context (omniflow external profile)
-
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  Operator browser ──HTTPS──► Traefik (host stack, network traefik)          │
-│         │ basic-auth middleware `auth`                                       │
-│         ▼                                                                    │
-│  https://financegnome.omniflow.cc ──► flow-finance-ai:8080 (no host ports)  │
-└─────────────────────────────────────────────────────────────────────────────┘
-         │
-         │  finance_goblin project (profile external + overlay merge only)
-         │
-         ├── flow-finance-ai ──GET──► firefly:8080 (host container, DNS on traefik)
-         │                      └──► postgres:5432 / flow_finance_ai (TimescaleDB)
-         │
-         └── grafana (internal-only default — traefik network, no public router)
-
-Host stacks (read-only alignment — not modified by finance_goblin):
-  /workdir/firefly/docker-compose.yml     → container `firefly`, Host finance.omniflow.cc
-  /workdir/services/docker-compose.yml    → container `postgres`
-  /workdir/networking/docker-compose.yml  → Traefik, middleware `auth`, certresolver myresolver
-```
-
-**Scope:** deployment wiring only — no application feature changes, no host stack edits in-repo.
-
-### Compose architecture (DEC-0056)
-
-#### Two-file merge pattern
-
-| File | Role |
-|------|------|
-| `docker-compose.yml` | Base stack: images, healthchecks, profiles, dev defaults (`host.docker.internal`) |
-| `docker-compose.external.yml` | Merge overlay only: external `traefik` network, in-network DNS overrides, Traefik labels, port `!reset` |
-
-**Canonical omniflow invocation:**
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d
-```
-
-Operator `.env` may set `COMPOSE_FILE=docker-compose.yml:docker-compose.external.yml` and `COMPOSE_PROFILES=external`.
-
-**Alternative considered:** env-conditional single compose — rejected (overlay keeps Traefik labels out of local minimal runs; discovery 2026-06-01).
-
-#### Profile model (post `bundled-firefly` split)
-
-| Profile | Services | Use case |
-|---------|----------|----------|
-| `minimal` | `flow-finance-ai`, `grafana` | Dev/CI baseline **without** bundled Firefly |
-| `bundled-firefly` | `firefly-iii` | Greenfield Firefly container alongside minimal |
-| `standard` | minimal + bundled-firefly + `redis` | Extended dev |
-| `full` | standard + `ollama`, `stats-forecast` | ML/AI sidecar path (remap `STATS_FORECAST_PORT=8091` on omniflow — host 8090 taken) |
-| `external` | `flow-finance-ai`, `grafana` | Omniflow attach — **no** `firefly-iii`, **no** `postgres` |
-| `oidc` | Authentik stack | Unchanged; optional |
-
-**Greenfield dev (replaces prior `--profile minimal` alone):**
-
-```bash
-docker compose --profile minimal --profile bundled-firefly up --build
-```
-
-**Profile union rule:** Compose profiles are a union. **Never** combine `external` with `minimal`, `standard`, `full`, or `bundled-firefly` on omniflow — CI must assert `minimal+external` does not list `firefly-iii` after split.
-
-#### External overlay contract
-
-**`flow-finance-ai` overrides:**
-
-| Aspect | Base default | External overlay |
-|--------|--------------|------------------|
-| Host ports | `${FLOW_PORT:-8080}:8080` | `ports: !reset []` |
-| Networks | implicit default | `traefik` (external) |
-| `DATABASE_HOST` | `host.docker.internal` | `postgres` |
-| `FIREFLY_BASE_URL` | `http://firefly-iii:8080` | `http://firefly:8080` |
-| Traefik | none | router `financegnome` (see below) |
-
-**`grafana` overrides:**
-
-| Aspect | Base default | External overlay |
-|--------|--------------|------------------|
-| Host ports | `${GRAFANA_PORT:-3000}:3000` | `ports: !reset []` (execute) |
-| Networks | implicit default | `traefik` (external) |
-| Public Traefik router | none | only when `${GRAFANA_TRAEFIK_HOST}` non-empty (opt-in) |
-
-**Forbidden in overlay:** new `postgres`, `firefly`, or `firefly-iii` service definitions (AC-1).
-
-#### Traefik routing (env-parameterized)
-
-Fixed router/service id **`financegnome`** — must not collide with host `firefly` router (R-0052).
-
-```yaml
-labels:
-  - traefik.enable=true
-  - traefik.docker.network=traefik
-  - traefik.http.routers.financegnome.rule=Host(`${TRAEFIK_HOST:-financegnome.omniflow.cc}`)
-  - traefik.http.routers.financegnome.entrypoints=websecure
-  - traefik.http.routers.financegnome.tls=true
-  - traefik.http.routers.financegnome.tls.certresolver=myresolver
-  - traefik.http.routers.financegnome.middlewares=${TRAEFIK_MIDDLEWARE:-auth}
-  - traefik.http.services.financegnome.loadbalancer.server.port=8080
-```
-
-Reuse host global basic-auth middleware **`auth`** (`credentials.passwd` on Traefik container — out of scope). TLS via existing `myresolver` wildcard `*.omniflow.cc`.
-
-**Public Firefly UI** remains `https://finance.omniflow.cc` (unchanged). Connector uses in-container `http://firefly:8080`.
-
-#### PostgreSQL / TimescaleDB preflight
-
-Flow Finance AI requires TimescaleDB (migration `001_initial.sql` → `CREATE EXTENSION timescaledb`; US-0002+ hypertables). Shared host container `postgres:latest` does **not** guarantee extension availability (R-0053 §1).
-
-**Operator steps before first `compose up`:**
-
-1. Create database `flow_finance_ai` and role `finance` on shared `postgres` (grants documented in `.env.example`).
-2. Verify server packages + `shared_preload_libraries = 'timescaledb'` + Postgres restart if extension missing.
-3. On `flow_finance_ai`: `CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;`
-4. Preflight SQL: `SELECT extversion FROM pg_extension WHERE extname='timescaledb';` — non-null required.
-
-**Failure mode:** backend migration panic; `/health` never OK until fixed. Firefly DB on same container does **not** imply TimescaleDB on `flow_finance_ai`.
-
-**Alternative considered:** skip extension in migration 001 for external mode — rejected (breaks US-0002–US-0009; violates released architecture).
-
-#### Environment variables (operator `.env` — names only)
-
-| Variable | External mode | Notes |
-|----------|---------------|-------|
-| `DATABASE_HOST` | `postgres` | Overlay default |
-| `DATABASE_PASSWORD` | required | `${DATABASE_PASSWORD:?}` in compose |
-| `FIREFLY_BASE_URL` | `http://firefly:8080` | Overlay default |
-| `FIREFLY_PERSONAL_ACCESS_TOKEN` | required for health/sync | Server-side only |
-| `COMPOSE_FILE` | `docker-compose.yml:docker-compose.external.yml` | Optional convenience |
-| `COMPOSE_PROFILES` | `external` | Must not combine with other profiles |
-| `TRAEFIK_HOST` | default `financegnome.omniflow.cc` | Optional override |
-| `TRAEFIK_MIDDLEWARE` | default `auth` | Host Traefik middleware name |
-| `GRAFANA_TRAEFIK_HOST` | empty (internal-only) | Set only for optional public Grafana |
-| `GRAFANA_ADMIN_PASSWORD` | operator-set | Replace weak base default |
-| `STATS_FORECAST_PORT` | `8091` if `full` on same host | Host 8090 used by `firefly_product_manager` |
-| `FIREFLY_APP_KEY`, `FIREFLY_DB_*` | only when `bundled-firefly` profile | Not required for external |
-| `VITE_OIDC_*`, `OIDC_*` | when auth enabled | See OIDC section |
-
-No literal passwords in committed YAML. Traefik basic-auth credentials remain on host Traefik stack only.
-
-#### OIDC on public URL (document-only)
-
-SPA (`frontend/src/auth/oidc.ts`) defaults `redirect_uri` to `${window.location.origin}/callback` when `VITE_OIDC_REDIRECT_URI` unset — works for omniflow without rebuild if IdP allows.
-
-**Operator IdP registration (out of scope to automate):**
-
-| Setting | Value |
-|---------|-------|
-| Redirect URI | `https://financegnome.omniflow.cc/callback` |
-| Post-logout redirect | `https://financegnome.omniflow.cc/` |
-| Web origin / CORS | `https://financegnome.omniflow.cc` |
-
-AC-6 smoke may use `AUTH_DEV_BYPASS=true`; auth-on deployments must register IdP URIs explicitly. Traefik basic-auth and OIDC are orthogonal (edge vs app session).
-
-#### CI / config guard (R-0053 §7)
-
-Extend compose config check (no live `docker up` required):
-
-```bash
-export DATABASE_PASSWORD=ci FIREFLY_APP_KEY=base64:32RandomCharactersMinimumRequired== \
-       FIREFLY_DB_PASSWORD=ci AUTHENTIK_SECRET_KEY=ci
-services=$(docker compose -f docker-compose.yml -f docker-compose.external.yml \
-  --profile external config --services | sort)
-# expect: flow-finance-ai, grafana only
-docker compose --profile minimal --profile bundled-firefly config --services
-# guard: minimal+external must NOT include firefly-iii after bundled-firefly split
-```
-
-Wire through `tests/run-tests.sh` or `scripts/compose-config-check.sh`; CI reads `TEST_COMMAND` from runbook.
-
-#### Operator smoke test (AC-6)
-
-Eight-step checklist on Debian host — full table in `docs/engineering/runbook.md` (omniflow section). Record pass/fail per step; **never commit operator credentials**.
-
-Key pass criteria: TimescaleDB version non-null; `http://firefly:8080/api/v1/about` from traefik network; backend `/health` OK; `https://financegnome.omniflow.cc/health` with basic-auth → 200; unauthenticated → 401; no `firefly-iii` in project services.
-
-### Risks
-
-| Risk | Mitigation | Ref |
-|------|------------|-----|
-| TimescaleDB missing on shared Postgres | Operator preflight block; fail-fast migrations | R-0053 §1, R-0004 |
-| Profile union starts duplicate Firefly | `bundled-firefly` split + CI guard + runbook warning | DEC-0056, R-0053 §2 |
-| Traefik router name collision | Fixed router id `financegnome` | R-0052 |
-| Grafana admin exposed | Internal-only default; `!reset` ports; opt-in host only | DEC-0056, R-0053 §4 |
-| Hardcoded Traefik host | `TRAEFIK_HOST` / `TRAEFIK_MIDDLEWARE` defaults | DEC-0056 |
-| Compose `!reset` unsupported | Document Compose ≥2.24 minimum | R-0053 |
-| OIDC misconfig masked by dev bypass | Smoke documents auth-off vs auth-on paths | R-0053 §5 |
-| Port 8090 conflict with host service | `STATS_FORECAST_PORT=8091` when using `full` | R-0052 |
-| Weak Grafana defaults | Require operator `GRAFANA_ADMIN_PASSWORD` in external docs | backlog discovery |
-
-### Decisions (US-0010)
-
-| ID | Topic | Summary |
-|----|-------|---------|
-| DEC-0056 | Omniflow external deploy | `bundled-firefly` split; two-file overlay contract; env Traefik labels; Grafana internal-only default |
-
-Full record: `decisions/DEC-0056.md`
-
-### Out of scope (US-0010)
-
-- Editing host Firefly/Postgres/Traefik compose files in-repo
-- Changing Firefly version or migrating Firefly data
-- Modifying Traefik ACME/DNS or replacing host `auth` middleware
-- OIDC IdP provisioning (redirect URI documentation only)
-- Application code changes (connector, sync, UI features unchanged)
-
-### Next phase
-
-`/sprint-plan` — decompose 6 acceptance criteria (infra-only; expect smaller task count than feature stories; no sprint split unless >12 tasks).
-
----
-
-## US-0011 — Unified analytics UI in financegnome (Grafana in-app)
-
-**Status:** architecture complete (2026-06-02)  
-**Research:** R-0054 (discovery route map; dedicated `/research` spike deferred — intake research satisfies architecture gate)  
-**Decisions:** DEC-0057 (extends DEC-0012 dashboard uids, DEC-0056 internal Grafana, DEC-0006 SPA auth)  
-**Spec-pack:** `docs/engineering/spec-pack/US-0011-{design-concept,crs,technical-specification}.md`  
-**Depends on:** US-0010 external deploy (Grafana on `traefik` network, no public host by default), US-0002–US-0009 Grafana JSON provisioning
-
-### System context
-
-```mermaid
-flowchart LR
-  User[Browser] --> Traefik[Traefik auth + TLS]
-  Traefik --> SPA[flow-finance-ai SPA + API]
-  SPA --> API["/api/v1/* JWT"]
-  SPA --> Proxy["/analytics/grafana/*"]
-  Proxy --> Grafana[grafana:3000 internal]
-  Grafana --> PG[(flow_finance_ai Postgres)]
-  SPA --> Iframe["/analytics/{slug} iframe kiosk=tv"]
-  Iframe --> Proxy
-```
-
-Operator-facing analytics today split across **React + ECharts** product pages (`/forecast`, `/wealth`, …) and **six Grafana SQL dashboards** (DEC-0012 uids). Only Wealth opens Grafana in a **new tab** via `VITE_GRAFANA_URL`. US-0011 unifies Grafana views **inside** the financegnome shell without removing the Grafana container or reimplementing SQL panels.
-
-**Trust boundary:** Traefik `auth` (+ optional OIDC on SPA) protects the public origin. Grafana is not routable from the internet when `GRAFANA_TRAEFIK_HOST` is empty (DEC-0056). Anonymous Grafana Viewer behind the proxy is acceptable because upstream is network-isolated (DEC-0057).
-
-### Dashboard → route map (canonical)
-
-| Provisioned JSON | uid | React path | Iframe `src` (relative to embed base) |
-|------------------|-----|------------|----------------------------------------|
-| `platform-health.json` | `platform-health` | `/analytics/platform-health` | `/d/platform-health/platform-health?kiosk=tv` |
-| `analytics/cashflow.json` | `cashflow` | `/analytics/cashflow` | `/d/cashflow/cashflow?kiosk=tv` |
-| `analytics/subscriptions.json` | `subscriptions` | `/analytics/subscriptions` | `/d/subscriptions/subscriptions?kiosk=tv` |
-| `analytics/budgets.json` | `budgets` | `/analytics/budgets` | `/d/budgets/budgets?kiosk=tv` |
-| `analytics/portfolio.json` | `portfolio` | `/analytics/portfolio` | `/d/portfolio/portfolio?kiosk=tv` |
-| `analytics/forecast-horizons.json` | `forecast-horizons` | `/analytics/forecast-horizons` | `/d/forecast-horizons/forecast-horizons?kiosk=tv` |
-
-**Embed base (build-time):** `VITE_GRAFANA_EMBED_BASE` default `/analytics/grafana`  
-**Full iframe URL:** ``${VITE_GRAFANA_EMBED_BASE}/d/{uid}/{slug}?kiosk=tv``
-
-**Sidebar IA:** new **Analytics** nav group with six `NavLink`s (labels = dashboard Title). Optional **Platform Health** entry above the Analytics group or as first item in the group.
-
-### Reverse proxy contract (DEC-0057)
-
-| Element | Contract |
-|---------|----------|
-| Public prefix | `/analytics/grafana/` |
-| Upstream | `GRAFANA_UPSTREAM` default `http://grafana:3000` (server env only) |
-| Path handling | Strip `/analytics/grafana` prefix; forward remainder to upstream root (no `GF_SERVER_SERVE_FROM_SUB_PATH`) |
-| Methods | GET, HEAD, POST (Grafana query API); OPTIONS for CORS preflight if needed |
-| WebSocket | Forward `Connection: upgrade` / `Upgrade` for live panel refresh |
-| Response headers | Remove or replace `X-Frame-Options: DENY/SAMEORIGIN` on proxied responses; avoid forwarding Grafana `Set-Cookie` to browser |
-| Router placement | Merge **before** SPA `ServeDir` fallback in `build_router`; **outside** `/api/v1` `require_auth` middleware |
-| Dev | `GRAFANA_UPSTREAM=http://localhost:3000` when Grafana published on host port |
-
-**Alternative rejected:** `/api/v1/analytics/grafana/*` — couples embed static assets to API auth and JWT middleware (DEC-0057).
-
-#### Grafana container environment (execute)
-
-Add to `grafana` service `environment` (compose base + external overlay unchanged for networking):
-
-```yaml
-GF_AUTH_ANONYMOUS_ENABLED: "true"
-GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
-GF_SECURITY_ALLOW_EMBEDDING: "true"
-```
-
-Keep `GF_USERS_ALLOW_SIGN_UP: "false"`. Do **not** enable public Traefik router for US-0011 acceptance path.
-
-**Alternative deferred:** Grafana auth-proxy headers mapped from OIDC — decision gate in DEC-0057 if anonymous proves insufficient on omniflow smoke.
-
-#### Environment variables
-
-| Variable | Scope | Default | Notes |
-|----------|-------|---------|-------|
-| `GRAFANA_UPSTREAM` | backend runtime | `http://grafana:3000` | Docker DNS on `traefik` / default network |
-| `VITE_GRAFANA_EMBED_BASE` | frontend build | `/analytics/grafana` | Same-origin path; no trailing slash required if code normalizes |
-| `VITE_GRAFANA_URL` | frontend build | — | **Deprecated** — remove Wealth external-tab usage |
-| `GRAFANA_TRAEFIK_HOST` | compose overlay | empty | Optional escape hatch only; not used by embed iframes |
-
-Document all four in `.env.example` omniflow block with DEC-0056 cross-reference.
-
-### Frontend components (execute)
-
-| Component | Responsibility |
-|-----------|----------------|
-| `AnalyticsEmbedPage` | Props: `uid`, `slug`, `title`; full-width responsive iframe; `loading`/`error` shell states |
-| `App.tsx` | Six routes under `ProtectedRoute` → `/analytics/:slug` or explicit six routes |
-| `AppLayout.tsx` | `analyticsNavItems` group; preserve collapsed sidebar labels |
-| `WealthPage.tsx` | Primary portfolio analytics → `<Link to="/analytics/portfolio">` (AC-5) |
-
-**Regression guard:** existing `/forecast`, `/wealth`, `/planning`, `/subscriptions`, `/alerts` ECharts flows unchanged (AC-4).
-
-**CSP:** default same-origin iframe needs `frame-src 'self'` only when CSP meta/header added; no `GRAFANA_TRAEFIK_HOST` in `frame-src` for MVP.
-
-### Future-chart guideline (AC-6)
-
-Document in `docs/user-guides/US-0011.md`:
-
-1. **Default:** new product charts → React page + REST API + ECharts (same shell, sidebar entry).
-2. **Exception:** Grafana embed only for SQL-heavy ops panels tied to existing provisioning until a deliberate migration story retires the panel.
-3. **Cross-links:** product pages may link to `/analytics/{slug}` as secondary “SQL view”; product page remains canonical for interactive flows (see DEC-0057 UX table).
-
-### Acceptance mapping
-
-| AC | Architecture anchor |
-|----|---------------------|
-| AC-1 Analytics sidebar + routes | Route map + `AppLayout` group |
-| AC-2 In-app open (no default new tab) | iframe on `/analytics/*`; DEC-0057 proxy |
-| AC-3 Traefik + auth | Edge auth on financegnome origin; proxy outside JWT |
-| AC-4 ECharts regression | Out of scope for proxy changes to `/api/v1` |
-| AC-5 Wealth migration | `/analytics/portfolio` replaces `VITE_GRAFANA_URL` tab |
-| AC-6 Future-chart + operator guide | User guide + DEC-0057 UX table |
-| AC-7 Single URL | No required `GRAFANA_TRAEFIK_HOST` |
-
-### Risks
-
-| Risk | Mitigation | Ref |
-|------|------------|-----|
-| iframe blocked by framing headers | Proxy strips/replaces `X-Frame-Options` | DEC-0057, R-0054 |
-| WS/live refresh broken | Explicit upgrade in proxy; QA smoke | discovery open Q |
-| Anonymous Grafana too permissive | Viewer role only; internal network; no public router | DEC-0056, DEC-0057 |
-| Traefik auth + OIDC confusion | Document dev `AUTH_DEV_BYPASS` vs production | US-0010 runbook |
-| Duplicate ECharts vs Grafana metrics | Canonical UX table in user guide | backlog |
-| Upstream SSRF misconfig | Allowlist `grafana` host in config validation | DEC-0057 |
-
-### Decisions (US-0011)
-
-| ID | Topic | Summary |
-|----|-------|---------|
-| DEC-0057 | Analytics proxy + embed | `/analytics/grafana/` same-origin proxy; anonymous Viewer Grafana; env contract; deprecate `VITE_GRAFANA_URL` |
-
-Full record: `decisions/DEC-0057.md`
-
-### Out of scope (US-0011)
-
-- Removing Grafana container or rewriting dashboard SQL to ECharts
-- Public `GRAFANA_TRAEFIK_HOST` as default UX
-- Grafana auth-proxy / OIDC header federation (deferred gate)
-- Changing DEC-0012 panel queries or uids
-- US-0010 compose/Traefik work except Grafana anonymous env vars
-
-### Next phase
-
-`/sprint-plan` — decompose 7 acceptance criteria; expect ~8–10 tasks (proxy, compose env, 6 routes/nav, Wealth migration, user guide, smoke test). Split only if > `SPRINT_MAX_TASKS` (12).
-
----
-
-## US-0012 — Auto-provision application database on first start
-
-**Status:** Architecture complete (2026-06-03)  
-**Research:** R-0055, R-0053 §1  
-**Decisions:** DEC-0058 (extends DEC-0003 startup retry, amends DEC-0056 operator DB-create preflight)  
-**Depends on:** US-0010 external profile (shared `postgres` on `traefik` network)
-
-### Problem
-
-External PostgreSQL rejects connections to non-existent databases (`3D000`). Current startup connects directly to `DATABASE_NAME`, retries until budget exhaustion (DEC-0003), then runs migrations. Operators on omniflow run manual `CREATE DATABASE flow_finance_ai` before `compose up` (US-0010 runbook §1).
-
-### Startup ordering (canonical)
-
-Insert **`DbPool::ensure_database(&config)`** in `backend/src/lib.rs` before existing pool connect:
-
-```
-AppConfig::load()  [validates DATABASE_NAME allowlist]
-       │
-       ▼
-ensure_database()  ── maintenance pool (retry: DEC-0003 startup_retry_*)
-       │              ├─ pg_database existence check (parameterized)
-       │              ├─ CREATE DATABASE … OWNER app_user (if absent)
-       │              └─ CREATE EXTENSION timescaledb on app DB (maintenance creds)
-       ▼
-connect_with_retry()  ── app pool → DATABASE_NAME
-       ▼
-run_migrations()  ── 001 still CREATE EXTENSION IF NOT EXISTS (idempotent)
-       ▼
-service wiring (unchanged)
-```
-
-**Fail-closed:** bootstrap errors exit before migrations — no partial schema on privilege or TimescaleDB failure.
-
-### Module layout
-
-| File | Responsibility |
-|------|----------------|
-| `backend/src/db/bootstrap.rs` | `ensure_database`, existence check, create, extension, reason-code logging |
-| `backend/src/db/mod.rs` | `pub mod bootstrap;`, re-export `ensure_database` |
-| `backend/src/config/mod.rs` | Parse `DATABASE_BOOTSTRAP_URL`; `maintenance_database_url()`; `validate_database_name()` |
-| `backend/src/lib.rs` | Call `ensure_database` before `connect_with_retry` |
-
-Use short-lived `PgConnection` / single-connection pool for maintenance and extension steps — do not reuse app `PgPool` max_connections budget.
-
-### Env contract (DEC-0058)
-
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD` | runtime (existing) | App connection + migrations — unchanged |
-| `DATABASE_BOOTSTRAP_URL` | optional | Full postgres URL to maintenance DB (`…/postgres`); admin/superuser; env-only |
-
-**Resolution order:**
-
-1. `DATABASE_BOOTSTRAP_URL` set → maintenance connection only.
-2. Else → derive `postgres://{USER}:{PASSWORD}@{HOST}:{PORT}/postgres` from runtime vars.
-
-**Out of scope env:** auto-create `DATABASE_USER`; `DATABASE_URL` for bootstrap (use `DATABASE_BOOTSTRAP_URL`).
-
-### Bootstrap sequence (idempotent)
-
-| Step | Action | Idempotency |
-|------|--------|-------------|
-| 1 | Maintenance connect (`postgres` DB) | DEC-0003 retry loop |
-| 2 | `SELECT 1 FROM pg_database WHERE datname = $1` | portable (R-0055) |
-| 3a | Absent: `CREATE DATABASE "{name}" OWNER "{app_user}"` | never drop/recreate |
-| 3b | Present: skip create | never recreate |
-| 4 | Log `database_bootstrap_grants_applied` when bootstrap user ≠ app user and create ran | OWNER handles grants |
-| 5 | Connect to app DB with maintenance creds → extension check/create | run on new and existing DB missing extension |
-| 6 | Fail closed on privilege (`42501`) or missing TimescaleDB server files | do not proceed to migrations |
-| 7 | App `connect_with_retry` → `run_migrations` | migration 001 duplicate-safe |
-
-**Wrong-password behavior (unchanged):** bootstrap may succeed via admin URL while app connect still fails — bootstrap does not fix credential typos.
-
-### Structured log reason codes
-
-Tracing field **`bootstrap_reason`** — stable operator/CI contract (full table in DEC-0058). Human-readable messages cite runbook § Omniflow external deploy §1 (TimescaleDB host install); never echo bootstrap URL secrets.
-
-### Privilege matrix
-
-| Deployment | App role | Bootstrap path |
-|------------|----------|----------------|
-| Greenfield dev (`DATABASE_USER` with `CREATEDB`) | has `CREATEDB` | derived maintenance URL |
-| Omniflow shared `postgres` | `finance` without `CREATEDB` | **`DATABASE_BOOTSTRAP_URL`** with admin/`postgres` superuser |
-| CI / test fixture | superuser | derived or `DATABASE_BOOTSTRAP_TEST_URL` |
-| DB already exists | any | skip create; extension attempt if missing |
-
-### TimescaleDB alignment
-
-| Layer | Owner |
-|-------|-------|
-| Host OS packages + `shared_preload_libraries` | Operator (R-0053 §1) — **out of scope** US-0012 |
-| `CREATE EXTENSION timescaledb` on app DB | Bootstrap before migrations + migration 001 (keep) |
-| Hypertables (002+) | Unchanged |
-
-**Amends US-0010 architecture § PostgreSQL/TimescaleDB preflight:** remove manual “create database `flow_finance_ai`” as blocking step; retain TimescaleDB server install + preflight `SELECT extversion …` when extension bootstrap fails.
-
-### Runbook delta plan (execute — docs only in architecture phase)
-
-| Artifact | Change |
-|----------|--------|
-| `docs/engineering/runbook.md` § Omniflow §1 | Replace “create DB/user first” with auto-provision + `DATABASE_BOOTSTRAP_URL` when app role lacks `CREATEDB`; TimescaleDB host install block unchanged |
-| `.env.example` omniflow block | Add `DATABASE_BOOTSTRAP_URL`; shrink manual SQL to TimescaleDB host-only note |
-| `docs/engineering/architecture.md` US-0010 § preflight | Cross-link US-0012 (this section) |
-| `decisions/DEC-0056.md` | Footnote: DB create automated by DEC-0058; TimescaleDB preflight retained |
-
-No new Compose services.
-
-### Test strategy
-
-| Tier | Scope | When runs |
-|------|-------|-----------|
-| **Unit** | `validate_database_name` allowlist; maintenance URL builder (no secrets in debug fmt); reason-code mapping | Always (`cargo test --lib`) |
-| **Integration** | `backend/tests/database_bootstrap_integration.rs` — ephemeral DB name, `ensure_database` creates DB, idempotent second call skips, optional extension assert | When `DATABASE_BOOTSTRAP_TEST_URL` or superuser `DATABASE_URL` with maintenance access set |
-| **CI optional job** | `postgres:16` service — create path without TimescaleDB; separate job or manual matrix with `timescale/timescaledb` for extension-ok path | Document in runbook; not blocking default CI if integration skips |
-
-**AC-6 mapping:** integration test proves create-if-missing without operator manual SQL; privilege-fail case via non-`CREATEDB` role + absent bootstrap URL (expect `database_bootstrap_failed_privilege`).
-
-Wire through `tests/run-tests.sh` when test env present (same pattern as existing `DATABASE_URL` gated tests).
-
-### Risks
-
-| Risk | Mitigation |
-|------|------------|
-| Bootstrap URL secret leakage | Redact passwords in logs; `.env.example` warns never commit |
-| Owner vs grant on shared host | `CREATE DATABASE … OWNER` (DEC-0058) |
-| Extension privilege on shared Postgres | Maintenance creds for extension step |
-| TimescaleDB missing after DB create | `database_bootstrap_failed_timescaledb` before migration panic |
-| Identifier injection | Config-load allowlist |
-| Duplicate failure modes with migration 001 | Bootstrap fails first with structured code |
-
-### Decisions (US-0012)
-
-| ID | Topic | Summary |
-|----|-------|---------|
-| DEC-0058 | Database bootstrap on first start | In-app `ensure_database`; optional `DATABASE_BOOTSTRAP_URL`; OWNER create; extension via maintenance creds; `bootstrap_reason` codes |
-
-Full record: `decisions/DEC-0058.md`
-
-### Out of scope (US-0012)
-
-- Host TimescaleDB package install / `postgresql.conf` edits
-- Auto-create PostgreSQL role (`DATABASE_USER`)
-- Embedded/bundled Postgres Compose service
-- Firefly database provisioning
-
-### Next phase
-
-`/sprint-plan` — decompose 6 acceptance criteria; expect ~7–9 tasks (bootstrap module, config, lib wiring, env/runbook docs, integration test). Single sprint under `SPRINT_MAX_TASKS` (12).
-
----
-
-## BUG-0002 — Omniflow production integration defects (Firefly sync + risk-score + exchange settings)
-
-**Status:** architecture complete (2026-06-04)  
-**Discovery:** `discovery-20260604-bug0002` in `handoffs/po_to_tl.md`  
-**Research:** R-0057 (PAT Bearer — no new R-xxxx), R-0001, R-0032  
-**Decisions:** extends DEC-0004 (Firefly PAT), DEC-0054 (plan risk score API); **no new DEC**  
-**Sprint:** `/quick` **Q0008** (recommended)  
-**Acceptance:** `docs/product/acceptance.md` rows C, D, E
-
-### Runtime proof (discovery baseline — unchanged)
-
-| Endpoint | HTTP | Interpretation |
-|----------|------|----------------|
-| `/api/v1/sync/status` | 200 | Route OK; `state: failed`, `error_message` contains `401 Unauthorized` |
-| `/api/v1/plans/risk-score` | 404 | Application `NOT_FOUND` when no persisted score — **not** Traefik misroute |
-| `/api/v1/settings` | 200 | `bitunix: configured=true, enabled=false`; Binance `enabled=true, configured=false` |
-
-`isolation_scope`: repo source + public HTTPS curl; no operator `.env` / PAT values read.
-
-### Fix slices (three independent, one deploy)
-
-```text
-BUG-0002
-├── C — Firefly sync (P0)
-│   ├── C1 — Operator: non-empty FIREFLY_PERSONAL_ACCESS_TOKEN + compose env passthrough (ops/docs)
-│   └── C2 — Code: empty PAT guard + fail-fast sync error (backend)
-├── D — Plan risk-score API
-│   └── D1 — 200 tagged empty-state JSON (backend + Planning UI types)
-└── E — Exchange settings semantics
-    ├── E1 — effective_enabled = configured() || toml.enabled (backend)
-    └── E2 — optional: binance.enabled=false in default.toml (greenfield)
-```
-
-C2, D1, E1 independently deployable; **C1 gates acceptance row C** on omniflow (operator PAT).
-
-### Sub-defect C — Firefly PAT empty-string guard
-
-#### Problem
-
-`config/mod.rs` applies `set_override("firefly.personal_access_token", pat)` when env var is **present but blank**, producing `Authorization: Bearer ` → Firefly **401**. Sync APIs are routable (**200** on `/api/v1/sync/status`).
-
-#### Contract (C2 — frozen)
-
-| Layer | Change |
-|-------|--------|
-| Env overlay | Apply PAT override **only when** `pat.trim().is_empty() == false` |
-| `FireflyConfig` | Add `pat_configured() -> bool` (non-empty trimmed token) |
-| Sync preflight | Before outbound Firefly HTTP, if sync enabled and `!pat_configured()`, fail run with stable `error_message`: `firefly_personal_access_token_missing` (human text: cite runbook PAT smoke; **no** token in logs) |
-| Readiness (optional) | Extend `/health/ready` JSON with `firefly_pat_configured: bool` (names-only; no secret) |
-
-**Ruled out:** Traefik/router fixes for sync (status **200** proves API path). Proxy/HTML rewrite (wrong layer).
-
-**Operator (C1):** Non-empty PAT in operator `.env`; after `docker compose … up`, `printenv FIREFLY_PERSONAL_ACCESS_TOKEN` non-empty (value not logged) per runbook § Omniflow PAT table.
-
-**Files:** `backend/src/config/mod.rs`, `backend/src/sync/mod.rs` (or shared preflight helper), `backend/src/health/mod.rs` (optional), `docs/engineering/runbook.md`, `.env.example` (comment only).
-
-**Risks:** PAT in `.env` but not mounted in container — C1 runbook + compose cwd; guard must not block intentional empty-PAT dev if Firefly disabled — gate on `base_url` + sync scheduler active only.
-
-### Sub-defect D — `GET /api/v1/plans/risk-score` empty-state 200
-
-#### Problem
-
-Handler returns **404** when `PlanRiskService::latest_for_active_plan()` is `None` (`plans.rs:546`). Route is registered; acceptance requires **200** with score or documented empty-state.
-
-#### API contract (D1 — frozen)
-
-**Always HTTP 200.** Tagged JSON body (serde `#[serde(tag = "status")]` or equivalent):
-
-**Populated score** (`status: "ok"`):
-
-```json
-{
-  "status": "ok",
-  "score": 42,
-  "band": "Medium",
-  "components": {
-    "balance_stress": 10.0,
-    "plan_viability": 20.0,
-    "crypto_volatility": 5.0,
-    "ml_divergence_modifier": 0.0
-  },
-  "plan_computation_id": "uuid"
-}
-```
-
-**Empty state** (`status: "no_score"`):
-
-```json
-{
-  "status": "no_score",
-  "reason": "no_active_plan"
-}
-```
-
-```json
-{
-  "status": "no_score",
-  "reason": "not_computed"
-}
-```
-
-| `reason` | When |
-|----------|------|
-| `no_active_plan` | No `plans.is_active = true` row |
-| `not_computed` | Active plan exists but no `plan_risk_scores` row for latest successful computation on active/latest version (includes post-sync-not-run and sync-blocked-by-C states) |
-
-**Alternatives rejected:** Keep **404** for empty (fails acceptance); rename route to singular `/plan/risk-score` (breaks existing client path).
-
-**Extends DEC-0054:** persistence/trigger unchanged; **API read path** returns empty-state instead of 404.
-
-**Frontend:** `PlanRiskScoreResponse` discriminated union in `api.ts`; `PlanningPage` — render badge only when `status === "ok"`; no hard error on `no_score` (query succeeds).
-
-**Files:** `backend/src/api/plans.rs`, `backend/src/plan/risk.rs` (optional helper for reason), `frontend/src/lib/api.ts`, `frontend/src/pages/PlanningPage.tsx`, `backend/tests/` or `plans` module test for 200 + `no_score`.
-
-**Risks:** Contract drift — frozen shapes above; clients parsing flat score object break — update SPA in same PR.
-
-### Sub-defect E — Exchange effective `enabled`
-
-#### Problem
-
-`settings_view()` and `mirror_enabled_at_startup()` use TOML `enabled` only. `configured()` reads env credentials. Production: Bitunix **configured=true, enabled=false** while `default.toml` has `binance.enabled=true`.
-
-#### Contract (E1 — frozen)
-
-```rust
-fn effective_enabled(instance: &ExchangeInstanceConfig) -> bool {
-    instance.configured() || instance.enabled
-}
-```
-
-Apply in:
-
-| Consumer | Behavior |
-|----------|----------|
-| `ExchangesConfig::settings_view()` | Each exchange row `enabled: effective_enabled(&instance)` |
-| `ExchangeService::mirror_enabled_at_startup()` | `set_enabled(id, effective_enabled(...))` |
-
-**Unchanged:** Sync still validates API keys before outbound exchange calls; effective enable does **not** bypass credential checks.
-
-**E2 (accepted in Q0008):** Set `[exchanges.binance] enabled = false` in `backend/config/default.toml` — reduces greenfield false “Binance on” without env keys. Bybit/bitunix defaults unchanged.
-
-**Alternatives rejected:** TOML-only operator edit (poor omniflow UX); UI-only mask (DB/API sync still wrong).
-
-**Files:** `backend/src/config/mod.rs`, `backend/src/exchanges/service.rs`, `backend/config/default.toml` (E2), `frontend/src/pages/SettingsPage.tsx` (no change if API correct).
-
-**Risks:** Auto-enable exchange with creds but operator intended disable — mitigated: operator can disable via Settings API/DB after mirror; document in runbook if needed.
-
-### Task map (Q0008)
-
-| Task | Sub | Layer | Deploy alone | Acceptance row |
-|------|-----|-------|--------------|----------------|
-| C1 | C | ops/docs | yes | C (operator) |
-| C2 | C | backend | yes | C (code path) |
-| D1 | D | backend + frontend | yes | D |
-| E1 | E | backend | yes | E |
-| E2 | E | config | yes | E (greenfield) |
-
-**Count:** 5 tasks (≤ `SPRINT_MAX_TASKS` 12) → **`/quick` Q0008**, skip full `/sprint-plan` ceremony unless PO requests S00xx.
-
-### Test strategy
-
-| Check | Type | Pass criteria |
-|-------|------|---------------|
-| C — PAT guard | Unit/integration | Empty env PAT → `pat_configured() == false`; sync preflight error code set |
-| C — PAT loaded | Operator | `printenv` name non-empty; manual sync success; no 401 in `last_run.error_message` |
-| D — risk empty | curl / Rust test | `GET /api/v1/plans/risk-score` → **200** + `status: no_score` OR `status: ok` |
-| D — Planning UI | Operator | Planning loads without query error on empty score |
-| E — settings | curl | Bitunix-only env → `enabled=true, configured=true` |
-| Regression | Operator | OIDC + bundled-firefly profiles per acceptance footer |
-
-### Decisions (BUG-0002)
-
-| Topic | Resolution |
-|-------|------------|
-| New DEC | **None** — behavioral fixes under DEC-0004 / DEC-0054 / exchange env pattern (R-0032) |
-| Empty risk 404 | **Rejected** — D1 tagged 200 empty-state |
-| Effective enabled | **E1** credentials imply intent |
-| E2 default.toml | **Accepted** in Q0008 |
-
-### Next phase
-
-`/sprint-plan` or **`/quick` Q0008** — materialize `sprints/quick/Q0008/task.json` from task table above; then `/execute`.
-
----
-
-## BUG-0003 — Omniflow production API 500 cascade, Bitunix test, Grafana SQL
-
-**Status:** architecture complete (2026-06-05)  
-**Discovery:** `discovery-20260605-bug0003` in `handoffs/po_to_tl.md`  
-**Research:** R-0052 (external `DATABASE_HOST=postgres`), R-0058 (Bitunix futures auth — G2 gate only)  
-**Decisions:** extends **DEC-0056** (omniflow external Postgres topology); **no new DEC**  
-**Sprint:** `/quick` **Q0009** (recommended)  
-**Acceptance:** `docs/product/acceptance.md` rows **F**, **G**, **H**  
-**Related:** BUG-0002 OPEN (Q0008) — **do not merge**; separate deploy/verify tracks
-
-### Runtime proof (discovery baseline — frozen)
-
-| Probe | HTTP | Latency | Notes |
-|-------|------|---------|-------|
-| `GET /api/v1/settings` | 200 | ~0.08s | `database_host: host.docker.internal`, `database_mode: external` |
-| `GET /api/v1/alerts/unread-count` | 500 | ~30.07s | DB timeout pattern |
-| `GET /api/v1/sync/entities` | 500 | ~30.12s | |
-| `GET /api/v1/sync/runs` | 500 | ~30.06s | |
-| `GET /api/v1/exchanges` | 500 | ~30.06s | |
-| `GET /api/v1/subscriptions` | 500 | ~30.06s | |
-| `GET /api/v1/ai/audit` | 500 | ~30.06s | |
-| `POST /api/v1/exchanges/bitunix/test` | 400 | &lt;0.2s | Registry gap — not DB timeout |
-| `POST …/analytics/grafana/api/ds/query` | 400 | ~0.36s | `db query error` on `SELECT 1` |
-
-Container env (names only): `DATABASE_HOST=host.docker.internal` on `flow-finance-ai` and `grafana`; `BITUNIX_API_KEY` / `BITUNIX_API_SECRET` present on backend.
-
-`isolation_scope`: artifact + repo source + public HTTPS curl + docker logs/env names-only; **no** operator `.env` / `.env_prod` read.
-
-### Fix slices (three sub-defects, shared deploy order)
-
-```text
-BUG-0003
-├── F — DATABASE_HOST misconfiguration (P0)
-│   ├── F1 — Operator: DATABASE_HOST=postgres; recreate flow-finance-ai + grafana (ops)
-│   └── F2 — Docs: external-profile env guard + omniflow block in .env.example (DEC-0056 / R-0052)
-├── G — Exchange connector registry gap (P0)
-│   ├── G1 — ExchangeService::new uses effective_enabled() for all connectors (backend)
-│   └── G2 — Conditional: R-0058 futures header-auth on fapi.bitunix.com (backend spike)
-└── H — Grafana SQL / provisioning (P1)
-    ├── H1 — Same as F1 (datasource ${DATABASE_HOST})
-    └── H2 — Optional: dedupe duplicate dashboard UIDs in provisioning (grafana)
-```
-
-**Deploy order:** F1 before acceptance rows F/H; G1 code can ship with F2 in one PR; **G2 only if** post-deploy smoke (`G1` + `F1`) still returns auth failure with body (not `unknown exchange`). **H2** only if operator needs provisioning refresh after UID dedupe.
-
-### Sub-defect F — `DATABASE_HOST=host.docker.internal` on external profile
-
-#### Problem
-
-Operator `.env` sets `DATABASE_HOST=host.docker.internal`, overriding `docker-compose.external.yml` `${DATABASE_HOST:-postgres}`. On Docker network `traefik`, `host.docker.internal` is unreachable from `flow-finance-ai` / `grafana` → SQLx pool query timeout ~30s → widespread API **500**. Settings endpoint may still return **200** (config read without DB round-trip).
-
-#### Contract (F1 — frozen, operator)
-
-| Step | Action |
-|------|--------|
-| 1 | Set `DATABASE_HOST=postgres` in operator `.env` (explicit; matches overlay default) |
-| 2 | Recreate **`flow-finance-ai`** and **`grafana`** (`docker compose … up -d --force-recreate` or equivalent) |
-| 3 | Verify `GET /api/v1/settings` → `database_host: postgres` |
-| 4 | Smoke representative `GET /api/v1/*` — **200** within normal latency (not **500** ~30s) |
-
-**Ruled out:** Traefik/router misroute (settings **200**); backend code change for pool host (ops/env layer per DEC-0056).
-
-#### Contract (F2 — frozen, docs)
-
-| Artifact | Change |
-|----------|--------|
-| `.env.example` | Add **omniflow external** block comment: `DATABASE_HOST=postgres` — **do not** copy greenfield `host.docker.internal` default into external deploy |
-| `docs/engineering/runbook.md` § Omniflow §2 | Warning callout: wrong `DATABASE_HOST` symptom table (~30s **500**); cite overlay `${DATABASE_HOST:-postgres}`; remediation = F1 |
-| Optional | Comment in `docker-compose.external.yml` above `DATABASE_HOST` line (one line, no behavior change) |
-
-**Alternatives rejected:**
-
-- *Change overlay to hardcode `postgres` without env* — breaks operator override for non-omniflow external hosts (DEC-0056 flexibility).
-- *Backend auto-rewrite `host.docker.internal` → `postgres` in external mode* — magic env coupling; docs + operator fix preferred.
-
-**Files (F2):** `.env.example`, `docs/engineering/runbook.md`; optional `docker-compose.external.yml` comment.
-
-**Risks:** Operator copies full `.env.example` without reading omniflow block — F2 mitigates; F1 still required on live host before verify-work.
-
-### Sub-defect G — Bitunix test **400** `unknown exchange`
-
-#### Problem
-
-Q0008 **E1** added `effective_enabled()` to `settings_view()` and `mirror_enabled_at_startup()` but **`ExchangeService::new` still gates connector registration on TOML `enabled` only** (`service.rs` L40–48). With `default.toml` `[exchanges.bitunix] enabled=false` and credentials present, settings show `enabled=true` but runtime `connectors` vec has no `bitunix` → `test_connection` returns **400** before HTTP.
-
-```40:48:backend/src/exchanges/service.rs
-        if config.binance.enabled {
-            connectors.push(Arc::new(BinanceConnector::new(config.binance.clone())));
-        }
-        if config.bybit.enabled {
-            connectors.push(Arc::new(BybitConnector::new(config.bybit.clone())));
-        }
-        if config.bitunix.enabled {
-            connectors.push(Arc::new(BitunixConnector::new(config.bitunix.clone())));
-        }
-```
-
-#### Contract (G1 — frozen)
-
-Register each connector when **`instance.effective_enabled()`** is true (same predicate as mirror/settings):
-
-| Connector | Registration condition |
-|-----------|------------------------|
-| Binance | `config.binance.effective_enabled()` |
-| Bybit | `config.bybit.effective_enabled()` |
-| Bitunix | `config.bitunix.effective_enabled()` |
-
-**Unchanged:** `test_connection` still performs outbound HTTP; effective enable does not skip credential validation. Sync paths unchanged.
-
-**Alternatives rejected:**
-
-- *Set `bitunix.enabled=true` in default.toml only* — wrong greenfield default; does not fix binance/bybit parity.
-- *Register all connectors always* — violates operator TOML disable intent when not configured.
-
-**Files (G1):** `backend/src/exchanges/service.rs`; unit test in `backend/src/config/mod.rs` or exchanges module asserting connector count when configured + TOML disabled.
-
-**Risks:** Auto-register with creds but operator intended disable — same as Q0008 E1; Settings API/DB can disable after mirror.
-
-#### Contract (G2 — decision gate, conditional)
-
-Execute **only when** after **F1 + G1** deploy:
-
-- `POST /api/v1/exchanges/bitunix/test` returns non-**400**-unknown-exchange, **and**
-- Response indicates auth/URL failure (e.g. **401**/**403** or structured error body), **not** success.
-
-Then spike per **[R-0058](docs/engineering/research.md#r-0058--bitunix-futures-api-auth-vs-connector-implementation)**:
-
-- Private REST host `https://fapi.bitunix.com`
-- Headers: `api-key`, `nonce`, `timestamp`, `sign` (futures sign doc)
-- Keep spot `openapi.bitunix.com` path for balance sync unless product expands scope
-
-**Alternatives rejected for day one:**
-
-- *Futures-only rewrite without smoke gate* — unnecessary if G1 fixes registry-only failure (discovery proved **&lt;0.2s** **400**).
-- *CCXT* — still rejected (R-0032).
-
-**Files (G2, if triggered):** `backend/src/exchanges/bitunix.rs`, tests against mock or documented error shapes.
-
-**Risks:** Operator keys futures-scoped vs spot host; wrong sign algorithm — capture HTTP status/body in smoke notes; do not conflate with F until DB host fixed.
-
-### Sub-defect H — Grafana SQL **400**
-
-#### Problem
-
-`grafana/provisioning/datasources/postgres.yaml` interpolates `${DATABASE_HOST}:${DATABASE_PORT}` — same wrong host as F. Duplicate dashboard UID warnings are **secondary** (provisioning write blocked; panels may still fail on host alone).
-
-#### Contract (H1 — frozen)
-
-**Acceptance row H** verified by **F1** smoke: `POST …/analytics/grafana/api/ds/query` → **200**; datasource reaches in-network `postgres`.
-
-#### Contract (H2 — optional, out of Q0009 default)
-
-Dedupe UIDs across `grafana/provisioning/dashboards/**` providers only if operator needs provisioning refresh after duplicate warnings persist post-F1.
-
-**Files (H2):** `grafana/provisioning/dashboards/**/*.json`, provider YAML if paths collide.
-
-**Risks:** UID rename breaks bookmarked `/d/uid` URLs — coordinate with US-0011 route map; low priority vs F1.
-
-### Task map (Q0009)
-
-| Task | Sub | Layer | Depends | Deploy alone | Acceptance row |
-|------|-----|-------|---------|--------------|----------------|
-| F1 | F | ops | — | yes | F, H (operator) |
-| F2 | F | docs | — | yes | F (guardrail) |
-| G1 | G | backend | — | yes | G (code) |
-| G2 | G | backend spike | G1, F1 deploy + smoke | gated | G (auth path) |
-
-**Count:** 4 tasks (3 required + 1 gated) ≤ `SPRINT_MAX_TASKS` 12 → **`/quick` Q0009**; H1 = F1 verify step; H2 deferred.
-
-### File touch list (frozen)
-
-| Path | Task | Change |
-|------|------|--------|
-| `backend/src/exchanges/service.rs` | G1 | `effective_enabled()` in `new()` |
-| `backend/src/config/mod.rs` or `backend/tests/` | G1 | Regression test: configured + TOML disabled → connector registered |
-| `backend/src/exchanges/bitunix.rs` | G2 | Futures header-auth (conditional) |
-| `.env.example` | F2 | Omniflow `DATABASE_HOST=postgres` warning block |
-| `docs/engineering/runbook.md` | F2 | § Omniflow mis-host symptom + remediation |
-| `docker-compose.external.yml` | F2 | Optional one-line comment (no behavior) |
-| `grafana/provisioning/dashboards/**` | H2 | Optional UID dedupe (not in Q0009 default) |
-| Operator `.env` on host | F1 | `DATABASE_HOST=postgres` (not committed) |
-
-**No touch:** Traefik labels, analytics proxy (DEC-0057), JWT stack, Firefly PAT (BUG-0002), `docker-compose.external.yml` default expression (already correct).
-
-### Test strategy
-
-| Check | Type | Pass criteria |
-|-------|------|---------------|
-| F — DB host | Operator + curl | Settings `database_host: postgres`; sample GETs **200** &lt;2s |
-| F — guardrail | Doc review | Omniflow block warns against `host.docker.internal` |
-| G — registry | Rust unit / integration | Configured bitunix + TOML `enabled=false` → connector in `new()` map |
-| G — test API | Operator curl | `POST …/bitunix/test` not **400** unknown exchange |
-| G2 — auth | Operator (gated) | Documented auth error or **200** test payload |
-| H — Grafana SQL | Operator | `POST …/ds/query` **200** after F1 |
-| Regression | Operator | Acceptance footer: OIDC + bundled-firefly |
-
-### Decisions (BUG-0003)
-
-| Topic | Resolution |
-|-------|------------|
-| New DEC | **None** — ops/docs under DEC-0056 + R-0052; G1 completes Q0008 E1 parity in `ExchangeService::new` |
-| Hardcode postgres in compose | **Rejected** — keep `${DATABASE_HOST:-postgres}` |
-| G2 futures auth | **Gated** — R-0058 spike only after G1+F1 smoke |
-| H2 UID dedupe | **Deferred** — optional follow-up |
-| Merge with BUG-0002 | **Rejected** — separate bugs and sprints (Q0008 vs Q0009) |
-
-### Next phase
-
-**`/quick` Q0009** — sprint-plan complete (`sprint.json`, `tasks.md`, `uat.md`); operator **F1** before verify-work; next `/plan-verify` → `/execute`.
-
----
-
 ## US-0016 — Root README for operators and contributors (living documentation)
 
 **Status:** Architecture complete (2026-06-08)  
@@ -2932,4 +2017,787 @@ Wire `mark_stale_inactive` into `run_detection` after candidates (currently defi
 ### Next phase
 
 `/sprint-plan` — materialize `sprints/quick/Q0023/` from task table; then `/plan-verify` → `/execute`.
+
+# US-0018 — Category filters & expense trend analytics
+
+**Status:** Architecture complete (2026-06-08)  
+**Discovery:** `discovery-20260608-us0018` in `handoffs/archive/po-to-tl-pack-20260608.md`  
+**Research:** [R-0083](research.md#r-0083--us-0018-category-filters-expense-series-api--trend-analytics), [R-0080](research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake)  
+**Decisions:** **DEC-0087** (expense-series API + uncategorized sentinel); **DEC-0088** (CategoryFilter + bar trend chart); **DEC-0089** (surface filter semantics + Grafana independence); **DEC-0090** (index deferral policy)  
+**Depends on:** BUG-0006 DONE (`category_id` ingest), US-0011 (analytics embed), US-0015 (bucket mapping — AC-6 regression guard), DEC-0007 (forecast engine unchanged in MVP)  
+**Sprint:** **S0017** recommended (or single sprint ≤12 tasks)  
+**Acceptance:** `docs/product/acceptance.md` § US-0018 (AC-1..AC-6)  
+**Spec-pack:** `docs/engineering/spec-pack/US-0018-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
+**User guide:** `docs/user-guides/US-0018.md` (`USER_GUIDE_MODE=1`; execute publishes content)
+
+### Problem
+
+Operators need **category-scoped visibility** across product surfaces and Grafana — monthly expense trends with explicit uncategorized handling — without forking the DEC-0007 forecast engine or plan compare recompute. Mirror ingest and period `aggregates_by_category` exist (BUG-0006); **monthly per-category series**, public REST routes, shared React filter, trend chart, and Grafana `$category` are missing.
+
+| AC | Discovery verdict | Architecture slice |
+|----|-------------------|-------------------|
+| AC-1 Category filter contract | **Gap** | S2 + S3 + S4 |
+| AC-2 Monthly series API | **Gap** | **S1 primary** |
+| AC-3 Trend chart UI | **Gap** | S2 primary |
+| AC-4 Performance insight | **Gap** | S1 (server `summary`) + S2 |
+| AC-5 Mirror fidelity | Partial (ingest done) | S1 (`__uncategorized__`) |
+| AC-6 Regression | Verify | S5 smoke |
+
+`isolation_scope`: artifact + repo source reads; no host `.env` / secrets read.
+
+### Research gates resolved
+
+| Gate | Decision | Alternative rejected |
+|------|----------|---------------------|
+| Multi-category overlay | **Defer** — single series (DEC-0088) | ≤3 overlay series on one chart |
+| Trend chart type | **Bar default** (DEC-0088) | Line default; line toggle = stretch P2 |
+| Grafana ↔ SPA sync | **Independent filters** (DEC-0089) | iframe `category_id` URL sync |
+| Forecast filter depth | **Display-only actuals panel**; household forecast unchanged (DEC-0089) | Full category forecast re-projection |
+| Uncategorized sentinel | **`__uncategorized__` query token** (DEC-0087) | Separate `/uncategorized` route |
+| Planning compare filter | **UI-scoped actuals widget**; compare API unchanged (DEC-0089) | Server-side `build_compare_metrics` per category |
+| Category index | **Defer** unless `EXPLAIN` >50 ms (DEC-0090) | Ship `idx_transactions_category_date` in US-0018 |
+
+### System context
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Browser — ForecastPage / PlanningPage / WealthPage                         │
+│    CategoryFilter (shared) ──▶ category_id state (single-select MVP)        │
+│    CategoryTrendChart (bar, ECharts) ◀── expense-series summary (MoM)       │
+└───────────────────────────────┬─────────────────────────────────────────────┘
+                                │ GET /api/v1/categories
+                                │ GET /api/v1/categories/expense-series
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  flow-finance-ai (Axum)                                                     │
+│    CategoriesService + TransactionsRepository::expense_series_by_month (NEW)│
+│    month_spine + LEFT JOIN transactions (R-0083 §1)                         │
+│    label_uncategorized_categories naming reuse                              │
+│                                                                             │
+│  Forecast monthly API ──▶ UNCHANGED projection (DEC-0007 / US-0015)         │
+│  Planning compare API ──▶ UNCHANGED (DEC-0019 overlay)                      │
+└───────────────────────────────┬─────────────────────────────────────────────┘
+                                │ mirror `transactions` + `categories`
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Grafana cashflow + budgets (US-0011 embed)                                 │
+│    $category variable (independent of SPA state)                            │
+│    Panel SQL: ('${category}' = '' OR t.category_id = '${category}')         │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**AC-6 boundary:** No changes to US-0015 `bucket_sources` / AI inference path; no Firefly write-back; aggregate-only new REST (DEC-0032 posture).
+
+### Architecture contract
+
+```text
+US-0018
+├── S1 — Backend category APIs (P0)
+│   ├── T1 — TransactionsRepository::expense_series_by_month (month spine SQL)
+│   ├── T2 — GET /api/v1/categories (catalog + optional ?q=)
+│   ├── T3 — GET /api/v1/categories/expense-series + summary (AC-2, AC-4, AC-5)
+│   └── T4 — Unit/integration tests: spine zeros, __uncategorized__, 24-month cap
+├── S2 — Shared React filter + trend chart (P0)
+│   ├── T1 — components/category/CategoryFilter.tsx (single-select; All sentinel)
+│   ├── T2 — components/category/CategoryTrendChart.tsx (bar default, ECharts)
+│   ├── T3 — ForecastPage monthly tab integration (primary home)
+│   └── T4 — MoM / best / worst callouts from API summary (AC-4)
+├── S3 — Planning + wealth surfaces (P1)
+│   ├── T1 — PlanningPage compare toolbar + CategoryTrendChart widget (actuals only)
+│   └── T2 — WealthPage category spending subsection + filter
+├── S4 — Grafana $category (P1)
+│   ├── T1 — cashflow.json: $category variable + monthly category outflow panel
+│   └── T2 — budgets.json: $category on Ist/deviation actual leg
+├── S5 — Regression + docs (P1)
+│   ├── T1 — OIDC external profile smoke (AC-6)
+│   ├── T2 — docs/user-guides/US-0018.md
+│   └── T3 — Optional EXPLAIN probe task (DEC-0090 gate)
+└── V1 — verify-work omniflow smoke
+```
+
+**Out of scope:** Multi-category chart overlay; Grafana↔SPA bidirectional sync; category-scoped forecast re-projection (US-0019); materialized views; Firefly category editing.
+
+### S1 — Expense-series API (DEC-0087)
+
+#### Endpoints
+
+| Method | Path | Contract |
+|--------|------|----------|
+| `GET` | `/api/v1/categories` | `{ categories: [{id, name}], truncated?: bool }` sorted by name; optional `?q=` with `MIN_CATEGORY_SEARCH_LEN=2`; cap **200** rows |
+| `GET` | `/api/v1/categories/expense-series` | Query: `category_id` (**required**), `months` (default **12**, max **24**), optional `end` (default today) |
+
+#### `category_id` values
+
+| Value | SQL filter | Response |
+|-------|------------|----------|
+| Firefly mirror id | `t.category_id = $1` | `category_name` from `categories` |
+| `__uncategorized__` | `t.category_id IS NULL` | `uncategorized: true`, `category_label: "Uncategorized"` |
+| (invalid / unknown id) | — | **404** with documented empty-state guidance |
+
+**Never** return a month series without bucket metadata when uncategorized is selected (AC-5).
+
+#### Monthly spine SQL (frozen)
+
+Per [R-0083 §1](research.md#r-0083--us-0018-category-filters-expense-series-api--trend-analytics): `generate_series` month spine + `LEFT JOIN transactions` on `date_trunc('month', t.date)`; outflow = `ABS(amount)` where `amount < 0`; inflow where `amount > 0`; explicit **€0** months in window.
+
+Window: `$end = end param or today`; `$start = date_trunc('month', $end) - (months-1) * 1 month` — **not** data min/max (AC-3 labels).
+
+#### `summary` object (AC-4)
+
+Computed server-side on full spine:
+
+| Field | Rule |
+|-------|------|
+| `mom_delta_pct` | Last two **calendar months in window** (zeros allowed) |
+| `best_month` | Month with max `outflow_eur` |
+| `worst_month` | Month with min `outflow_eur` among months with any activity, or min outflow if all zero |
+
+#### Module placement
+
+| Type | Path |
+|------|------|
+| `expense_series_by_month` | `backend/src/transactions/repository.rs` |
+| `CategoriesService` | `backend/src/transactions/service.rs` (or new `categories/service.rs`) |
+| Routes | `backend/src/api/categories.rs` (new), wire in `api/mod.rs` |
+
+**Risks:** `date_trunc` on `date` may not use `idx_transactions_date` alone when filtering `category_id` — see DEC-0090.
+
+### S2 — CategoryFilter & CategoryTrendChart (DEC-0088)
+
+#### CategoryFilter contract
+
+| Prop / behavior | Contract |
+|-----------------|----------|
+| Selection | **Single category** MVP; multi-select deferred |
+| Sentinel `""` | **All categories** — toolbar surfaces only; hides trend chart or shows household hint |
+| Data source | `GET /api/v1/categories`; combobox/search when `categories.length > 20` |
+| Uncategorized | Explicit option value `__uncategorized__` in dropdown |
+| Pattern | Clone `ForecastPage` account `<select>` for ≤20; native filter input above |
+
+#### CategoryTrendChart contract
+
+| Aspect | Choice |
+|--------|--------|
+| Chart type | **Bar** default (aligns with `MonthlyChart.tsx`, Finanzguru discrete months) |
+| Library | ECharts (existing stack) |
+| Data | `expense-series` `months[]` — `month` label + `outflow_eur` |
+| Empty state | "No categorized spending in this period" when `transaction_count=0` for all months |
+| Disabled state | No `category_id` selected → prompt to pick category |
+| Line toggle | **Stretch P2** — not required for AC-3 |
+
+#### Primary placement
+
+`/forecast` **Monthly** tab: filter above stat cards; trend chart below `MonthlyChart` (household buckets unchanged per DEC-0089).
+
+**Files:** `frontend/src/components/category/{CategoryFilter,CategoryTrendChart}.tsx`, `frontend/src/lib/api.ts`, `ForecastPage.tsx`
+
+### S3 — Cross-surface semantics (DEC-0089)
+
+| Surface | With category selected | Unchanged |
+|---------|------------------------|-----------|
+| **Forecast monthly** | `CategoryTrendChart` shows **filtered actuals** from expense-series | Income/Fixed/Variable stat cards + `MonthlyChart` remain **household** forecast (DEC-0007) |
+| **Planning compare** | Toolbar `CategoryFilter` + adjacent **CategoryTrendChart** (actuals preview) | `GET` compare metrics / version table — **no** `category_id` query param |
+| **Wealth overview** | New "Category spending" subsection: period total + trend link | Net worth / crypto totals household-level |
+| **Grafana cashflow/budgets** | `$category` variable filters panel SQL | **Independent** of SPA selection — no iframe query sync |
+
+**Planning rationale:** `build_compare_metrics` category fork is US-0019 scope; compare tab already surfaces `target_type=category` plan lines in table.
+
+**Grafana `$category` variable (frozen):**
+
+```json
+{
+  "name": "category",
+  "type": "query",
+  "query": "SELECT '' AS __value, 'All categories' AS __text UNION ALL SELECT c.firefly_id, COALESCE(c.name, c.firefly_id) FROM categories c ORDER BY 2"
+}
+```
+
+Panel filter: `AND ('${category}' = '' OR t.category_id = '${category}')`
+
+| Dashboard | Panel action |
+|-----------|--------------|
+| **cashflow** | New panel: monthly category outflow (`date_trunc` + sum abs negative) |
+| **budgets** | Extend Ist/deviation **actual** CTE with category filter; planned leg household-only |
+
+Default `category=''` preserves pre-US-0018 behavior.
+
+### S4 — Performance policy (DEC-0090)
+
+- **MVP:** no migration; sequential scan acceptable for ~900 rows × 24 months × single `category_id`
+- **Gate task (optional):** `EXPLAIN ANALYZE` on operator mirror during execute; if **>50 ms**, add `CREATE INDEX idx_transactions_category_date ON transactions (category_id, date)` as follow-on migration task
+- **Reject for MVP:** Timescale continuous aggregate; materialized monthly rollup table
+
+### Task table (sprint-plan input)
+
+| ID | Slice | Task | Files | Priority |
+|----|-------|------|-------|----------|
+| **C1** | S1 | `expense_series_by_month` repository + tests | `transactions/repository.rs` | P0 |
+| **C2** | S1 | Categories routes + service | `api/categories.rs`, `api/mod.rs`, `service.rs` | P0 |
+| **C3** | S2 | `CategoryFilter` + `CategoryTrendChart` | `components/category/*`, `api.ts` | P0 |
+| **C4** | S2 | Forecast monthly integration | `ForecastPage.tsx` | P0 |
+| **C5** | S3 | Planning compare widget | `PlanningPage.tsx` | P1 |
+| **C6** | S3 | Wealth category subsection | `WealthPage.tsx` | P1 |
+| **G1** | S4 | cashflow `$category` + panel | `cashflow.json` | P1 |
+| **G2** | S4 | budgets `$category` + Ist filter | `budgets.json` | P1 |
+| **D1** | S5 | User guide US-0018 | `docs/user-guides/US-0018.md` | P1 |
+| **V1** | S5 | OIDC smoke + AC-1..AC-6 | `uat.md` | P0 |
+| **P1** | S5 | EXPLAIN probe (conditional index) | migration optional | P2 |
+
+**Count:** 10 mandatory/primary (C1–C4, G1, G2, V1) + 2 P1 (C5, C6, D1) + 1 conditional (P1) → **≤12** under `SPRINT_MAX_TASKS` → **single sprint S0017** (no split).
+
+**Deploy order:** C1→C2→C3→C4 (vertical slice) ∥ G1/G2 after C2; C5/C6 after C3; V1 last.
+
+### Codebase map (US-0018 slice)
+
+| Path | Role | Touch |
+|------|------|-------|
+| `backend/src/transactions/repository.rs` | Monthly spine SQL | C1 |
+| `backend/src/api/categories.rs` | REST routes | C2 |
+| `backend/src/api/mod.rs` | Route registration | C2 |
+| `frontend/src/components/category/*` | Filter + chart | C3 |
+| `frontend/src/pages/ForecastPage.tsx` | Primary home | C4 |
+| `frontend/src/pages/PlanningPage.tsx` | Compare widget | C5 |
+| `frontend/src/pages/WealthPage.tsx` | Category subsection | C6 |
+| `grafana/.../cashflow.json` | `$category` + panel | G1 |
+| `grafana/.../budgets.json` | Ist category filter | G2 |
+
+### Decisions (US-0018)
+
+| ID | Topic | Contract |
+|----|-------|----------|
+| **DEC-0087** | Expense-series API | Month spine SQL; catalog + expense-series endpoints; `__uncategorized__` sentinel; server `summary` |
+| **DEC-0088** | Filter + chart UX | Single-select MVP; bar default trend chart; defer multi-overlay |
+| **DEC-0089** | Surface semantics | Forecast actuals-only side panel; planning widget; independent Grafana `$category` |
+| **DEC-0090** | Index policy | Defer `category_id` index unless EXPLAIN >50 ms |
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Operators expect category filter to change forecast buckets | Copy/tooltip: household forecast unchanged; trend shows actuals (DEC-0089) |
+| Planning compare confusion (filter vs plan lines) | Widget labeled "Actual spending trend"; compare table unchanged |
+| Grafana vs SPA category mismatch | Document independent filters in user guide |
+| Stale category id post-Firefly delete | Empty series + 404 on unknown id |
+| 24-month query slow on large mirrors | DEC-0090 EXPLAIN gate; optional index task P1 |
+| US-0015 regression | No `project.rs` / bucket_inference changes in US-0018 |
+
+### Next phase
+
+`/sprint-plan` — materialize **S0017** from task table; then `/plan-verify` → `/execute`.
+
+# US-0019 — Goal-driven planning with per-plan stats & AI savings suggestions
+
+**Status:** Architecture complete (2026-06-09)  
+**Discovery:** `discovery-20260609-us0019` in `handoffs/archive/po-to-tl-pack-20260608-d.md`  
+**Research:** [R-0084](research.md#r-0084--us-0019-goal-plans-per-plan-stats-category-overlay--ai-savings), [R-0080](research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake)  
+**Decisions:** **DEC-0091** (goal schema + template); **DEC-0092** (goal-stats API + yearly rollup + feasibility copy); **DEC-0093** (category overlay cap); **DEC-0094** (deterministic savings suggestions); **DEC-0095** (goal account scope); **DEC-0096** (PVA household scope unchanged); **DEC-0097** (REST primary; optional AI tool)  
+**Depends on:** US-0018 DONE (**DEC-0087** catalog + expense-series, **DEC-0088** `CategoryFilter`, **DEC-0089** compare actuals-only), US-0014 DONE (templates/onboarding), US-0006 (AI audit), DEC-0073 (overlay compare delta), DEC-0007 (forecast baseline unchanged)  
+**Sprint:** **S0018** recommended (single sprint ≤12 tasks)  
+**Acceptance:** `docs/product/acceptance.md` § US-0019 (AC-1..AC-6)  
+**Spec-pack:** `docs/engineering/spec-pack/US-0019-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
+**User guide:** `docs/user-guides/US-0019.md` (`USER_GUIDE_MODE=1`; execute publishes content)
+
+### Problem
+
+Operators need **goal-driven what-if planning**: target balance + target date (e.g. €10 000 in 5 months), **statistics scoped to that plan** (not household aggregates on detail), **category-scoped spend cuts** that affect recompute, and **deterministic savings suggestions** the operator explicitly applies — building on US-0018 category APIs without forking DEC-0007 forecast buckets or DEC-0089 compare actuals preview.
+
+| AC | Discovery verdict | Architecture slice |
+|----|-------------------|-------------------|
+| AC-1 Goal plan type | **Gap** | **S1** primary |
+| AC-2 Per-plan statistics | **Gap** | **S2** primary |
+| AC-3 Category adjustments | **Partial** (form exists; overlay ignores category) | **S3** primary |
+| AC-4 AI savings suggestions | **Gap** | **S4** primary |
+| AC-5 Privacy | Verify | S4 + optional S6 |
+| AC-6 Regression | Verify | S5 smoke |
+
+`isolation_scope`: artifact + repo source reads; `fresh_context_marker`: `architecture-20260609-us0019-tl-fresh`; no host `.env` / secrets read.
+
+### Research gates resolved (R-0084)
+
+| Gate | Decision | Alternative rejected |
+|------|----------|---------------------|
+| Goal storage | **DEC-0091** — `plans` columns + `goal_balance` enum | JSON blob; per-version columns; `plan_goals` table |
+| Stats API | **DEC-0092** — `GET …/goal-stats` per plan+version | Extend `/compare` only |
+| Yearly rollup | **DEC-0092** — calendar year `SUM(planned_net)` | Rolling 12m |
+| Category `remove_outflow` | **DEC-0093** — cap at 3-mo mirror avg outflow | Daily weighted; display-only |
+| Category `add_outflow` | **DEC-0093** — household-labeled, no cap | API reject |
+| Savings ranking | **DEC-0094** — deterministic top-N aggregates | LLM-only |
+| Fixed-category exclusion | **DEC-0094** — exclude DEC-0007 fixed bucket | Show all categories |
+| Account scope | **DEC-0095** — optional `goal_account_id`; default max-balance asset | Always household |
+| Feasibility | **DEC-0092** — gap + required monthly (0% interest); copy only | PMT + auto-lines |
+| PVA scope | **DEC-0096** — unchanged household active plan | Per-plan PVA |
+| AI tool | **DEC-0097** — REST primary; optional `get_category_savings` P2 | Chat-only |
+
+### System context
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Browser — PlanningPage (Scenarios / Compare / PVA)                       │
+│    Goal balance template card + target fields (DEC-0091)                    │
+│    GoalStatsStrip ◀── GET …/goal-stats (DEC-0092)                         │
+│    CategoryFilter add-line (exists) + CategorySavingsModal (DEC-0094)     │
+│    CategoryTrendChart on Compare = actuals only (DEC-0089 — unchanged)    │
+└───────────────────────────────┬─────────────────────────────────────────────┘
+                                │ POST /api/v1/plans (goal_balance)
+                                │ GET  /api/v1/plans/{id}/goal-stats
+                                │ GET  /api/v1/plans/{id}/category-savings-suggestions
+                                │ POST adjustments (batch remove_outflow category)
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  flow-finance-ai (Axum) — plan engine                                       │
+│    plans migration: target_balance_eur, target_date, goal_account_id        │
+│    build_overlay_deltas + category cap via expense_series (DEC-0093)      │
+│    goal-stats SQL on plan_daily_cashflow + compare delta (DEC-0092)       │
+│    savings ranking: aggregates_by_category + resolve_bucket filter        │
+│    goal projection: per-account baseline when goal_account_id set (0095)  │
+│                                                                             │
+│  Forecast monthly API ──▶ UNCHANGED (DEC-0007 / US-0015)                  │
+│  PVA active endpoint ──▶ UNCHANGED household (DEC-0096)                   │
+│  Optional: get_category_savings tool wraps same service (DEC-0097 P2)       │
+└───────────────────────────────┬─────────────────────────────────────────────┘
+                                │ mirror transactions + categories + plan_daily
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  TimescaleDB — plan_daily_cashflow (730d horizon)                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**AC-6 boundary:** US-0014 template grid, toasts, PVA guided card unchanged; DEC-0089 compare category filter stays actuals-only; no Firefly write-back; aggregate-only new REST (DEC-0032).
+
+### Architecture contract
+
+```text
+US-0019
+├── S1 — Goal plan schema + create flow (P0)
+│   ├── T1 — Migration: goal_balance enum + plan columns (DEC-0091)
+│   ├── T2 — Plan types, validation, templates.rs goal preset
+│   ├── T3 — POST /api/v1/plans goal_balance branch + 422 guards
+│   └── T4 — PlanningPage Goal balance template card + form fields
+├── S2 — Per-plan goal-stats API + UI strip (P0)
+│   ├── T1 — goal-stats repository/service (target-date SQL, yearly rollup)
+│   ├── T2 — GET /api/v1/plans/{id}/goal-stats route + beyond_horizon
+│   ├── T3 — GoalStatsStrip component (Scenarios + Compare)
+│   └── T4 — Feasibility copy: gap + required_monthly_savings (no auto-lines)
+├── S3 — Category overlay engine (P0)
+│   ├── T1 — overlay.rs category remove_outflow cap (3-mo avg via expense_series)
+│   ├── T2 — add_outflow category household-labeled path (DEC-0093)
+│   ├── T3 — goal_account_id projection fork in project.rs (DEC-0095)
+│   └── T4 — Unit tests: cap, zero mirror, account default
+├── S4 — Category savings suggestions (P0)
+│   ├── T1 — category-savings-suggestions service (DEC-0094 ranking)
+│   ├── T2 — GET route + fixed-bucket exclusion
+│   ├── T3 — CategorySavingsModal + batch POST adjustments
+│   └── T4 — Audit log on adjustment create (AC-5)
+├── S5 — Regression + docs (P1)
+│   ├── T1 — US-0014 onboarding/templates smoke (AC-6)
+│   ├── T2 — DEC-0089 compare actuals widget unchanged
+│   └── T3 — docs/user-guides/US-0019.md
+├── S6 — Optional AI tool (P2)
+│   └── T1 — get_category_savings wraps DEC-0094 service (DEC-0097)
+└── V1 — verify-work OIDC external profile smoke
+```
+
+**Out of scope:** Per-plan PVA endpoint; PMT/interest feasibility; LLM savings ranking; category-scoped forecast re-projection; Grafana changes; auto-apply savings lines.
+
+### S1 — Goal schema (DEC-0091)
+
+#### Migration
+
+| Column | Type | Validation |
+|--------|------|------------|
+| `target_balance_eur` | `NUMERIC(18,2) NULL` | Required when `template='goal_balance'` |
+| `target_date` | `DATE NULL` | Required; ≥ today on create |
+| `goal_account_id` | `TEXT NULL` | Optional; see DEC-0095 |
+
+`ALTER TYPE plan_template ADD VALUE 'goal_balance'` in dedicated migration after existing values.
+
+#### Create API
+
+```json
+POST /api/v1/plans
+{
+  "name": "Emergency fund",
+  "template": "goal_balance",
+  "target_balance_eur": "10000.00",
+  "target_date": "2026-11-01",
+  "goal_account_id": "114"
+}
+```
+
+**Files:** `backend/migrations/`, `plan/types.rs`, `plan/repository.rs`, `plan/templates.rs`, `api/plans.rs`, `PlanningPage.tsx`
+
+### S2 — Goal-stats API (DEC-0092)
+
+#### Endpoint
+
+`GET /api/v1/plans/{plan_id}/goal-stats?version_id={optional}`
+
+**404** when `template != 'goal_balance'`.
+
+#### Frozen response (excerpt)
+
+```json
+{
+  "plan_id": "…",
+  "version_id": "…",
+  "target_balance_eur": "10000.00",
+  "target_date": "2026-11-01",
+  "goal_account_id": "114",
+  "monthly_delta_vs_baseline": "-120.00",
+  "yearly_rollup": [{ "year": 2026, "planned_net_eur": "2400.00" }],
+  "projected_balance_at_target": "9850.00",
+  "gap_eur": "150.00",
+  "required_monthly_savings_eur": "30.00",
+  "on_track": false,
+  "beyond_horizon": false,
+  "reporting_currency": "EUR",
+  "computed_at": "2026-06-09T12:00:00Z"
+}
+```
+
+#### Target-date SQL (frozen)
+
+Last `planned_balance` from successful computation where `ts::date <= target_date` — no interpolation. If `target_date > today + 730d`: `beyond_horizon: true`, `projected_balance_at_target: null`.
+
+#### UI
+
+- **Scenarios:** stats strip below plan summary when goal template selected
+- **Compare:** strip above version table for **selected plan only** — not mixed across plans
+- **PVA:** unchanged per DEC-0096
+
+### S3 — Category overlay (DEC-0093)
+
+#### `remove_outflow` + `category`
+
+```
+effective = min(adj.amount, avg_outflow_last_3_calendar_months)
+```
+
+Source: `expense_series_by_month` (DEC-0087). Empty history → **0** overlay + line warning.
+
+#### `add_outflow` + `category`
+
+Full amount on household schedule; category id stored for display — no cap.
+
+#### Account scope (DEC-0095)
+
+Goal plan recompute uses `goal_account_id` daily series when set; default max-balance asset on create when NULL; household fallback + banner.
+
+**Primary file:** `backend/src/plan/overlay.rs`
+
+### S4 — Savings suggestions (DEC-0094)
+
+#### Endpoint
+
+`GET /api/v1/plans/{plan_id}/category-savings-suggestions?months=6&limit=10`
+
+| Filter | Rule |
+|--------|------|
+| Min spend | ≥ €20/mo average over window |
+| Already in plan | Skip `target_type=category` + `remove_outflow` |
+| Fixed bucket | Exclude via DEC-0007 `resolve_bucket` |
+| Ranking | `total_outflow` DESC deterministic |
+| Reduction hint | 50% of avg monthly outflow |
+
+#### Apply flow
+
+Checkbox modal → batch `POST` adjustments → recompute. **No auto-apply.**
+
+### S5 — PVA + regression (DEC-0096, AC-6)
+
+- `GET /api/v1/plans/active/plan-vs-actual` — **no API changes**
+- Compare `CategoryTrendChart` — actuals only (DEC-0089)
+- US-0014 template grid + empty-plan flows — regression smoke in V1
+
+### Task table (sprint-plan input)
+
+| ID | Slice | Task | Files | Priority |
+|----|-------|------|-------|----------|
+| **G1** | S1 | Migration goal_balance + columns | `migrations/`, `plan/types.rs` | P0 |
+| **G2** | S1 | Create API + template card | `api/plans.rs`, `PlanningPage.tsx` | P0 |
+| **S1** | S2 | goal-stats service + SQL | `plan/service.rs`, `repository.rs` | P0 |
+| **S2** | S2 | goal-stats route + GoalStatsStrip | `api/plans.rs`, `components/plan/` | P0 |
+| **O1** | S3 | Category remove_outflow cap | `plan/overlay.rs` | P0 |
+| **O2** | S3 | goal_account_id projection | `plan/project.rs`, `forecast/service.rs` | P0 |
+| **A1** | S4 | category-savings-suggestions service | `plan/savings_service.rs` or `api/plans.rs` | P0 |
+| **A2** | S4 | Savings modal + batch apply | `PlanningPage.tsx` | P0 |
+| **D1** | S5 | User guide US-0019 | `docs/user-guides/US-0019.md` | P1 |
+| **R1** | S5 | US-0014 + DEC-0089 regression tests | `PlanningPage` tests, `uat.md` | P1 |
+| **T1** | S6 | Optional get_category_savings tool | `ai/tools/` | P2 |
+| **V1** | — | OIDC smoke AC-1..AC-6 | `uat.json` | P0 |
+
+**Count:** 9 mandatory P0 (G1, G2, S1, S2, O1, O2, A1, A2, V1) + 2 P1 (D1, R1) + 1 P2 (T1) → **≤12** under `SPRINT_MAX_TASKS` → **single sprint S0018** (no split).
+
+**Deploy order:** G1→G2→O1→O2 (schema + overlay) ∥ S1→S2 after G1; A1→A2 after O1; V1 last.
+
+### Codebase map (US-0019 slice)
+
+| Path | Role | Touch |
+|------|------|-------|
+| `backend/migrations/` | Goal columns + enum | G1 |
+| `backend/src/plan/overlay.rs` | Category cap | O1 |
+| `backend/src/plan/project.rs` | Account-scoped baseline | O2 |
+| `backend/src/plan/service.rs` | goal-stats | S1 |
+| `backend/src/api/plans.rs` | goal-stats + savings routes | S2, A1 |
+| `backend/src/transactions/repository.rs` | expense_series + aggregates reuse | O1, A1 |
+| `frontend/src/pages/PlanningPage.tsx` | Template, strip, modal | G2, S2, A2 |
+| `frontend/src/lib/api.ts` | New types + fetchers | S2, A1 |
+
+### Decisions (US-0019)
+
+| ID | Topic | Contract |
+|----|-------|----------|
+| **DEC-0091** | Goal schema | `goal_balance` template; plan-level target fields |
+| **DEC-0092** | Goal-stats API | Per plan+version; calendar yearly; gap copy; 730d horizon guard |
+| **DEC-0093** | Category overlay | remove cap 3-mo avg; add household-labeled |
+| **DEC-0094** | Savings suggestions | Deterministic ranking; fixed exclusion; modal apply |
+| **DEC-0095** | Goal account | Optional id; default max-balance asset |
+| **DEC-0096** | PVA scope | Household active plan unchanged |
+| **DEC-0097** | AI path | REST primary; optional tool P2 |
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| `target_date` beyond 730d | `beyond_horizon` flag + UI copy (DEC-0092) |
+| Category overlay over-removal | Cap at historical avg (DEC-0093) |
+| Fixed costs in savings list | DEC-0007 bucket filter (DEC-0094) |
+| Goal account vs compare mismatch | Document in strip + user guide |
+| Compare vs PVA confusion | DEC-0096 contextual help |
+| Enum migration ordering | Dedicated migration; CI migration test |
+| DEC-0089 regression | No compare API category param; widget actuals-only |
+| Seven-tool registry (optional T1) | P2 only; REST satisfies AC-4/AC-5 without tool |
+
+### Next phase
+
+`/sprint-plan` — materialize **S0018** from task table; then `/plan-verify` → `/execute`.
+
+`runtime_proof_id`: `runtime-proof-architecture-20260609-us0019-001`
+
+# US-0020 — Subscription manual discovery, majority category & operator tags
+
+**Status:** Architecture complete (2026-06-10)  
+**Discovery:** `discovery-20260609-us0020` in `handoffs/archive/po-to-tl-pack-20260608-i.md`  
+**Research:** [R-0085](research.md#r-0085--us-0020-subscription-discover-majority-category--operator-tags), [R-0080](research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake)  
+**Decisions:** **DEC-0098** (discover explorer API); **DEC-0099** (manual confirm-from-discover); **DEC-0100** (display majority category); **DEC-0101** (operator tag schema); **DEC-0102** (tag assign + list filter); **DEC-0103** (Grafana `$tag` P2 stretch)  
+**Depends on:** US-0003 DONE (detection + pending confirm), **DEC-0084**..**DEC-0086** (confirm persistence), US-0018 DONE (**DEC-0087** category catalog), US-0008 (alert dedup — AC-6 regression guard)  
+**Sprint:** **S0019** recommended (single sprint ≤12 tasks; Grafana P2 optional)  
+**Acceptance:** `docs/product/acceptance.md` § US-0020 (AC-1..AC-6)  
+**Spec-pack:** `docs/engineering/spec-pack/US-0020-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
+**User guide:** `docs/user-guides/US-0020.md` (`USER_GUIDE_MODE=1`; execute publishes content)
+
+### Problem
+
+Operators need **manual subscription discovery** alongside auto-detection: search recurring candidates, confirm without pending-only path, see **majority display category** from linked transactions, and organize confirmed subscriptions with **operator-defined tags** — all product-DB overlay metadata with **no Firefly write-back**. US-0003 tabs + pending confirm exist; explorer API/UI, manual confirm-from-search, `display_category_id`, and tag CRUD/assign/filter are missing.
+
+| AC | Discovery verdict | Architecture slice |
+|----|-------------------|-------------------|
+| AC-1 Manual search | **Gap** | **S1 primary** |
+| AC-2 Operator confirm | **Gap** | **S2 primary** |
+| AC-3 Majority category | **Gap** | **S3 primary** |
+| AC-4 Operator tags | **Gap** | S4 + S5 |
+| AC-5 Storage contract | **Gap** | S3 + S4 (product DB only) |
+| AC-6 Regression | Verify | S6 smoke |
+
+`isolation_scope`: artifact + repo source reads; `fresh_context_marker`: `architecture-20260610-us0020-tl-fresh`; no host `.env` / secrets read.
+
+### Research gates resolved (R-0085 — 14 core + 2 stretch)
+
+| Gate | Decision | Alternative rejected |
+|------|----------|---------------------|
+| Explorer engine | **DEC-0098** — reuse `detect_recurrence_groups` + post-filters | Ad-hoc SQL GROUP BY |
+| Discover route | **DEC-0098** — `GET /discover` + `POST /discover/confirm` | Extend pending confirm only |
+| Manual confirm state | **DEC-0099** — direct `confirmed` insert | Pending intermediate |
+| DEC-0085 on manual | **DEC-0099** — merge when payee+interval exists | 409 duplicate |
+| Rejected payee-interval | **DEC-0099** — 409 until operator clears | Silent override |
+| Alert on manual confirm | **DEC-0099** — no `new_detection` | Emit alert |
+| Majority algorithm | **DEC-0100** — COUNT + RANK (cnt DESC, last_date DESC) | `mode()`; operator override |
+| Majority refresh | **DEC-0100** — recompute on merge only | Every sync |
+| `display_category_id` | **DEC-0100** — column on `subscription_patterns` | Join table |
+| Tag tables | **DEC-0101** — `operator_tags` + junction | JSON array |
+| Tag delete | **DEC-0101** — hard delete + CASCADE | Soft delete |
+| Tag assign API | **DEC-0102** — `PUT …/tags` replace set | PATCH per tag |
+| List `?tag=` | **DEC-0102** — slug filter on list API | Client-only filter |
+| Result cap | **DEC-0098** — 50 | Paginated |
+| Amount band filter | **DEC-0098** — P2 stretch | Required in AC-1 |
+| Grafana `$tag` | **DEC-0103** — P2 if ≤12 tasks | Defer post-MVP (default OK) |
+
+### System context
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Browser — SubscriptionsPage (All / Pending / Standing / Discover)          │
+│    Discover tab: search form + candidate table (DEC-0098)                   │
+│    Confirm row → POST discover/confirm (DEC-0099)                           │
+│    Majority category badge + tooltip (DEC-0100)                               │
+│    Tag manager + chips + ?tag= filter chips (DEC-0101/0102)                 │
+└───────────────────────────────┬─────────────────────────────────────────────┘
+                                │ GET  /api/v1/subscriptions/discover
+                                │ POST /api/v1/subscriptions/discover/confirm
+                                │ GET  /api/v1/subscriptions?tag=
+                                │ PUT  /api/v1/subscriptions/:id/tags
+                                │ CRUD /api/v1/subscription-tags
+                                │ GET  /api/v1/categories (display names)
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  flow-finance-ai (Axum) — subscriptions module                              │
+│    detect_recurrence_groups reuse (DEC-0084 payee_key, DEC-0086 tolerance)  │
+│    merge_confirmed_pattern on manual confirm (DEC-0085)                     │
+│    display_category_id compute at confirm + merge (DEC-0100)              │
+│    operator_tags + subscription_pattern_tags (DEC-0101)                   │
+│                                                                             │
+│  DetectionPipeline::run_candidates ──▶ UNCHANGED (AC-6)                   │
+│  Pending confirm/reject + alert dedup ──▶ UNCHANGED (US-0008)             │
+└───────────────────────────────┬─────────────────────────────────────────────┘
+                                │ mirror transactions + categories
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PostgreSQL — subscription_patterns + operator_tags (product DB overlay)    │
+│  Optional Grafana subscriptions.json $tag variable (DEC-0103 P2)            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**AC-6 boundary:** No changes to `DetectionPipeline` skip order or pending tab flows; US-0008 alert dedup untouched; OIDC external profile smoke in V1; no Firefly write-back.
+
+### Architecture contract
+
+```text
+US-0020
+├── S1 — Discover explorer API + UI (P0)
+│   ├── T1 — Discover service: load txs, detect_recurrence_groups, post-filters (DEC-0098)
+│   ├── T2 — GET /api/v1/subscriptions/discover route + meta cap 50
+│   └── T3 — Discover tab: account + payee + interval form + results table
+├── S2 — Manual confirm-from-discover (P0)
+│   ├── T1 — POST discover/confirm: validate, merge/create, no alert (DEC-0099)
+│   └── T2 — Discover row confirm + kind override modal; merge vs create toast
+├── S3 — Majority display category (P0)
+│   ├── T1 — Migration display_category_id + compute helper (DEC-0100)
+│   ├── T2 — Recompute on merge_confirmed_pattern
+│   └── T3 — Majority badge on confirmed list + detail drawer + tooltip
+├── S4 — Operator tags backend (P0)
+│   ├── T1 — Migration operator_tags + subscription_pattern_tags (DEC-0101)
+│   ├── T2 — Tag CRUD routes
+│   └── T3 — PUT assign + list ?tag= + tags on DTO (DEC-0102)
+├── S5 — Tag UI (P0)
+│   ├── T1 — Tag manager modal (CRUD + delete confirm)
+│   └── T2 — Detail drawer chips + All/Standing filter chips
+├── S6 — Regression + docs (P1)
+│   ├── T1 — US-0003/US-0008 detection + dedup tests (AC-6)
+│   ├── T2 — docs/user-guides/US-0020.md
+│   └── T3 — Optional amount band on discover (DEC-0098 P2)
+├── S7 — Grafana $tag (P2)
+│   └── T1 — subscriptions.json templating (DEC-0103)
+└── V1 — verify-work OIDC external profile smoke
+```
+
+**Out of scope:** Firefly tag/category write-back; operator override of display category (stretch); per-account tags; changes to auto-detection thresholds; paginated discover beyond 50.
+
+### S1 — Discover explorer (DEC-0098)
+
+#### Endpoint
+
+`GET /api/v1/subscriptions/discover?account_id=&payee=&interval_days=&amount_min=&amount_max=&limit=50`
+
+#### Response (frozen excerpt)
+
+```json
+{
+  "candidates": [{
+    "payee_key": "netflix",
+    "display_name": "Netflix P3E460",
+    "interval_days": 30,
+    "median_amount": "-12.99",
+    "confidence_pct": 95,
+    "transaction_count": 8,
+    "transaction_ids": ["ff-…"],
+    "account_ids": ["114"]
+  }],
+  "meta": { "limit": 50, "truncated": false, "window_days": 365 }
+}
+```
+
+**Files:** `backend/src/subscriptions/discovery.rs`, `api/subscriptions.rs`, `SubscriptionsPage.tsx`
+
+### S2 — Manual confirm (DEC-0099)
+
+`POST /api/v1/subscriptions/discover/confirm` — see DEC-0099 for merge/rejection/alert rules.
+
+**Primary files:** `repository.rs`, `service.rs`, `api/subscriptions.rs`
+
+### S3 — Majority category (DEC-0100)
+
+Column `display_category_id TEXT NULL` on `subscription_patterns`. Compute at confirm and on merge — RANK policy frozen in DEC-0100.
+
+Display via DEC-0087 catalog; NULL → "Uncategorized".
+
+### S4/S5 — Tags (DEC-0101, DEC-0102)
+
+Schema and APIs per DEC-0101/0102. UI: global tag manager; multi-select chips on detail; slug filter chips on list tabs.
+
+### Task table (sprint-plan input)
+
+| ID | Slice | Task | Files | Priority |
+|----|-------|------|-------|----------|
+| **M1** | S3/S4 | Migration: `display_category_id` + tag tables | `migrations/` | P0 |
+| **D1** | S1 | Discover service + GET route | `subscriptions/discovery.rs`, `api/` | P0 |
+| **D2** | S1 | Discover tab UI | `SubscriptionsPage.tsx` | P0 |
+| **C1** | S2 | POST discover/confirm + merge | `repository.rs`, `service.rs` | P0 |
+| **C2** | S3 | Majority compute + merge refresh | `repository.rs` | P0 |
+| **C3** | S3 | Majority badge UI | `SubscriptionsPage.tsx` | P0 |
+| **T1** | S4 | Tag CRUD API | `api/subscription_tags.rs` | P0 |
+| **T2** | S4 | PUT assign + list `?tag=` | `api/subscriptions.rs` | P0 |
+| **T3** | S5 | Tag manager + filter chips | `SubscriptionsPage.tsx` | P0 |
+| **R1** | S6 | User guide US-0020 | `docs/user-guides/US-0020.md` | P1 |
+| **R2** | S6 | US-0003/US-0008 regression tests | `subscriptions/` tests | P1 |
+| **G1** | S7 | Grafana `$tag` variable | `subscriptions.json` | P2 |
+| **V1** | — | OIDC smoke AC-1..AC-6 | `uat.json` | P0 |
+
+**Count:** 10 mandatory P0 (M1, D1, D2, C1, C2, C3, T1, T2, T3, V1) + 2 P1 (R1, R2) + 1 P2 (G1) → **12** at `SPRINT_MAX_TASKS` with G1 optional → **single sprint S0019** (no split).
+
+**Deploy order:** M1→D1→C1→C2 (schema + discover + confirm) ∥ T1 after M1; D2/C3/T3 UI after APIs; V1 last.
+
+### Codebase map (US-0020 slice)
+
+| Path | Role | Touch |
+|------|------|-------|
+| `backend/migrations/` | display_category + tags | M1 |
+| `backend/src/recurrence/detect.rs` | `detect_recurrence_groups` reuse | D1 |
+| `backend/src/subscriptions/detection.rs` | unchanged — regression guard | — |
+| `backend/src/subscriptions/discovery.rs` | **New** discover service | D1 |
+| `backend/src/subscriptions/repository.rs` | confirm-from-discover, majority, tags | C1, C2, T2 |
+| `backend/src/api/subscriptions.rs` | discover + list tag filter | D1, T2 |
+| `backend/src/api/subscription_tags.rs` | **New** tag CRUD | T1 |
+| `frontend/src/pages/SubscriptionsPage.tsx` | Discover tab, badges, tags | D2, C3, T3 |
+| `grafana/.../subscriptions.json` | optional `$tag` | G1 |
+
+### Decisions (US-0020)
+
+| ID | Topic | Contract |
+|----|-------|----------|
+| **DEC-0098** | Discover explorer | Reuse recurrence core; GET `/discover`; cap 50; amount band P2 |
+| **DEC-0099** | Manual confirm | POST `/discover/confirm`; direct confirmed; DEC-0085 merge; 409 rejection; no alert |
+| **DEC-0100** | Majority category | `display_category_id`; RANK tie-break; recompute on merge |
+| **DEC-0101** | Tag schema | `operator_tags` + junction; hard delete; global scope |
+| **DEC-0102** | Tag assign/filter | PUT replace set; `?tag=` slug on list |
+| **DEC-0103** | Grafana `$tag` | P2 stretch; DEC-0089 independent pattern |
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Explorer perf on 365d window | Account filter required in UI; cap 50 (DEC-0098) |
+| Manual confirm bypasses rejection maps | 409 on rejected payee-interval (DEC-0099) |
+| DEC-0085 merge + category drift | Recompute majority on merge (DEC-0100) |
+| `mode()` tie ambiguity | Explicit RANK policy (DEC-0100) |
+| Tag delete surprise | Confirm dialog (DEC-0101) |
+| Detection regression | No `run_candidates` changes; dedicated tests (AC-6) |
+| Grafana stretch slips | DEC-0103 P2; SPA filter sufficient |
+
+### Next phase
+
+`/sprint-plan` — materialize **S0019** from task table; then `/plan-verify` → `/execute`.
+
+`runtime_proof_id`: `runtime-proof-architecture-20260610-us0020-001`
+
+`triad_hot_surface`: architecture § US-0020 appended; decisions DEC-0098..DEC-0103 formalized; spec-pack US-0020 created; state checkpoint; post-write `--check` required.
 

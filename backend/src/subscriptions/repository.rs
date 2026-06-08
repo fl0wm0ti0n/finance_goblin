@@ -7,10 +7,12 @@ use uuid::Uuid;
 
 use crate::config::SubscriptionsConfig;
 use crate::forecast::types::TransactionRow;
-use crate::recurrence::RecurrenceGroup;
+use crate::recurrence::{RecurrenceGroup, normalize};
 
+use super::tags::{normalize_slug, validate_tag_name};
 use super::types::{
-    AlertRow, ConfirmedPayeeInterval, PatternDetailRow, PatternRow, PendingUpsertOutcome,
+    AlertRow, ConfirmFromDiscoverError, ConfirmFromDiscoverResult, ConfirmedPayeeInterval,
+    OperatorTagRow, OperatorTagSummary, PatternDetailRow, PatternRow, PendingUpsertOutcome,
     PriceEventRow, UnreadAlertCountResponse,
 };
 
@@ -60,21 +62,99 @@ impl SubscriptionRepository {
     pub async fn load_expense_transactions(
         &self,
         window_days: i64,
+        account_id: Option<&str>,
     ) -> Result<Vec<TransactionRow>, sqlx::Error> {
         let cutoff = Utc::now().date_naive() - chrono::Duration::days(window_days);
+        let rows = if let Some(account_id) = account_id {
+            sqlx::query_as::<_, TransactionDbRow>(
+                r#"
+                SELECT firefly_id, account_id, date, amount::float8 AS amount, description, category_id, payload
+                FROM transactions
+                WHERE date >= $1 AND amount < 0 AND account_id = $2
+                ORDER BY date ASC
+                "#,
+            )
+            .bind(cutoff)
+            .bind(account_id)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, TransactionDbRow>(
+                r#"
+                SELECT firefly_id, account_id, date, amount::float8 AS amount, description, category_id, payload
+                FROM transactions
+                WHERE date >= $1 AND amount < 0
+                ORDER BY date ASC
+                "#,
+            )
+            .bind(cutoff)
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    pub async fn load_transactions_by_ids(
+        &self,
+        transaction_ids: &[String],
+    ) -> Result<Vec<TransactionRow>, sqlx::Error> {
+        if transaction_ids.is_empty() {
+            return Ok(Vec::new());
+        }
         let rows = sqlx::query_as::<_, TransactionDbRow>(
             r#"
             SELECT firefly_id, account_id, date, amount::float8 AS amount, description, category_id, payload
             FROM transactions
-            WHERE date >= $1 AND amount < 0
+            WHERE firefly_id = ANY($1)
             ORDER BY date ASC
             "#,
         )
-        .bind(cutoff)
+        .bind(transaction_ids)
         .fetch_all(&self.pool)
         .await?;
-
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    pub async fn compute_display_category_id(
+        &self,
+        pattern_id: Uuid,
+    ) -> Result<Option<String>, sqlx::Error> {
+        let category_id: Option<String> = sqlx::query_scalar(
+            r#"
+            WITH linked AS (
+              SELECT t.category_id, t.date
+              FROM subscription_pattern_transactions spt
+              JOIN transactions t ON t.firefly_id = spt.transaction_firefly_id
+              WHERE spt.pattern_id = $1 AND t.category_id IS NOT NULL
+            ),
+            ranked AS (
+              SELECT category_id,
+                     COUNT(*) AS cnt,
+                     MAX(date) AS last_date,
+                     RANK() OVER (ORDER BY COUNT(*) DESC, MAX(date) DESC) AS rnk
+              FROM linked
+              GROUP BY category_id
+            )
+            SELECT category_id FROM ranked WHERE rnk = 1 LIMIT 1
+            "#,
+        )
+        .bind(pattern_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(category_id)
+    }
+
+    pub async fn refresh_display_category_id(&self, pattern_id: Uuid) -> Result<(), sqlx::Error> {
+        let category_id = self.compute_display_category_id(pattern_id).await?;
+        sqlx::query(
+            "UPDATE subscription_patterns SET display_category_id = $2, updated_at = NOW() WHERE id = $1",
+        )
+        .bind(pattern_id)
+        .bind(category_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     pub async fn load_rejection_fingerprints(&self) -> Result<HashSet<String>, sqlx::Error> {
@@ -220,7 +300,159 @@ impl SubscriptionRepository {
         }
 
         tx.commit().await?;
+        self.refresh_display_category_id(existing_id).await?;
         Ok(true)
+    }
+
+    pub async fn confirm_from_discover(
+        &self,
+        payee_key: &str,
+        interval_days: i32,
+        median_amount: f64,
+        transaction_ids: &[String],
+        kind: &str,
+        sync_run_id: Uuid,
+    ) -> Result<Result<ConfirmFromDiscoverResult, ConfirmFromDiscoverError>, sqlx::Error> {
+        let txs = self.load_transactions_by_ids(transaction_ids).await?;
+        if txs.len() != transaction_ids.len() {
+            return Ok(Err(ConfirmFromDiscoverError::InvalidTransactions(
+                "one or more transaction ids not found".into(),
+            )));
+        }
+
+        for tx in &txs {
+            let desc_key = normalize::payee_key(tx.description.as_deref().unwrap_or(""));
+            if desc_key != payee_key {
+                return Ok(Err(ConfirmFromDiscoverError::InvalidTransactions(
+                    "transactions do not share normalized payee_key".into(),
+                )));
+            }
+        }
+
+        let mut dates: Vec<NaiveDate> = txs.iter().map(|t| t.date).collect();
+        dates.sort();
+        let display_name = txs
+            .last()
+            .and_then(|t| t.description.clone())
+            .unwrap_or_else(|| payee_key.to_string());
+
+        let group = RecurrenceGroup {
+            payee_key: payee_key.to_string(),
+            display_name,
+            interval_days: interval_days as i64,
+            median_amount,
+            confidence_pct: 95,
+            transaction_ids: transaction_ids.to_vec(),
+            transaction_dates: dates.clone(),
+            category_ids: txs.iter().map(|t| t.category_id.clone()).collect(),
+        };
+
+        let fingerprint =
+            crate::recurrence::compute_fingerprint(payee_key, interval_days as i64, median_amount);
+
+        let confirmed_payee_intervals = self.load_confirmed_payee_intervals().await?;
+        let rejected_payee_intervals = self.load_rejected_payee_intervals().await?;
+
+        if is_rejected_payee_interval(&rejected_payee_intervals, payee_key, interval_days) {
+            return Ok(Err(ConfirmFromDiscoverError::RejectedPayeeInterval));
+        }
+
+        if let Some(confirmed) =
+            find_confirmed_payee_interval(&confirmed_payee_intervals, payee_key, interval_days)
+        {
+            let merged = self
+                .merge_confirmed_pattern(confirmed.id, &group, &fingerprint, kind, sync_run_id)
+                .await?;
+            if !merged {
+                return Ok(Err(ConfirmFromDiscoverError::FingerprintConflict));
+            }
+            let pattern = self
+                .get_pattern_row(confirmed.id)
+                .await?
+                .ok_or_else(|| sqlx::Error::RowNotFound)?;
+            return Ok(Ok(ConfirmFromDiscoverResult {
+                pattern,
+                merged: true,
+            }));
+        }
+
+        let first = dates.first().copied().unwrap_or_else(|| Utc::now().date_naive());
+        let last = dates.last().copied().unwrap_or(first);
+
+        let mut tx = self.pool.begin().await?;
+        let pattern_id: Uuid = match sqlx::query_scalar(
+            r#"
+            INSERT INTO subscription_patterns (
+                fingerprint, status, kind, payee_key, display_name, interval_days,
+                current_amount, confidence_pct, first_seen_at, last_seen_at,
+                confirmed_at, detection_run_id
+            )
+            VALUES ($1, 'confirmed', $2::subscription_kind, $3, $4, $5, $6, $7, $8, $9, NOW(), $10)
+            RETURNING id
+            "#,
+        )
+        .bind(&fingerprint)
+        .bind(kind)
+        .bind(payee_key)
+        .bind(&group.display_name)
+        .bind(interval_days)
+        .bind(median_amount)
+        .bind(group.confidence_pct)
+        .bind(first)
+        .bind(last)
+        .bind(sync_run_id)
+        .fetch_one(&mut *tx)
+        .await
+        {
+            Ok(id) => id,
+            Err(e) if is_unique_violation(&e) => {
+                tx.rollback().await?;
+                return Ok(Err(ConfirmFromDiscoverError::FingerprintConflict));
+            }
+            Err(e) => return Err(e),
+        };
+
+        for tx_id in transaction_ids {
+            sqlx::query(
+                r#"
+                INSERT INTO subscription_pattern_transactions (pattern_id, transaction_firefly_id)
+                VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+                "#,
+            )
+            .bind(pattern_id)
+            .bind(tx_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        self.refresh_display_category_id(pattern_id).await?;
+
+        let pattern = self
+            .get_pattern_row(pattern_id)
+            .await?
+            .ok_or_else(|| sqlx::Error::RowNotFound)?;
+        Ok(Ok(ConfirmFromDiscoverResult {
+            pattern,
+            merged: false,
+        }))
+    }
+
+    async fn get_pattern_row(&self, id: Uuid) -> Result<Option<PatternRow>, sqlx::Error> {
+        sqlx::query_as::<_, PatternRow>(
+            r#"
+            SELECT id, fingerprint, status::text, kind::text, payee_key, display_name,
+                   interval_days, current_amount::float8 AS current_amount, confidence_pct,
+                   first_seen_at, last_seen_at, confirmed_at, rejected_at, display_category_id,
+                   created_at, updated_at
+            FROM subscription_patterns
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
     }
 
     pub async fn load_confirmed_for_forecast(
@@ -516,26 +748,44 @@ impl SubscriptionRepository {
         &self,
         status: Option<&str>,
         kind: Option<&str>,
+        tag_slug: Option<&str>,
     ) -> Result<Vec<PatternRow>, sqlx::Error> {
         let mut sql = String::from(
             r#"
-            SELECT id, fingerprint, status::text, kind::text, payee_key, display_name,
-                   interval_days, current_amount::float8 AS current_amount, confidence_pct, first_seen_at, last_seen_at,
-                   confirmed_at, rejected_at, created_at, updated_at
-            FROM subscription_patterns
-            WHERE 1=1
+            SELECT p.id, p.fingerprint, p.status::text, p.kind::text, p.payee_key, p.display_name,
+                   p.interval_days, p.current_amount::float8 AS current_amount, p.confidence_pct,
+                   p.first_seen_at, p.last_seen_at, p.confirmed_at, p.rejected_at, p.display_category_id,
+                   p.created_at, p.updated_at
+            FROM subscription_patterns p
             "#,
         );
+        if tag_slug.is_some() {
+            sql.push_str(
+                r#"
+                INNER JOIN subscription_pattern_tags spt ON spt.pattern_id = p.id
+                INNER JOIN operator_tags ot ON ot.id = spt.tag_id
+                "#,
+            );
+        }
+        sql.push_str(" WHERE 1=1");
+        let mut bind_idx = 1;
+        if tag_slug.is_some() {
+            sql.push_str(&format!(" AND ot.slug = ${bind_idx}"));
+            bind_idx += 1;
+        }
         if status.is_some() {
-            sql.push_str(" AND status = $1::subscription_status");
+            sql.push_str(&format!(" AND p.status = ${bind_idx}::subscription_status"));
+            bind_idx += 1;
         }
         if kind.is_some() {
-            let idx = if status.is_some() { 2 } else { 1 };
-            sql.push_str(&format!(" AND kind = ${idx}::subscription_kind"));
+            sql.push_str(&format!(" AND p.kind = ${bind_idx}::subscription_kind"));
         }
-        sql.push_str(" ORDER BY last_seen_at DESC");
+        sql.push_str(" ORDER BY p.last_seen_at DESC");
 
         let mut q = sqlx::query_as::<_, PatternRow>(&sql);
+        if let Some(slug) = tag_slug {
+            q = q.bind(slug);
+        }
         if let Some(s) = status {
             q = q.bind(s);
         }
@@ -545,12 +795,44 @@ impl SubscriptionRepository {
         q.fetch_all(&self.pool).await
     }
 
+    pub async fn list_tags_for_patterns(
+        &self,
+        pattern_ids: &[Uuid],
+    ) -> Result<std::collections::HashMap<Uuid, Vec<OperatorTagSummary>>, sqlx::Error> {
+        if pattern_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+        let rows: Vec<(Uuid, Uuid, String, String)> = sqlx::query_as(
+            r#"
+            SELECT spt.pattern_id, ot.id, ot.name, ot.slug
+            FROM subscription_pattern_tags spt
+            INNER JOIN operator_tags ot ON ot.id = spt.tag_id
+            WHERE spt.pattern_id = ANY($1)
+            ORDER BY ot.name ASC
+            "#,
+        )
+        .bind(pattern_ids)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut map: std::collections::HashMap<Uuid, Vec<OperatorTagSummary>> =
+            std::collections::HashMap::new();
+        for (pattern_id, id, name, slug) in rows {
+            map.entry(pattern_id).or_default().push(OperatorTagSummary {
+                id,
+                name,
+                slug,
+            });
+        }
+        Ok(map)
+    }
+
     pub async fn get_pattern(&self, id: Uuid) -> Result<Option<PatternDetailRow>, sqlx::Error> {
         sqlx::query_as::<_, PatternDetailRow>(
             r#"
             SELECT p.id, p.fingerprint, p.status::text, p.kind::text, p.payee_key, p.display_name,
-                   p.interval_days, p.current_amount::float8 AS current_amount, p.confidence_pct, p.first_seen_at, p.last_seen_at,
-                   p.confirmed_at, p.rejected_at,
+                   p.interval_days, p.current_amount::float8 AS current_amount, p.confidence_pct,
+                   p.first_seen_at, p.last_seen_at, p.confirmed_at, p.rejected_at, p.display_category_id,
                    (SELECT COUNT(*)::bigint FROM subscription_pattern_transactions t WHERE t.pattern_id = p.id) AS transaction_count
             FROM subscription_patterns p
             WHERE p.id = $1
@@ -575,8 +857,9 @@ impl SubscriptionRepository {
                 updated_at = NOW()
             WHERE id = $1 AND status = 'pending'
             RETURNING id, fingerprint, status::text, kind::text, payee_key, display_name,
-                      interval_days, current_amount::float8 AS current_amount, confidence_pct, first_seen_at, last_seen_at,
-                      confirmed_at, rejected_at, created_at, updated_at
+                      interval_days, current_amount::float8 AS current_amount, confidence_pct,
+                      first_seen_at, last_seen_at, confirmed_at, rejected_at, display_category_id,
+                      created_at, updated_at
             "#,
         )
         .bind(id)
@@ -586,6 +869,10 @@ impl SubscriptionRepository {
 
         if let Some(ref pattern) = row {
             self.mark_read_unread_alerts_for_pattern(pattern.id).await?;
+            self.refresh_display_category_id(pattern.id).await?;
+            if let Some(updated) = self.get_pattern_row(pattern.id).await? {
+                return Ok(Some(updated));
+            }
         }
 
         Ok(row)
@@ -603,8 +890,9 @@ impl SubscriptionRepository {
             SET status = 'rejected', rejected_at = NOW(), updated_at = NOW()
             WHERE id = $1 AND status = 'pending'
             RETURNING id, fingerprint, status::text, kind::text, payee_key, display_name,
-                      interval_days, current_amount::float8 AS current_amount, confidence_pct, first_seen_at, last_seen_at,
-                      confirmed_at, rejected_at, created_at, updated_at
+                      interval_days, current_amount::float8 AS current_amount, confidence_pct,
+                      first_seen_at, last_seen_at, confirmed_at, rejected_at, display_category_id,
+                      created_at, updated_at
             "#,
         )
         .bind(id)
@@ -642,7 +930,7 @@ impl SubscriptionRepository {
     }
 
     pub async fn list_confirmed_patterns(&self) -> Result<Vec<PatternRow>, sqlx::Error> {
-        self.list_patterns(Some("confirmed"), None).await
+        self.list_patterns(Some("confirmed"), None, None).await
     }
 
     pub async fn list_alerts(&self, unread_only: bool) -> Result<Vec<AlertRow>, sqlx::Error> {
@@ -706,6 +994,107 @@ impl SubscriptionRepository {
         .await
     }
 
+    pub async fn list_operator_tags(&self) -> Result<Vec<OperatorTagRow>, sqlx::Error> {
+        sqlx::query_as::<_, OperatorTagRow>(
+            r#"
+            SELECT id, name, slug, created_at, updated_at
+            FROM operator_tags
+            ORDER BY name ASC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    pub async fn create_operator_tag(&self, name: &str) -> Result<OperatorTagRow, sqlx::Error> {
+        validate_tag_name(name).map_err(|_| sqlx::Error::RowNotFound)?;
+        let slug = normalize_slug(name);
+        sqlx::query_as::<_, OperatorTagRow>(
+            r#"
+            INSERT INTO operator_tags (name, slug)
+            VALUES ($1, $2)
+            RETURNING id, name, slug, created_at, updated_at
+            "#,
+        )
+        .bind(name.trim())
+        .bind(slug)
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    pub async fn rename_operator_tag(
+        &self,
+        id: Uuid,
+        name: &str,
+    ) -> Result<Option<OperatorTagRow>, sqlx::Error> {
+        validate_tag_name(name).map_err(|_| sqlx::Error::RowNotFound)?;
+        let slug = normalize_slug(name);
+        sqlx::query_as::<_, OperatorTagRow>(
+            r#"
+            UPDATE operator_tags
+            SET name = $2, slug = $3, updated_at = NOW()
+            WHERE id = $1
+            RETURNING id, name, slug, created_at, updated_at
+            "#,
+        )
+        .bind(id)
+        .bind(name.trim())
+        .bind(slug)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    pub async fn delete_operator_tag(&self, id: Uuid) -> Result<bool, sqlx::Error> {
+        let result = sqlx::query("DELETE FROM operator_tags WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() > 0)
+    }
+
+    pub async fn operator_tag_exists(&self, id: Uuid) -> Result<bool, sqlx::Error> {
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*)::bigint FROM operator_tags WHERE id = $1")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(count > 0)
+    }
+
+    pub async fn replace_pattern_tags(
+        &self,
+        pattern_id: Uuid,
+        tag_ids: &[Uuid],
+    ) -> Result<(), sqlx::Error> {
+        for tag_id in tag_ids {
+            if !self.operator_tag_exists(*tag_id).await? {
+                return Err(sqlx::Error::RowNotFound);
+            }
+        }
+
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM subscription_pattern_tags WHERE pattern_id = $1")
+            .bind(pattern_id)
+            .execute(&mut *tx)
+            .await?;
+
+        for tag_id in tag_ids {
+            sqlx::query(
+                r#"
+                INSERT INTO subscription_pattern_tags (pattern_id, tag_id)
+                VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+                "#,
+            )
+            .bind(pattern_id)
+            .bind(tag_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
     pub async fn update_confirmed_amount(
         &self,
         id: Uuid,
@@ -763,6 +1152,28 @@ struct ConfirmedDbRow {
     fingerprint: String,
 }
 
+/// DEC-0100 — deterministic majority category from linked (category_id, date) pairs.
+pub fn majority_category_id(category_dates: &[(Option<String>, NaiveDate)]) -> Option<String> {
+    use std::collections::HashMap;
+    let mut counts: HashMap<String, (i64, NaiveDate)> = HashMap::new();
+    for (cat, date) in category_dates {
+        let Some(id) = cat else { continue };
+        let entry = counts.entry(id.clone()).or_insert((0, *date));
+        entry.0 += 1;
+        if *date > entry.1 {
+            entry.1 = *date;
+        }
+    }
+    counts
+        .into_iter()
+        .max_by(|a, b| {
+            a.1 .0
+                .cmp(&b.1 .0)
+                .then_with(|| a.1 .1.cmp(&b.1 .1))
+        })
+        .map(|(id, _)| id)
+}
+
 fn is_unique_violation(err: &sqlx::Error) -> bool {
     err.as_database_error()
         .and_then(|db| db.code())
@@ -803,5 +1214,36 @@ mod tests {
         let rejected = vec![("apple".to_string(), 30)];
         assert!(is_rejected_payee_interval(&rejected, "apple", 32));
         assert!(!is_rejected_payee_interval(&rejected, "apple", 25));
+    }
+
+    #[test]
+    fn majority_category_picks_mode_then_latest_date() {
+        let d1 = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let d2 = NaiveDate::from_ymd_opt(2026, 2, 1).unwrap();
+        let d3 = NaiveDate::from_ymd_opt(2026, 3, 1).unwrap();
+        let rows = vec![
+            (Some("cat-a".into()), d1),
+            (Some("cat-a".into()), d2),
+            (Some("cat-b".into()), d3),
+            (None, d3),
+        ];
+        assert_eq!(majority_category_id(&rows).as_deref(), Some("cat-a"));
+    }
+
+    #[test]
+    fn majority_category_tie_breaks_by_latest_date() {
+        let d1 = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let d2 = NaiveDate::from_ymd_opt(2026, 3, 1).unwrap();
+        let rows = vec![
+            (Some("cat-a".into()), d1),
+            (Some("cat-b".into()), d2),
+        ];
+        assert_eq!(majority_category_id(&rows).as_deref(), Some("cat-b"));
+    }
+
+    #[test]
+    fn majority_category_all_uncategorized_returns_none() {
+        let d1 = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        assert_eq!(majority_category_id(&[(None, d1)]), None);
     }
 }

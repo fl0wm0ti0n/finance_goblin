@@ -1,73 +1,69 @@
-# Dev → QA Handoff
+# Dev → QA handoff — US-0020 / S0019
 
 **From:** Dev (`/execute`)  
 **To:** QA (`/qa`)  
-**Date:** 2026-06-07  
-**Bug:** BUG-0015  
-**Sprint:** Q0023 (`/quick`)  
-**Orchestrator:** `auto-20260607-bug0015-001`
+**Date:** 2026-06-10  
+**Story:** US-0020  
+**Sprint:** S0019  
+**Orchestrator:** `auto-20260608-us0020-001`  
+**Verdict:** execute **COMPLETE** — ready for QA
 
-### Summary
+## Summary
 
-Implemented AU1–AU4 for BUG-0015 confirm persistence after rebuild: **DEC-0084** card billing `payee_key` normalization, **DEC-0085/0086** payee+interval confirm inheritance (load maps, merge upsert, ±3d tolerance), detection skip+merge path, and stale inactive by payee+interval wired into `run_detection`. **V1** open — blocked on operator deploy + gates.
+S0019 execute delivered discover explorer, manual confirm-from-discover, majority display category, operator tags (CRUD + assign + filter), user guide, regression tests, UAT template, and optional Grafana `$tag` per DEC-0098..DEC-0103.
 
-### Tasks completed
+## Tasks completed
 
-| ID | Status | Acceptance row |
-|----|--------|----------------|
-| AU1 | done | AU, AV |
-| AU2 | done | AU, AV |
-| AU3 | done | AU, AV, AW |
-| AU4 | done | AV |
-| V1 | open | AU–AW — operator smoke after deploy |
+| ID | Title | Evidence |
+|----|-------|----------|
+| T-0198 | Migration `display_category_id` + tag tables | `backend/migrations/014_us0020_display_category_tags.sql`, `types.rs` |
+| T-0199 | Discover service + GET `/discover` | `backend/src/subscriptions/discovery.rs`, `api/subscriptions.rs` |
+| T-0200 | Discover tab UI | `frontend/src/pages/SubscriptionsPage.tsx`, `lib/api.ts` |
+| T-0201 | POST `discover/confirm` + merge | `repository.rs::confirm_from_discover`, DEC-0085 merge |
+| T-0202 | Majority category compute | `repository.rs::compute_display_category_id`, `majority_category_id` |
+| T-0203 | Majority badge + tooltip | `SubscriptionsPage.tsx` |
+| T-0204 | Tag CRUD API | `api/subscription_tags.rs` (PATCH rename per DEC-0101) |
+| T-0205 | PUT tag assign + `?tag=` filter | `api/subscriptions.rs`, `repository.rs` |
+| T-0206 | Tag manager + filter chips | `SubscriptionsPage.tsx` |
+| T-0207 | User guide | `docs/user-guides/US-0020.md` |
+| T-0208 | Regression tests | `detection.rs`, `repository.rs`, `discovery.rs`, `tags.rs` tests |
+| T-0209 | UAT template | `sprints/S0019/uat.md`, `uat.json` |
+| T-0210 | Grafana `$tag` (P2) | `grafana/.../subscriptions.json` |
 
-### Acceptance mapping (verify)
+## Test results
 
-| Row | Tasks | Verify focus |
-|-----|-------|--------------|
-| **AU** | AU1, AU2, AU3, V1 | Confirmed Cursor/Apple after rebuild + Full sync — not pending |
-| **AV** | AU1–AU4, V1 | No duplicate pending; merge/skip on payee+interval |
-| **AW** | AU3, V1 | Unread alerts reconcile; no spurious new_detection on merge |
+| Check | Result |
+|-------|--------|
+| `cargo test --lib` | **213/213 PASS** |
+| `npm test -- --run` | **9/9 PASS** |
 
-### Test evidence
+## Decision alignment notes
 
-| Command | Result |
-|---------|--------|
-| `cargo test --lib` | 187/187 PASS |
-| `npm test -- --run` | 6/6 PASS |
+- Tag field **`name`** (not `label`) per DEC-0101 at execute
+- Tag rename uses **PATCH** per DEC-0101 (not PUT)
+- `DetectionPipeline::run_candidates` unchanged (AC-6)
+- Manual discover confirm does not call `upsert_alert` (DEC-0099)
 
-### Key contracts
+## Operator gates (deferred live smoke)
 
-- **DEC-0084:** `payee_key()` asterisk split, comma left-segment, Apple billing roots → `apple`, domain `.com`/`/bill` tail strip
-- **DEC-0085:** `load_confirmed_payee_intervals`, `load_rejected_payee_intervals`, `merge_confirmed_pattern` in-place refresh; index `idx_subscription_patterns_payee_status`
-- **DEC-0086:** `interval_matches` ±3d; fingerprint rotation on merge; UNIQUE conflict fail-safe to pending path
-- **AU3:** merge before pending upsert; no `new_detection` on confirmed merge
-- **AU4:** `mark_stale_inactive` uses `build_active_payee_intervals`; gap > 2× `interval_days`
+1. **BACKEND_FRONTEND_DEPLOY** — deploy S0019 backend + frontend on US-0010 external profile
+2. **FULL_FIREFLY_SYNC** — mirror transactions + categories for discover + majority category
 
-### Files changed
+## QA focus
 
-- `backend/src/recurrence/normalize.rs` — AU1
-- `backend/src/subscriptions/repository.rs` — AU2
-- `backend/src/subscriptions/types.rs` — `ConfirmedPayeeInterval`
-- `backend/src/subscriptions/detection.rs` — AU3, AU4
-- `backend/src/subscriptions/service.rs` — wire maps + stale pass
-- `backend/migrations/012_subscription_patterns_payee_status.sql` — AU2 index
+- AC-1..AC-6 trace vs `sprints/S0019/uat.json`
+- DEC-0098..DEC-0103 contract review
+- Regression: pending confirm/reject, alert dedup, DEC-0085 merge paths
+- No Firefly write-back for tags or `display_category_id`
 
-### Operator prerequisites for V1
+## Artifacts
 
-1. **BACKEND_FRONTEND_DEPLOY** — Q0023 backend bundle on financegnome.omniflow.cc
-2. **POSTGRES_PERSISTENCE_PROBE** — H2 SQL before Full sync
-3. **FULL_FIREFLY_SYNC** — Full sync + detection phase
+- `sprints/S0019/{progress.md,summary.md,uat.md,uat.json}`
+- `docs/user-guides/US-0020.md`
+- `handoffs/plan_verify_to_execute.md`
 
-### QA instructions
+`fresh_context_marker`: execute-20260610-us0020-dev-fresh  
+`runtime_proof_id`: runtime-proof-execute-20260610-us0020-001  
+`phase_boundary`: execute → qa
 
-Run `/qa` per `sprints/quick/Q0023/uat.md`. Code review AU1–AU4 contracts; V1 runtime probes deferred to verify-work after operator gates.
-
-### Gaps / advisories
-
-- V1 omniflow smoke not run in dev — operator gates required
-- Pre-fix orphan pending cleanup deferred per frozen boundaries
-
-### Next phase
-
-`/qa` in fresh subagent context.
+**Next:** `/qa` in fresh subagent/chat (role: qa). Do not begin QA in this subagent.

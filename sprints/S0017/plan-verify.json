@@ -1,0 +1,139 @@
+{
+  "sprint": "S0017",
+  "story_id": "US-0018",
+  "orchestrator_run_id": "auto-20260608-us0018-001",
+  "verified_at": "2026-06-08T22:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0018",
+  "tasks_source": "sprints/S0017/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#US-0018",
+  "decision_alignment": {
+    "decision_ids": ["DEC-0087", "DEC-0088", "DEC-0089", "DEC-0090"],
+    "aligned": true,
+    "research_basis": ["R-0080", "R-0083"],
+    "contract_elements_covered": [
+      "Month spine SQL + __uncategorized__ sentinel + 24-month cap (T-0175)",
+      "GET /api/v1/categories + /categories/expense-series + server summary (T-0176)",
+      "CategoryFilter single-select + CategoryTrendChart bar default (T-0177)",
+      "Forecast monthly actuals-only filter + trend chart (T-0178, DEC-0089)",
+      "Planning compare toolbar + actuals widget — compare API unchanged (T-0179)",
+      "Wealth category spending subsection — household totals unchanged (T-0180)",
+      "Grafana cashflow + budgets $category variables + panel filters (T-0181, T-0182)",
+      "User guide DEC-0089 semantics + uncategorized behavior (T-0183)",
+      "OIDC smoke AC-1..AC-6 + US-0015 regression scope (T-0184)",
+      "Optional EXPLAIN probe conditional index gate (T-0185, DEC-0090)"
+    ],
+    "frozen_boundaries_respected": [
+      "DEC-0088 single-select MVP — satisfies AC-1 single-or-multi",
+      "DEC-0089 forecast stat cards + MonthlyChart household-only — no bucket re-projection",
+      "DEC-0089 planning compare API unchanged — no category_id query param",
+      "DEC-0089 Grafana independent filters — no SPA iframe sync",
+      "DEC-0090 no pre-emptive index — P2 optional T-0185 only if EXPLAIN >50 ms",
+      "No project.rs / bucket_inference changes — US-0015 regression preserved",
+      "Read-only Firefly — no write-back in sprint scope"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "T-0175 → T-0176 → T-0177 → (T-0178 ∥ T-0179 ∥ T-0180 ∥ T-0181 ∥ T-0182) → T-0183 → T-0184; T-0185 optional after T-0175",
+    "notes": "S1 API before S2 components; Grafana parallel after catalog API; docs/UAT after surface integrations; BACKEND_FRONTEND_DEPLOY before omniflow AC-6 smoke"
+  },
+  "test_coverage": {
+    "repository_spine": "T-0175 — spine zeros, __uncategorized__, 24-month cap, invalid window",
+    "api_contract": "T-0176 — catalog search/truncation, expense-series JSON, summary fields, 404 unknown id",
+    "component_smoke": "T-0177 — bar chart month labels, empty/disabled states, summary callouts",
+    "surface_integration": "T-0178, T-0179, T-0180 — filter + chart on forecast/planning/wealth per DEC-0089",
+    "grafana_provisioning": "T-0181, T-0182 — $category variable + panel SQL filters",
+    "operator_docs": "T-0183 — docs/user-guides/US-0018.md",
+    "uat_smoke": "T-0184 — OIDC US-0010 external profile template (placeholder until execute)",
+    "perf_gate": "T-0185 — optional EXPLAIN probe per DEC-0090",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Shared category filter (single or multi) on /forecast monthly, /planning compare, /wealth firefly breakdown, and at least two embedded Grafana dashboards via variable or filter panel",
+      "tasks": ["T-0176", "T-0177", "T-0178", "T-0179", "T-0180", "T-0181", "T-0182", "T-0184"],
+      "covered": true,
+      "notes": "Single-select MVP per DEC-0088 satisfies single-or-multi; four SPA/Grafana surfaces + UAT smoke"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "GET category expense API returns per-month EUR outflow (and inflow where scoped) for selected category_id(s) over configurable window (default 12 months, max 24)",
+      "tasks": ["T-0175", "T-0176"],
+      "covered": true,
+      "notes": "expense_series_by_month spine + /categories/expense-series; single category_id per DEC-0087"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "React category trend chart renders month labels with EUR amounts; supports at least one category; empty-state when mirror has no categorized rows in period",
+      "tasks": ["T-0177", "T-0178", "T-0179", "T-0180"],
+      "covered": true,
+      "notes": "CategoryTrendChart on forecast (primary), planning, wealth via shared component"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "UI surfaces month-over-month change and best/worst month indicator for selected category in period (table or chart annotation)",
+      "tasks": ["T-0176", "T-0177", "T-0178", "T-0179", "T-0180"],
+      "covered": true,
+      "notes": "Server summary mom_delta_pct/best_month/worst_month + UI callouts from API"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Series uses Firefly-synced category_id on mirror transactions; uncategorized bucket explicit — not silent zero",
+      "tasks": ["T-0175", "T-0176"],
+      "covered": true,
+      "notes": "__uncategorized__ sentinel maps IS NULL; bucket metadata in response"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "OIDC-enabled US-0010 external profile smoke pass; read-only Firefly preserved; US-0015 bucket mapping unchanged",
+      "tasks": ["T-0184"],
+      "covered": true,
+      "notes": "UAT template + regression scope explicit; operator gate BACKEND_FRONTEND_DEPLOY"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "BACKEND_FRONTEND_DEPLOY operator gate required before omniflow OIDC smoke (AC-6) — documented in T-0184 UAT template"
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "tasks.md acceptance map lists T-0177/T-0178 only for AC-3/AC-4 — T-0179/T-0180 also render CategoryTrendChart; no coverage gap"
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "T-0183 user guide and T-0185 EXPLAIN probe have no direct AC row — architecture D1/P1 support tasks; non-blocking"
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "Multi-category overlay deferred per DEC-0088 — AC-1 satisfied by single-select MVP"
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_count": 6,
+    "covered_count": 6,
+    "blocking_covered_count": 6,
+    "gap_count": 0,
+    "task_count": 11,
+    "task_ids": ["T-0175", "T-0176", "T-0177", "T-0178", "T-0179", "T-0180", "T-0181", "T-0182", "T-0183", "T-0184", "T-0185"],
+    "tasks_without_acceptance_ref": ["T-0183", "T-0185"],
+    "tasks_without_acceptance_ref_blocking": false,
+    "dec_0087_aligned": true,
+    "dec_0088_aligned": true,
+    "dec_0089_aligned": true,
+    "dec_0090_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true,
+    "execute_ready_caveat": null
+  },
+  "notes": "QA plan-verify 2026-06-08: sprints/S0017/tasks.md (T-0175..T-0185) aligns with docs/product/acceptance.md § US-0018 (AC-1..AC-6) and architecture § US-0018 / DEC-0087..0090; 11/11 tasks mapped; 6/6 acceptance rows covered; 0 gaps. Approved for /execute."
+}

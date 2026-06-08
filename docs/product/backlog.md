@@ -2881,8 +2881,9 @@ So that onboarding and production smoke paths stay accurate without hunting runb
 
 ### US-0018 — Category filters & expense trend analytics
 
-Status: OPEN
+Status: DONE
 Priority: P1
+**sprint_id:** S0017
 
 As a household budgeter using Firefly categories,
 I want to filter by category across product views and see how each category's spending changes month over month,
@@ -2892,16 +2893,26 @@ So that I can spot where I save or overspend and use categories in forecasts and
 
 - In: Shared **category filter** contract (API + React) on forecast monthly/long-term views, planning compare context, wealth/firefly breakdown, and Grafana dashboards where category breakdown applies
 - In: **Per-category monthly expense series** API (rolling 12–24 months) from mirror `transactions` + `categories`
-- In: React **category trend chart** (line/bar) with EUR totals per month; multi-category compare optional in discovery
-- In: Category performance summary (month-over-month delta, optional rank) for selected period
-- In: Grafana panel or `$category` variable wiring on at least cashflow/budgets analytics dashboards
-- Out: Firefly category editing; ML category auto-labeling (US-0015 bucket mapping unchanged); tax reporting
+- In: React **category trend chart** (bar default, line optional) with EUR totals per month; **single-category MVP** (multi-overlay deferred)
+- In: Category performance summary (month-over-month delta, best/worst month indicator) for selected period
+- In: Grafana **`$category`** variable + category-scoped panel on **`cashflow`** and **`budgets`** dashboards (AC-1 minimum two)
+- In: Shared **`CategoryFilter`** React component + `GET /api/v1/categories` catalog + `GET /api/v1/categories/expense-series` monthly series
+- Out: Firefly category editing; ML category auto-labeling (US-0015 bucket mapping unchanged); tax reporting; Grafana↔SPA bidirectional filter sync; multi-category chart overlay (stretch)
 
 #### Constraints
 
 - Firefly read-only — categories sourced from mirror sync (post-BUG-0006 `category_id` ingest)
 - Reporting currency EUR with native Firefly account currency noted where mixed
-- Privacy: aggregate category series only in APIs exposed to AI tools unless scope expands in architecture
+- Privacy: aggregate category series only in new public REST endpoints (no raw rows)
+- Forecast monthly category filter scopes **display/breakdown** in MVP; full forecast re-projection by category is architecture follow-on (DEC-0007 join)
+
+#### Discovery (2026-06-08)
+
+- **Surface map:** `/forecast` monthly tab, `/planning` compare toolbar, `/wealth` overview subsection, Grafana `cashflow` + `budgets` (see `docs/product/vision.md` US-0018 discovery)
+- **Partial impl:** mirror + period `aggregates_by_category` done; monthly per-category series API, REST routes, filter component, trend chart, Grafana `$category` missing
+- **Multi-category:** deferred — single select satisfies AC-3; architecture may add ≤3 overlay later
+- **Uncategorized:** explicit labeled bucket per AC-5 (reuse AI aggregate labeling pattern)
+- **Decomposition:** single story retained — filter contract + API + chart + Grafana wiring are one vertical slice
 
 #### Intake decomposition
 
@@ -2915,16 +2926,19 @@ So that I can spot where I save or overspend and use categories in forecasts and
 - `selected_pack`: `first-intake-pack`
 - `plan_area_id`: `category-analytics`
 - Evidence bundle: `handoffs/intake_evidence/intake-20260607-category-planning-subscriptions.json`
-- Research: [R-0080](docs/engineering/research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake)
+- Research: [R-0080](docs/engineering/research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake), [R-0083](docs/engineering/research.md#r-0083--us-0018-category-filters-expense-series-api--trend-analytics)
 
-**Recommended next phase:** `/discovery`
+**Artifacts:** `sprints/S0017/*`, `handoffs/tl_to_dev.md` (`sprint-plan-20260608-s0017-us0018`), `handoffs/releases/S0017-release-notes.md`
+
+**Recommended next phase:** _(closed — release PASS S0017 `0.18.0-us0018`)_
 
 ---
 
 ### US-0019 — Goal-driven planning with per-plan stats & AI savings suggestions
 
-Status: OPEN
+Status: DONE
 Priority: P1
+**sprint_id:** S0018
 
 As a household planner,
 I want goal-based plans (e.g. **€10k balance in 5 months**) with per-plan statistics and AI-assisted savings ideas by category,
@@ -2955,14 +2969,26 @@ So that I see monthly/yearly deltas and projected balance at my target date—no
 - Same bundle as US-0018 (`intake-20260607-category-planning-subscriptions`)
 - Research: [R-0080](docs/engineering/research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake)
 
-**Recommended next phase:** `/discovery` (after or parallel with US-0018 architecture)
+#### Discovery (2026-06-09)
+
+- **Surface map:** `/planning` Scenarios (goal template + metadata + category adjustments + AI savings modal), Compare (per-plan goal stats strip + existing version table), PVA unchanged (active plan); see `docs/product/vision.md` US-0019 discovery
+- **US-0018 dependency (released):** `CategoryFilter` + `GET /api/v1/categories` + expense-series for actuals preview; **DEC-0089** — compare API household-level; category overlay in plan engine is US-0019 scope
+- **Partial impl (pre-S0018):** templates + category enum + subscription savings modal done; goal metadata, per-plan stats, category overlay, AI category suggestions shipped in S0018
+- **Goal template:** new **`goal_balance`** card with `target_balance_eur`, `target_date`, optional `account_id` (discovery draft)
+- **AI savings:** ranked category candidates with evidence summary; operator checkbox select → adjustment lines (`allow_raw_transactions=false`)
+- **Decomposition:** single story retained — goal type + stats + category overlay + AI picker are one planning vertical slice
+
+**Artifacts:** `sprints/S0018/*`, `handoffs/tl_to_dev.md` (`sprint-plan-20260609-s0018-us0019`), `handoffs/releases/S0018-release-notes.md`
+
+**Recommended next phase:** _(closed — release PASS S0018 `0.19.0-us0019`)_
 
 ---
 
 ### US-0020 — Subscription manual discovery, majority category & operator tags
 
-Status: OPEN
+Status: DONE
 Priority: P2
+**sprint_id:** S0019
 
 As a subscription manager,
 I want to search for potential subscriptions myself, assign majority categories from transaction history, and tag subscriptions with my own labels,
@@ -2993,7 +3019,19 @@ So that detection automation plus manual control both work and I can group servi
 - Same bundle as US-0018 (`intake-20260607-category-planning-subscriptions`)
 - Research: [R-0080](docs/engineering/research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake)
 
-**Recommended next phase:** `/discovery`
+#### Discovery (2026-06-09)
+
+- **Surface map:** `/subscriptions` **Discover** tab (search form + candidate table), confirmed list + detail drawer (majority category badge), tag manager + tag filter chips; optional Grafana `subscriptions` **`$tag`** variable (stretch); see `docs/product/vision.md` US-0020 discovery
+- **US-0003 dependency (released):** auto-detection + Pending confirm/reject preserved; manual path additive — does not replace sync-triggered detection
+- **DEC-0084**..**DEC-0086** (released): manual confirms must use same payee normalization, payee+interval inheritance, ±3d interval tolerance as auto-detected confirms
+- **US-0018 dependency (released):** `GET /api/v1/categories` for display names on majority category — no new category ingest
+- **Partial impl:** `/subscriptions` All/Pending/Standing tabs + confirm/reject on pending done; explorer API/UI, `display_category_id`, tag CRUD/assign/filter, manual confirm-from-search **missing**
+- **Majority category:** mode of linked tx `category_id` on confirm; tie-break most-recent category documented in UI tooltip
+- **Decomposition:** single story retained — discover search + manual confirm + majority category + operator tags are one subscription-ops vertical slice
+
+**Artifacts:** `sprints/S0019/*`, `handoffs/tl_to_dev.md` (`sprint-plan-20260610-s0019-us0020`), `handoffs/releases/S0019-release-notes.md`
+
+**Recommended next phase:** _(closed — release PASS S0019 `0.20.0-us0020`; last story in intake bundle)_
 
 ---
 

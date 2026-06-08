@@ -86,6 +86,7 @@ pub fn template_defaults(
             sort_order: 0,
         }],
         PlanTemplate::Custom => vec![],
+        PlanTemplate::GoalBalance => vec![],
         PlanTemplate::AllocationTarget => vec![PlanAdjustment {
             id: Uuid::new_v4(),
             version_id,

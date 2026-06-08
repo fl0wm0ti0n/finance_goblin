@@ -17,11 +17,13 @@ use crate::AppState;
 mod ai_audit;
 mod ai_test;
 mod alerts;
+mod categories;
 mod chat;
 mod exchanges;
 mod forecast;
 mod plans;
 mod portfolio;
+mod subscription_tags;
 mod subscriptions;
 mod wealth;
 
@@ -39,8 +41,10 @@ pub fn routes(state: Arc<AppState>) -> Router {
         .route("/api/v1/forecast/long-term", get(forecast::long_term))
         .route("/api/v1/forecast/compare", get(forecast::compare))
         .route("/api/v1/forecast/aggregate", get(forecast::aggregate))
+        .merge(categories::routes())
         .merge(plans::routes())
         .merge(subscriptions::routes())
+        .merge(subscription_tags::routes())
         .merge(exchanges::routes())
         .merge(wealth::routes())
         .merge(portfolio::routes())

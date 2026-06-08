@@ -64,6 +64,25 @@
       ],
       "title": "Monthly cashflow decomposition",
       "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+      "fieldConfig": {
+        "defaults": { "custom": { "lineWidth": 2 }, "unit": "currencyEUR" },
+        "overrides": []
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 18 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('month', t.date)::timestamp AS time, COALESCE(SUM(ABS(t.amount::float8)), 0) AS value FROM transactions t WHERE t.amount::float8 < 0 AND ('${category}' = '' OR t.category_id = '${category}') GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Monthly category outflow (mirror actuals)",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
@@ -84,6 +103,14 @@
         "type": "query",
         "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
         "query": "SELECT scarcity_threshold_eur AS __value, 'Scarcity threshold (€)' AS __text FROM alert_config WHERE id = 1",
+        "refresh": 1,
+        "sort": 1
+      },
+      {
+        "name": "category",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+        "query": "SELECT '' AS __value, 'All categories' AS __text UNION ALL SELECT c.firefly_id AS __value, COALESCE(c.name, c.firefly_id) AS __text FROM categories c ORDER BY 2",
         "refresh": 1,
         "sort": 1
       }

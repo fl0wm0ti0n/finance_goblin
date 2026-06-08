@@ -81,6 +81,9 @@ impl AiTool for GetTransactionsTool {
                 crate::transactions::TransactionsError::InvalidArgs(msg) => {
                     ToolError::InvalidArgs(msg)
                 }
+                crate::transactions::TransactionsError::NotFound(msg) => {
+                    ToolError::InvalidArgs(format!("category not found: {msg}"))
+                }
                 crate::transactions::TransactionsError::Db(msg) => {
                     ToolError::Service(msg.to_string())
                 }

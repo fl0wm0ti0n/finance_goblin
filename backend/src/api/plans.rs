@@ -21,6 +21,20 @@ use crate::AppState;
 pub struct CreatePlanBody {
     pub name: String,
     pub template: Option<String>,
+    pub target_balance_eur: Option<String>,
+    pub target_date: Option<String>,
+    pub goal_account_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct GoalStatsQuery {
+    pub version_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct CategorySavingsQuery {
+    pub months: Option<u32>,
+    pub limit: Option<u32>,
 }
 
 #[derive(Deserialize)]
@@ -113,6 +127,11 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/api/v1/plans/:id", get(get_plan).patch(rename_plan).delete(delete_plan))
         .route("/api/v1/plans/:id/activate", post(activate_plan))
         .route("/api/v1/plans/:id/compare", get(compare_plan))
+        .route("/api/v1/plans/:id/goal-stats", get(goal_stats))
+        .route(
+            "/api/v1/plans/:id/category-savings-suggestions",
+            get(category_savings_suggestions),
+        )
         .route("/api/v1/plans/:id/versions", get(list_versions).post(create_version))
         .route(
             "/api/v1/plans/:id/versions/:vid",
@@ -223,6 +242,14 @@ fn plan_error_status(err: PlanError) -> (StatusCode, Json<serde_json::Value>) {
             StatusCode::NOT_FOUND,
             Json(serde_json::json!({ "error": "no_active_plan" })),
         ),
+        PlanError::GoalValidation(msg) => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(serde_json::json!({ "error": "goal_validation_failed", "message": msg })),
+        ),
+        PlanError::NotGoalPlan => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "not_goal_plan" })),
+        ),
         other => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": other.to_string() })),
@@ -239,13 +266,46 @@ async fn list_plans(State(state): State<Arc<AppState>>) -> Result<Json<Vec<crate
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+fn parse_optional_amount(s: &str) -> Result<f64, StatusCode> {
+    s.parse::<f64>().map_err(|_| StatusCode::UNPROCESSABLE_ENTITY)
+}
+
 async fn create_plan(
     State(state): State<Arc<AppState>>,
     Json(body): Json<CreatePlanBody>,
 ) -> Result<(StatusCode, Json<PlanDetailResponse>), (StatusCode, Json<serde_json::Value>)> {
+    let target_balance = body
+        .target_balance_eur
+        .as_deref()
+        .map(parse_optional_amount)
+        .transpose()
+        .map_err(|_| {
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({ "error": "invalid target_balance_eur" })),
+            )
+        })?;
+    let target_date = body
+        .target_date
+        .as_deref()
+        .map(parse_date)
+        .transpose()
+        .map_err(|_| {
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(serde_json::json!({ "error": "invalid target_date" })),
+            )
+        })?;
+
     let (plan, version) = state
         .plans
-        .create_plan(&body.name, body.template.as_deref())
+        .create_plan(
+            &body.name,
+            body.template.as_deref(),
+            target_balance,
+            target_date,
+            body.goal_account_id.clone(),
+        )
         .await
         .map_err(plan_error_status)?;
 
@@ -498,6 +558,44 @@ async fn compare_plan(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+async fn goal_stats(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<GoalStatsQuery>,
+) -> Result<Json<crate::plan::types::GoalStatsResponse>, (StatusCode, Json<serde_json::Value>)> {
+    let version_id = match &query.version_id {
+        None => None,
+        Some(s) => Some(Uuid::parse_str(s).map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": "invalid version_id" })),
+            )
+        })?),
+    };
+
+    state
+        .plans
+        .goal_stats(id, version_id)
+        .await
+        .map(Json)
+        .map_err(plan_error_status)
+}
+
+async fn category_savings_suggestions(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+    Query(query): Query<CategorySavingsQuery>,
+) -> Result<Json<crate::plan::types::CategorySavingsResponse>, StatusCode> {
+    let months = query.months.unwrap_or(6).clamp(1, 24);
+    let limit = query.limit.unwrap_or(10).clamp(1, 50);
+    state
+        .plans
+        .category_savings_suggestions(id, months, limit)
+        .await
+        .map(Json)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+}
+
 async fn plan_vs_actual(
     State(state): State<Arc<AppState>>,
     Query(query): Query<PlanVsActualQuery>,
@@ -586,6 +684,29 @@ async fn risk_score(
         None => Ok(Json(RiskScoreApiResponse::NoScore {
             reason: "not_computed",
         })),
+    }
+}
+
+#[cfg(test)]
+mod goal_create_api_tests {
+    use super::plan_error_status;
+    use crate::plan::service::PlanError;
+    use axum::http::StatusCode;
+
+    #[test]
+    fn goal_validation_returns_422() {
+        let (status, body) = plan_error_status(PlanError::GoalValidation("target_date must be today or later".into()));
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(
+            body.0.get("error").and_then(|v| v.as_str()),
+            Some("goal_validation_failed")
+        );
+    }
+
+    #[test]
+    fn not_goal_plan_returns_404() {
+        let (status, _) = plan_error_status(PlanError::NotGoalPlan);
+        assert_eq!(status, StatusCode::NOT_FOUND);
     }
 }
 

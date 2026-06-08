@@ -1,0 +1,35 @@
+{
+  "id": "S0018",
+  "story_ids": ["US-0019"],
+  "status": "PLANNED",
+  "created": "2026-06-09",
+  "orchestrator_run_id": "auto-20260608-us0019-001",
+  "goal": "Deliver DEC-0091 goal_balance schema; DEC-0092 goal-stats API + strip; DEC-0093 category overlay cap; DEC-0095 goal account projection; DEC-0094 savings suggestions + modal apply; DEC-0096 PVA unchanged; DEC-0097 REST-primary savings; user guide US-0019; OIDC smoke.",
+  "scope": [
+    "backend/migrations/ — goal_balance enum + target_balance_eur, target_date, goal_account_id (DEC-0091)",
+    "POST /api/v1/plans goal_balance branch + PlanningPage template card (DEC-0091)",
+    "GET /api/v1/plans/{id}/goal-stats service + route + GoalStatsStrip (DEC-0092)",
+    "plan/overlay.rs category remove_outflow cap via expense_series (DEC-0093)",
+    "plan/project.rs goal_account_id projection fork (DEC-0095)",
+    "GET /api/v1/plans/{id}/category-savings-suggestions + CategorySavingsModal batch apply (DEC-0094)",
+    "Audit log on adjustment create (AC-5)",
+    "docs/user-guides/US-0019.md publish (USER_GUIDE_MODE=1)",
+    "US-0014 onboarding + DEC-0089 compare actuals regression",
+    "UAT OIDC external profile smoke template AC-1..AC-6",
+    "Optional get_category_savings AI tool wraps savings service (DEC-0097 P2)"
+  ],
+  "risks": [
+    "target_date beyond 730d — beyond_horizon flag + copy",
+    "Category overlay over-removal — 3-mo avg cap",
+    "Fixed costs in savings list — DEC-0007 bucket exclusion",
+    "Goal account vs compare mismatch — user guide",
+    "US-0014 regression — template grid smoke in R1",
+    "AC-6 operator gate — BACKEND_FRONTEND_DEPLOY prerequisite"
+  ],
+  "task_count": 12,
+  "estimate_total_hours": 38,
+  "decisions": ["DEC-0091", "DEC-0092", "DEC-0093", "DEC-0094", "DEC-0095", "DEC-0096", "DEC-0097"],
+  "research": ["R-0084", "R-0080"],
+  "slices": ["US-0019-S1", "US-0019-S2", "US-0019-S3", "US-0019-S4", "US-0019-S5", "US-0019-S6"],
+  "split_decision": "no_split — 12 tasks = SPRINT_MAX_TASKS 12; P2 AI tool optional"
+}

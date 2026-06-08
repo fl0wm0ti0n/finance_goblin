@@ -1293,6 +1293,197 @@ Operators want **Firefly categories surfaced everywhere analytics matter** — n
 
 Delivered as three vertical stories: **US-0018** (category filters & trends), **US-0019** (goal plans & per-plan stats), **US-0020** (subscription search, majority category, tags). Research: [R-0080](docs/engineering/research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake).
 
+## Discovery notes (US-0018 — 2026-06-08)
+
+Operators want **Finanzguru-like category intelligence**: pick a Firefly category once, see it reflected across forecast, planning compare, wealth breakdown, and Grafana — plus a **monthly spend trend** (Jan €300 → Feb €250) with obvious save/overspend signals.
+
+### UX references & patterns
+
+| Reference | What to borrow | US-0018 application |
+|-----------|----------------|---------------------|
+| **Finanzguru / household PFM** | Category spend over time, month labels with EUR | Primary trend chart: month axis + EUR outflow bars/lines; MoM delta callout |
+| **Forecast account selector** (`ForecastPage`) | Single-select dropdown above charts | Reuse control pattern for **category filter** (searchable combobox when catalog > ~20) |
+| **ECharts product charts** (`MonthlyChart`, `PlanVsActualChart`) | Lazy-loaded ECharts, EUR formatting | New `CategoryTrendChart` — bar default, line toggle optional (research) |
+| **Grafana `$account_id` variable** (`cashflow.json`) | Postgres query variable driving all panels | Add **`$category`** (multi=false MVP) on **cashflow** + **budgets** dashboards |
+| **Transaction aggregates (AI tool)** | `aggregates_by_category` + uncategorized labeling | Extend to **monthly per-category series** API; expose REST (not AI-only) |
+| **US-0011 analytics embed** | `/analytics/:slug` kiosk iframes | Category panels on **cashflow** + **budgets**; SPA filter does not auto-sync iframe vars in MVP |
+
+### Surface → filter placement (canonical)
+
+| Surface | Route / uid | Filter placement | Discovery target |
+|---------|-------------|------------------|------------------|
+| **Forecast monthly** | `/forecast` (monthly tab) | Category filter above monthly chart + decomposition table | Filter scopes displayed monthly breakdown when API supports `category_id` |
+| **Planning compare** | `/planning` (compare tab) | Category filter in compare toolbar | Compare/PVA series respect selected category (household unfiltered when none) |
+| **Wealth Firefly breakdown** | `/wealth` (overview) | Category filter above accounts / category table (new subsection) | Show per-category totals for selected period; link to trend chart |
+| **Grafana cashflow** | `cashflow` | `$category` template variable | New panel: monthly category outflow time series |
+| **Grafana budgets** | `budgets` | `$category` template variable | Filter **Ist** / deviation panels by category when set; "All categories" = current household behavior |
+
+### Product principles
+
+- **Uncategorized is explicit** — never silent zero; labeled bucket with count (AC-5).
+- **EUR reporting** — outflow as positive EUR magnitude in charts; mixed native currency noted in tooltip where mirror lacks FX.
+- **Read-only Firefly** — category list from mirror `categories` table post-BUG-0006; no in-app category editing.
+- **Single-category MVP** — one active category for trend chart and MoM insight; multi-category overlay deferred (see decision gate below).
+- **Privacy default** — category series APIs return aggregates only; no raw transaction rows in new public endpoints unless architecture expands AI parity.
+
+### Partial implementation (discovery)
+
+| Area | Status |
+|------|--------|
+| Mirror `category_id` on transactions | **Done** (BUG-0006) |
+| `aggregates_by_category` (period totals) | **Done** — not monthly per category |
+| `aggregates_by_month` (household) | **Done** — no category dimension |
+| Public REST category/trend API | **Missing** |
+| React category filter component | **Missing** |
+| Category trend chart | **Missing** |
+| Planning `category` target type enum | **Present** — filter on compare context still missing |
+| Grafana `$category` variable | **Missing** on all dashboards |
+| US-0015 bucket mapping | **Done** — unchanged per AC-6 |
+
+### Decision gate (PO recommendation — confirm at architecture if challenged)
+
+| Topic | Recommendation | Alternative |
+|-------|--------------|-------------|
+| **Multi-category compare** | **Defer** — MVP single select; AC-3 satisfied with one series | Up to 3 overlay series in same chart (stretch) |
+| **Primary trend chart home** | **Forecast monthly tab** + reusable component embeddable on wealth | Dedicated `/analytics/category-trends` route only |
+| **Grafana ↔ SPA sync** | **No bidirectional sync in MVP** — independent filters; document in UI | URL `category_id` passed into iframe (complex) |
+| **Forecast filter depth** | Category filter affects **monthly breakdown display** first; full forecast re-projection by category is **architecture** (DEC-0007 bucket join) | Block US-0018 on forecast engine category fork |
+
+**Carry to `/research`:** monthly per-category SQL shape; category catalog list endpoint; forecast projection join to `category_id`; Grafana panel SQL for `$category`; ECharts bar vs line default; performance on 24-month × N categories.
+
+## Discovery notes (US-0019 — 2026-06-09)
+
+Operators want **goal-driven planning** on top of released US-0004/US-0014 templates: define a **target balance + target date** (e.g. **€10 000 in 5 months**), see **statistics scoped to that plan** (monthly delta vs baseline, yearly rollup, projected balance on the target date), apply **category-scoped spend cuts** in the plan builder, and accept **AI-ranked savings ideas by category** — not silent auto-apply. Builds on US-0018 category catalog + expense-series APIs (**DEC-0087**) and planning compare actuals preview (**DEC-0089**).
+
+### UX references & patterns
+
+| Reference | What to borrow | US-0019 application |
+|-----------|----------------|---------------------|
+| **Finanzguru / YNAB-style savings goals** | Target amount + deadline, progress bar, gap-to-goal callout | Goal template card: **target balance**, **target date**, optional **asset account**; progress = projected balance at target date vs goal |
+| **US-0014 template grid** (`PlanningPage` empty + Scenarios) | Six built-in cards + **Create empty plan** | Add **Goal balance** template card alongside Leasing/Savings mode; pre-fills goal metadata form |
+| **Savings mode modal** (subscription checkboxes) | Operator selects lines before **Apply** | **AI savings suggestions** modal: ranked **categories** with aggregate EUR + evidence summary; checkboxes → materialize `remove_outflow` category adjustment lines |
+| **US-0018 `CategoryFilter`** | Searchable combobox from `GET /api/v1/categories` | Category picker in adjustment form (`target_type=category` + `target_key=category_id`); goal-plan builder primary what-if surface |
+| **Compare tab table + footnote** (DEC-0073) | Version columns: monthly delta, projected month-end balance | Extend with **goal stats strip**: monthly delta vs baseline, **yearly rollup**, **balance at target date** for **selected plan only** |
+| **Plan vs Actual chart** (`PlanVsActualChart`) | Daily planned / Ist / deviation | PVA remains **active plan** contract; goal stats live on Scenarios + Compare — not household headline cards |
+| **US-0006 AI tool layer** (`get_transactions` aggregates) | `allow_raw_transactions=false`; operator confirms adopted lines | New or extended tool: **category savings candidates** from `aggregates_by_category` / expense-series — cite totals only (DEC-0032) |
+| **Planning mutation toasts** (US-0014 / DEC-0077) | `showPlanningFeedback` success/error | Apply goal template, add AI-selected lines, recompute — visible operator feedback |
+
+### Surface → placement (canonical)
+
+| Surface | Route / tab | Discovery target |
+|---------|-------------|------------------|
+| **Goal template** | `/planning` Scenarios — template grid + empty state | New **Goal balance** card; create flow collects name, **target_balance_eur**, **target_date**, optional **account_id** (default primary asset acct) |
+| **Goal metadata** | Scenarios — plan header / version panel | Editable goal fields on latest unfrozen version; frozen versions read-only |
+| **Per-plan statistics** | Compare tab (primary) + Scenarios summary card | Stats API scoped to `plan_id` + selected version: monthly delta vs baseline, yearly rollup, **projected balance at target_date** — never mixed across plans |
+| **Category adjustments** | Scenarios — Add adjustment form | `CategoryFilter` when `target_type=category`; lines affect overlay after recompute (AC-3) |
+| **AI savings** | Scenarios — **Suggest savings** action on goal/custom plans | Modal parallel to savings-mode subscription picker; selections → POST adjustments |
+| **Category actuals preview** | Compare tab (existing US-0018) | Keep DEC-0089 semantics: `CategoryTrendChart` = actuals only; goal stats strip separate from household compare table |
+
+### Product principles
+
+- **Per-plan scope (AC-2):** Compare metrics, goal progress, and adjustment tables always keyed to **one selected plan** — no cross-plan aggregation on plan detail.
+- **Operator opt-in (AC-4):** AI proposes; operator checks suggestions; **no silent auto-apply** — mirror savings-mode subscription modal.
+- **Privacy (AC-5):** AI path uses aggregate/category signals only; audit log per US-0006; no raw transaction rows in suggestions API.
+- **US-0018 dependency:** Category picker uses released catalog + expense-series; category **overlay in plan engine** is US-0019 scope (DEC-0089 deferred compare recompute).
+- **Extends, not replaces US-0014:** Template grid, Set-active banner, PVA guided empty state, mutation toasts remain regression baseline (AC-6).
+
+### Partial implementation (discovery)
+
+| Area | Status |
+|------|--------|
+| Plan templates (Current … Allocation target) | **Done** — no `goal_balance` template |
+| `AdjustmentTarget::Category` enum + form option | **Done** — overlay engine treats like household (no category scoping) |
+| `GET /api/v1/categories` + `CategoryFilter` | **Done** (US-0018 / DEC-0087) |
+| Compare per-plan version metrics | **Done** — household overlay; no target-date projection |
+| Savings suggestions API | **Partial** — subscription payees only (`/templates/savings-mode/suggestions`) |
+| Goal metadata (`target_balance`, `target_date`) | **Missing** — schema + API + UI |
+| Per-plan goal stats (yearly rollup, balance at date) | **Missing** |
+| AI category savings suggestions | **Missing** — no ranked category tool/UI |
+| Category-scoped overlay recompute | **Missing** — `build_overlay_deltas` ignores `target_type=category` |
+| US-0014 onboarding / toasts / PVA guided | **Done** — AC-6 regression guard |
+
+### Decision gates (PO recommendation — confirm at architecture)
+
+| Topic | Recommendation | Alternative |
+|-------|--------------|-------------|
+| **Goal plan shape** | New template **`goal_balance`** + `plans`/`plan_versions` goal columns | Generic metadata JSON on any template |
+| **Stats home** | **Compare tab** goal strip + Scenarios summary card | Dedicated fourth tab **Goals** |
+| **Category overlay** | Map `category_id` → monthly actual spend cap in overlay (research spike) | Display-only category lines until forecast fork |
+| **AI suggestions** | Dedicated **`GET /api/v1/plans/.../savings-suggestions`** (aggregates) + optional chat tool | Chat-only via US-0006 without REST picker |
+| **Account for balance goal** | Single selectable asset account; default highest-balance asset (acct **114** pattern) | Household total only |
+| **Feasibility hint** | Show required monthly savings gap (target − projected) — copy only in MVP | Auto-generate adjustment lines |
+
+**Carry to `/research`:** goal metadata schema; back-solve monthly savings; category overlay join to mirror txs; per-plan stats SQL at `target_date`; AI ranking from `aggregates_by_category`; account selection for starting balance; interaction with DEC-0089 (actuals preview vs plan overlay).
+
+## Discovery notes (US-0020 — 2026-06-09)
+
+Operators want **manual subscription discovery** alongside US-0003 auto-detection: **search** recurring expense candidates by account, payee/title text, and billing interval; **confirm** matches without waiting for the detection pipeline alone; assign a **display category** from the **majority** of linked transaction categories (tolerating occasional miscategorization); and apply **operator-defined tags** (luxus, important, etc.) for grouping and filtering — all as Flow Finance AI overlay metadata with **no Firefly write-back**. Builds on US-0003 confirm/reject UX, **DEC-0084**..**DEC-0086** confirm persistence, and US-0018 category catalog for display names.
+
+### UX references & patterns
+
+| Reference | What to borrow | US-0020 application |
+|-----------|----------------|---------------------|
+| **US-0003 `/subscriptions` Pending tab** | Card + Confirm/Reject; confidence badge; kind override modal | Reuse confirm modal for explorer results; preserve standing-order vs subscription choice |
+| **Banking / PFM subscription managers** (Truebill, Finanzguru recurring) | Search by merchant, amount band, account; manual add recurring | **Discover** tab: filter form + candidate table; operator-initiated confirm |
+| **US-0018 `CategoryFilter`** | Searchable combobox from `GET /api/v1/categories` | Show majority category on confirmed rows + detail drawer; optional override deferred |
+| **Gmail / Notion tag UX** | Free-text tags, multi-assign, filter chips | Tag manager modal + chip filters on subscription list |
+| **Planning savings-mode picker** (`PlanningPage`) | Checkbox select → Apply | Parallel pattern for tag assign on detail drawer (multi-select chips) |
+| **Grafana `subscriptions` dashboard** | Stat panels on `subscription_patterns` | Optional **`$tag`** variable filtering confirmed list (stretch — AC does not require) |
+
+### Surface → placement (canonical)
+
+| Surface | Route / tab | Discovery target |
+|---------|-------------|------------------|
+| **Discover search** | `/subscriptions` — new **Discover** tab | Filters: **account** (dropdown), **payee/title** (`ILIKE`), **interval** (weekly / monthly / quarterly / custom days), optional **amount band** (min/max EUR — stretch); results = recurrence groups from mirror not yet confirmed/rejected |
+| **Manual confirm** | Discover results row action | **Confirm** creates/updates `subscription_patterns` as **confirmed** with linked txs; respects **DEC-0085** payee+interval inheritance and fingerprint rules |
+| **Majority category** | Confirmed list + detail drawer | On confirm, compute **mode `category_id`** from linked transactions; show Firefly category name via US-0018 catalog; tooltip documents tie-break |
+| **Tag manager** | `/subscriptions` — **Tags** sub-panel or settings drawer | CRUD operator tags (create/rename/delete); global tag namespace (single operator MVP) |
+| **Tag assign** | Detail drawer + confirmed table | Multi-tag chips per subscription; persist in product DB join table |
+| **Tag filter** | **All** / **Standing orders** tabs | Filter chips or dropdown — list API `?tag=` |
+| **Regression** | Pending tab + alerts banner | US-0003 detection, US-0008 alert dedup, OIDC smoke unchanged (AC-6) |
+
+### Product principles
+
+- **Automation + manual control (AC-2):** Auto-detection remains default path; Discover is for merchants detection missed or operator wants proactive search.
+- **Majority category, not last-tx (AC-3):** Display category = statistical mode of constituent txs; single miscategorized month must not dominate (operator example: 1 of 12 wrong).
+- **Read-only Firefly (AC-5):** Tags and display category live in product DB only; no category or tag write-back to Firefly source transactions.
+- **Confirm persistence (AC-6):** Manual confirms must honor **DEC-0084** payee normalization, **DEC-0085** payee+interval merge, **DEC-0086** ±3d interval tolerance — same as auto-detected confirms.
+- **Detection contracts preserved:** Explorer query must not bypass rejection fingerprints or confirmed skip logic; rejected payee+interval pairs excluded from Discover results.
+
+### Partial implementation (discovery)
+
+| Area | Status |
+|------|--------|
+| `/subscriptions` tabs (All / Pending / Standing) | **Done** (US-0003) |
+| Auto-detection pipeline + confirm/reject API | **Done** — Full sync trigger only |
+| **DEC-0084**..**DEC-0086** confirm persistence | **Done** (BUG-0015 / Q0023) |
+| `subscription_pattern_transactions` + `category_id` on mirror txs | **Done** (BUG-0006) |
+| `GET /api/v1/categories` catalog | **Done** (US-0018) |
+| Discover / explorer search API + UI | **Missing** |
+| Manual confirm-from-search path | **Missing** — confirm only on existing `pending` rows today |
+| `display_category_id` on `subscription_patterns` | **Missing** |
+| Majority-category computation on confirm | **Missing** |
+| Operator tag tables + CRUD API | **Missing** |
+| Tag assign + list filter | **Missing** |
+| Grafana `$tag` variable | **Missing** (optional stretch) |
+| US-0008 alert dedup contract | **Done** — regression guard |
+
+### Decision gates (PO recommendation — confirm at architecture)
+
+| Topic | Recommendation | Alternative |
+|-------|--------------|-------------|
+| **Search home** | New **Discover** tab on `/subscriptions` | Dedicated `/subscriptions/discover` route |
+| **Manual confirm flow** | `POST` from explorer → **confirmed** row + link txs (skip pending queue) | Insert pending then immediate confirm (extra step) |
+| **Majority category algorithm** | `MODE(category_id)` on linked txs; **exclude NULL**; tie → **most recent** tx with that category; document in tooltip | Median-of-months heuristic; operator override column (stretch) |
+| **Outlier handling** | No special drop — mode naturally tolerates 1/N miscategorization per operator note | Exclude categories appearing once when N≥6 |
+| **Amount band filter** | **Stretch** — account + payee + interval sufficient for MVP (AC-1) | Required fourth filter in MVP |
+| **Tag namespace** | Global operator tags (single-tenant MVP) | Per-account tag scopes |
+| **Tag delete** | Soft-delete or block when assigned — architecture chooses | Hard delete cascades assignments |
+| **Grafana tag filter** | **Stretch** — `$tag` on `subscriptions` dashboard if sprint capacity | Defer entirely post-MVP |
+| **Explorer pagination** | Cap **50** candidates per query; document limit (AC-1) | Full scan with client pagination |
+
+**Carry to `/research`:** explorer SQL over mirror (`GROUP BY payee_key, account_id, interval`); manual confirm API vs detection `upsert_pending`; majority-category SQL + tie-break; tag schema (`subscription_tags`, `subscription_pattern_tags`); list API `?tag=` + `?account_id=`; interaction with DEC-0085 merge on manual confirm; Grafana `$tag` variable SQL; performance on 365d window.
+
 ## Discovery notes (BUG-0014 — 2026-06-09)
 
 Post-rebuild operator cluster on **`financegnome.omniflow.cc`** separates into **ops gates (AO/AT)**, **three code/UX gaps (AP/AQ/AS)**, and **one data/account re-verify (AR)** — not a single regression.

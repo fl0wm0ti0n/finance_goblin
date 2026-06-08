@@ -61,7 +61,7 @@
       "targets": [
         {
           "format": "time_series",
-          "rawSql": "SELECT (t.date::timestamp AT TIME ZONE 'UTC') AS time, SUM(t.amount::float) AS value FROM transactions t JOIN accounts a ON a.firefly_id = t.account_id WHERE a.type = 'asset' AND COALESCE(t.payload->'attributes'->>'type', '') != 'transfer' AND $__timeFilter(t.date::timestamp) GROUP BY t.date ORDER BY 1",
+          "rawSql": "SELECT (t.date::timestamp AT TIME ZONE 'UTC') AS time, SUM(t.amount::float) AS value FROM transactions t JOIN accounts a ON a.firefly_id = t.account_id WHERE a.type = 'asset' AND COALESCE(t.payload->'attributes'->>'type', '') != 'transfer' AND ('${category}' = '' OR t.category_id = '${category}') AND $__timeFilter(t.date::timestamp) GROUP BY t.date ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -77,7 +77,7 @@
       "targets": [
         {
           "format": "time_series",
-          "rawSql": "WITH planned AS (SELECT pdc.ts::date AS day, pdc.planned_net::float AS planned FROM plan_daily_cashflow pdc JOIN plan_versions v ON v.id = pdc.version_id JOIN plans p ON p.id = v.plan_id WHERE p.is_active = true AND v.is_latest = true AND pdc.computation_id = (SELECT pc.id FROM plan_computations pc WHERE pc.version_id = v.id AND pc.status = 'success' ORDER BY pc.computed_at DESC LIMIT 1)), actual AS (SELECT t.date AS day, SUM(t.amount::float) AS actual FROM transactions t JOIN accounts a ON a.firefly_id = t.account_id WHERE a.type = 'asset' AND COALESCE(t.payload->'attributes'->>'type', '') != 'transfer' GROUP BY t.date) SELECT COALESCE(a.day, p.day)::timestamp AT TIME ZONE 'UTC' AS time, COALESCE(a.actual, 0) - COALESCE(p.planned, 0) AS value FROM actual a FULL OUTER JOIN planned p ON a.day = p.day WHERE $__timeFilter(COALESCE(a.day, p.day)::timestamp) ORDER BY 1",
+          "rawSql": "WITH planned AS (SELECT pdc.ts::date AS day, pdc.planned_net::float AS planned FROM plan_daily_cashflow pdc JOIN plan_versions v ON v.id = pdc.version_id JOIN plans p ON p.id = v.plan_id WHERE p.is_active = true AND v.is_latest = true AND pdc.computation_id = (SELECT pc.id FROM plan_computations pc WHERE pc.version_id = v.id AND pc.status = 'success' ORDER BY pc.computed_at DESC LIMIT 1)), actual AS (SELECT t.date AS day, SUM(t.amount::float) AS actual FROM transactions t JOIN accounts a ON a.firefly_id = t.account_id WHERE a.type = 'asset' AND COALESCE(t.payload->'attributes'->>'type', '') != 'transfer' AND ('${category}' = '' OR t.category_id = '${category}') GROUP BY t.date) SELECT COALESCE(a.day, p.day)::timestamp AT TIME ZONE 'UTC' AS time, COALESCE(a.actual, 0) - COALESCE(p.planned, 0) AS value FROM actual a FULL OUTER JOIN planned p ON a.day = p.day WHERE $__timeFilter(COALESCE(a.day, p.day)::timestamp) ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -94,7 +94,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "WITH planned AS (SELECT COALESCE(SUM(pdc.planned_net), 0)::numeric AS total FROM plan_daily_cashflow pdc JOIN plan_versions v ON v.id = pdc.version_id JOIN plans p ON p.id = v.plan_id WHERE p.is_active = true AND v.is_latest = true AND pdc.computation_id = (SELECT pc.id FROM plan_computations pc WHERE pc.version_id = v.id AND pc.status = 'success' ORDER BY pc.computed_at DESC LIMIT 1) AND pdc.ts >= date_trunc('month', CURRENT_DATE) AND pdc.ts::date <= CURRENT_DATE), actual AS (SELECT COALESCE(SUM(t.amount), 0)::numeric AS total FROM transactions t JOIN accounts a ON a.firefly_id = t.account_id WHERE a.type = 'asset' AND COALESCE(t.payload->'attributes'->>'type', '') != 'transfer' AND t.date >= date_trunc('month', CURRENT_DATE)::date) SELECT 'Planned MTD' AS metric, (SELECT total FROM planned) AS amount UNION ALL SELECT 'Actual MTD', (SELECT total FROM actual) UNION ALL SELECT 'Deviation MTD', (SELECT total FROM actual) - (SELECT total FROM planned)",
+          "rawSql": "WITH planned AS (SELECT COALESCE(SUM(pdc.planned_net), 0)::numeric AS total FROM plan_daily_cashflow pdc JOIN plan_versions v ON v.id = pdc.version_id JOIN plans p ON p.id = v.plan_id WHERE p.is_active = true AND v.is_latest = true AND pdc.computation_id = (SELECT pc.id FROM plan_computations pc WHERE pc.version_id = v.id AND pc.status = 'success' ORDER BY pc.computed_at DESC LIMIT 1) AND pdc.ts >= date_trunc('month', CURRENT_DATE) AND pdc.ts::date <= CURRENT_DATE), actual AS (SELECT COALESCE(SUM(t.amount), 0)::numeric AS total FROM transactions t JOIN accounts a ON a.firefly_id = t.account_id WHERE a.type = 'asset' AND COALESCE(t.payload->'attributes'->>'type', '') != 'transfer' AND ('${category}' = '' OR t.category_id = '${category}') AND t.date >= date_trunc('month', CURRENT_DATE)::date) SELECT 'Planned MTD' AS metric, (SELECT total FROM planned) AS amount UNION ALL SELECT 'Actual MTD', (SELECT total FROM actual) UNION ALL SELECT 'Deviation MTD', (SELECT total FROM actual) - (SELECT total FROM planned)",
           "refId": "A"
         }
       ],
@@ -121,6 +121,14 @@
         "refresh": 1,
         "regex": "",
         "type": "query"
+      },
+      {
+        "name": "category",
+        "type": "query",
+        "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
+        "query": "SELECT '' AS __value, 'All categories' AS __text UNION ALL SELECT c.firefly_id AS __value, COALESCE(c.name, c.firefly_id) AS __text FROM categories c ORDER BY 2",
+        "refresh": 1,
+        "sort": 1
       }
     ]
   },

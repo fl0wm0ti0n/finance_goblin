@@ -1,0 +1,35 @@
+{
+  "id": "S0019",
+  "story_ids": ["US-0020"],
+  "status": "PLANNED",
+  "created": "2026-06-10",
+  "orchestrator_run_id": "auto-20260608-us0020-001",
+  "goal": "Deliver DEC-0098 discover explorer; DEC-0099 manual confirm-from-discover; DEC-0100 majority display_category_id; DEC-0101/0102 operator tags CRUD assign filter; user guide US-0020; US-0003/US-0008 regression; OIDC smoke.",
+  "scope": [
+    "backend/migrations/ — display_category_id + operator_tags + subscription_pattern_tags (DEC-0100, DEC-0101)",
+    "GET /api/v1/subscriptions/discover + discovery.rs service (DEC-0098)",
+    "SubscriptionsPage Discover tab: account + payee + interval form + results table (DEC-0098)",
+    "POST /api/v1/subscriptions/discover/confirm with DEC-0085 merge (DEC-0099)",
+    "Majority category RANK compute + merge refresh + badge UI (DEC-0100)",
+    "CRUD /api/v1/subscription-tags + PUT assign + list ?tag= (DEC-0101, DEC-0102)",
+    "Tag manager modal + filter chips on All/Standing tabs (DEC-0102)",
+    "docs/user-guides/US-0020.md publish (USER_GUIDE_MODE=1)",
+    "US-0003 detection pipeline + US-0008 alert dedup regression tests",
+    "UAT OIDC external profile smoke template AC-1..AC-6",
+    "Optional Grafana subscriptions.json $tag variable (DEC-0103 P2)"
+  ],
+  "risks": [
+    "Explorer perf on 365d window — account filter required; cap 50",
+    "Manual confirm bypasses rejection maps — 409 on rejected payee-interval",
+    "DEC-0085 merge + category drift — recompute majority on merge",
+    "Tag delete surprise — confirm dialog on hard delete",
+    "Detection regression — no run_candidates changes; dedicated tests",
+    "AC-6 operator gate — BACKEND_FRONTEND_DEPLOY prerequisite"
+  ],
+  "task_count": 12,
+  "estimate_total_hours": 37,
+  "decisions": ["DEC-0098", "DEC-0099", "DEC-0100", "DEC-0101", "DEC-0102", "DEC-0103"],
+  "research": ["R-0085", "R-0080"],
+  "slices": ["US-0020-S1", "US-0020-S2", "US-0020-S3", "US-0020-S4", "US-0020-S5", "US-0020-S6", "US-0020-S7"],
+  "split_decision": "no_split — 12 tasks = SPRINT_MAX_TASKS 12; P2 Grafana optional"
+}

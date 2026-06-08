@@ -93,7 +93,7 @@ async fn plan_create_apply_recompute_plan_vs_actual() {
     let plans = PlanService::new(db, PlansConfig::default(), forecast);
 
     let (plan, version) = plans
-        .create_plan("Integration Leasing", Some("leasing"))
+        .create_plan("Integration Leasing", Some("leasing"), None, None, None)
         .await
         .expect("create plan");
 
@@ -138,7 +138,7 @@ async fn compare_zero_adjustments_overlay_delta_is_zero() {
     let plans = PlanService::new(db, PlansConfig::default(), forecast);
 
     let (plan, version) = plans
-        .create_plan("Empty Compare", Some("custom"))
+        .create_plan("Empty Compare", Some("custom"), None, None, None)
         .await
         .expect("create plan");
 
@@ -177,7 +177,7 @@ async fn compare_leasing_template_overlay_delta_approx_minus_300() {
     let plans = PlanService::new(db, PlansConfig::default(), forecast);
 
     let (plan, version) = plans
-        .create_plan("Leasing Compare", Some("leasing"))
+        .create_plan("Leasing Compare", Some("leasing"), None, None, None)
         .await
         .expect("create plan");
 
@@ -222,7 +222,7 @@ async fn plan_vs_actual_without_active_plan_returns_error() {
     let plans = PlanService::new(db, PlansConfig::default(), forecast);
 
     let (_plan, _version) = plans
-        .create_plan("Inactive PVA", Some("custom"))
+        .create_plan("Inactive PVA", Some("custom"), None, None, None)
         .await
         .expect("create plan");
 

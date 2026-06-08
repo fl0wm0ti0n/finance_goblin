@@ -1,0 +1,160 @@
+{
+  "sprint": "S0019",
+  "story_id": "US-0020",
+  "orchestrator_run_id": "auto-20260608-us0020-001",
+  "verified_at": "2026-06-10T17:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#US-0020",
+  "tasks_source": "sprints/S0019/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#US-0020",
+  "decision_alignment": {
+    "decision_ids": ["DEC-0098", "DEC-0099", "DEC-0100", "DEC-0101", "DEC-0102", "DEC-0103"],
+    "aligned": true,
+    "research_basis": ["R-0085", "R-0080"],
+    "contract_elements_covered": [
+      "display_category_id + operator_tags + subscription_pattern_tags migration (T-0198, DEC-0100, DEC-0101)",
+      "GET /api/v1/subscriptions/discover with recurrence reuse + 50-cap (T-0199, DEC-0098)",
+      "Discover tab account + payee + interval form + results table (T-0200, DEC-0098)",
+      "POST /api/v1/subscriptions/discover/confirm with DEC-0085 merge + no alert (T-0201, DEC-0099)",
+      "RANK majority display_category_id compute + merge refresh (T-0202, DEC-0100)",
+      "Majority category badge + tie-break tooltip (T-0203, DEC-0100, DEC-0087)",
+      "CRUD /api/v1/subscription-tags (T-0204, DEC-0101)",
+      "PUT assign + list ?tag= slug filter + tags on DTO (T-0205, DEC-0102)",
+      "Tag manager modal + filter chips UI (T-0206, DEC-0101, DEC-0102)",
+      "docs/user-guides/US-0020.md operator workflow (T-0207)",
+      "US-0003 detection + US-0008 alert dedup regression tests (T-0208, AC-6)",
+      "UAT OIDC smoke AC-1..AC-6 template + operator gates (T-0209)",
+      "Optional Grafana subscriptions.json $tag variable (T-0210 P2, DEC-0103)"
+    ],
+    "frozen_boundaries_respected": [
+      "DetectionPipeline::run_candidates unchanged — no threshold edits (T-0208, AC-6)",
+      "DEC-0085 merge_confirmed_pattern preserved on manual confirm path (T-0201)",
+      "DEC-0086 interval_matches tolerance preserved (T-0199, T-0201)",
+      "No Firefly tag/category write-back — product DB overlay only (AC-5)",
+      "US-0008 alert dedup contracts untouched — no new_detection on manual confirm (DEC-0099)",
+      "DEC-0103 Grafana $tag P2 optional — SPA ?tag= filter sufficient for MVP"
+    ]
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "T-0198 → T-0199 → (T-0200 ∥ T-0201) → T-0202 → T-0203; T-0198 → T-0204 → T-0205 → T-0206; T-0207 → T-0208 → T-0209; T-0210 optional after T-0205",
+    "notes": "Migration before discover/tags; confirm gates majority; regression before UAT; BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC before omniflow smoke"
+  },
+  "test_coverage": {
+    "migration_types": "T-0198 — display_category_id + tag tables",
+    "discover_service": "T-0199 — recurrence reuse, exclusions, 50-cap",
+    "discover_ui": "T-0200 — account + payee + interval form",
+    "confirm_from_discover": "T-0201 — direct confirmed, merge, 409 rejection, no alert",
+    "majority_compute": "T-0202 — RANK policy + merge refresh",
+    "majority_ui": "T-0203 — badge + tie-break tooltip",
+    "tag_crud": "T-0204 — subscription-tags CRUD",
+    "tag_assign_filter": "T-0205 — PUT replace set + ?tag= slug",
+    "tag_ui": "T-0206 — manager modal + filter chips",
+    "operator_docs": "T-0207 — docs/user-guides/US-0020.md",
+    "regression": "T-0208 — US-0003/US-0008 detection + dedup",
+    "uat_smoke": "T-0209 — OIDC US-0010 external profile template",
+    "grafana_optional": "T-0210 — $tag variable P2",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Manual search by account, payee, interval; paginated or capped with documented limit",
+      "tasks": ["T-0199", "T-0200", "T-0209"],
+      "covered": true,
+      "notes": "GET /discover + Discover tab; 50-cap with meta.truncated; UAT-1 smoke"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "Operator confirm searched candidate without auto-detection-only path",
+      "tasks": ["T-0201", "T-0209"],
+      "covered": true,
+      "notes": "POST /discover/confirm direct confirmed insert; DEC-0085 merge; UAT-2 smoke"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Display category defaults to mode category; tie-break documented",
+      "tasks": ["T-0202", "T-0203", "T-0209"],
+      "covered": true,
+      "notes": "RANK majority compute; badge + tooltip per DEC-0100; UAT-3 smoke"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "Tag CRUD; multi-assign; filter subscription list by tag",
+      "tasks": ["T-0204", "T-0205", "T-0206", "T-0209"],
+      "covered": true,
+      "notes": "operator_tags CRUD + PUT assign + ?tag= filter + UI chips; UAT-4 smoke"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Tags and majority-category metadata in product DB; no Firefly write-back",
+      "tasks": ["T-0198", "T-0202", "T-0204", "T-0209"],
+      "covered": true,
+      "notes": "Migration overlay columns/tables only; UAT-5 storage probe"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "US-0003/US-0008 detection and alert dedup unchanged; OIDC external smoke",
+      "tasks": ["T-0207", "T-0208", "T-0209"],
+      "covered": true,
+      "notes": "Regression tests + UAT template; operator gate BACKEND_FRONTEND_DEPLOY"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC operator gates required before omniflow smoke — documented in T-0209"
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "T-0207 user guide has no direct AC row — architecture R1 support task; non-blocking"
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "T-0210 Grafana $tag P2 optional — SPA ?tag= filter satisfies AC-4 without Grafana"
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "DEC-0101 uses name column; tasks use label — execute should align with decision"
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "DEC-0101 PATCH vs T-0204 PUT for tag rename — execute should follow decision verb"
+    },
+    {
+      "id": "ADV-6",
+      "severity": "low",
+      "note": "DEC-0098 amount band P2 stretch correctly omitted from mandatory tasks"
+    }
+  ],
+  "summary": {
+    "acceptance_criteria_count": 6,
+    "covered_count": 6,
+    "blocking_covered_count": 6,
+    "gap_count": 0,
+    "task_count": 12,
+    "mandatory_task_count": 12,
+    "optional_task_ids": ["T-0210"],
+    "task_ids": ["T-0198", "T-0199", "T-0200", "T-0201", "T-0202", "T-0203", "T-0204", "T-0205", "T-0206", "T-0207", "T-0208", "T-0209", "T-0210"],
+    "tasks_without_acceptance_ref": ["T-0207", "T-0210"],
+    "tasks_without_acceptance_ref_blocking": false,
+    "dec_0098_aligned": true,
+    "dec_0099_aligned": true,
+    "dec_0100_aligned": true,
+    "dec_0101_aligned": true,
+    "dec_0102_aligned": true,
+    "dec_0103_aligned": true,
+    "dependency_graph_valid": true,
+    "execute_ready": true,
+    "execute_ready_caveat": null
+  },
+  "notes": "QA plan-verify 2026-06-10: sprints/S0019/tasks.md (T-0198..T-0210) aligns with docs/product/acceptance.md § US-0020 (AC-1..AC-6) and architecture § US-0020 / DEC-0098..0103; 12/12 tasks mapped; 6/6 acceptance rows covered; 0 gaps. Approved for /execute."
+}

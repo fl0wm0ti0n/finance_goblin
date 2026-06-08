@@ -31,6 +31,9 @@ Canonical release queue for sprint-level release state.
 | Q0021 | US-0017 | released | 2026-06-09T22:00:00Z | handoffs/releases/Q0021-release-notes.md | check-in_test:pass-with-story-scope(doc-profile exit 0); qa:pass; uat:pass; isolation:pass; runtime_proof:pass; publish:skipped(disabled) | 0.17.0-us0017 | — |
 | Q0022 | BUG-0014 | released | 2026-06-07T12:00:00Z | handoffs/releases/Q0022-release-notes.md | check-in_test:pass(177/177); qa:pass; uat:pass-with-prerequisites(verify-work); isolation:pass; runtime_proof:pass; publish:skipped(disabled) | bug0014-q0022 | — |
 | Q0023 | BUG-0015 | released | 2026-06-07T14:00:00Z | handoffs/releases/Q0023-release-notes.md | check-in_test:pass(187/187); qa:pass; uat:pass-with-prerequisites(verify-work); isolation:pass; runtime_proof:pass; publish:skipped(disabled) | bug0015-q0023 | — |
+| S0017 | US-0018 | released | 2026-06-09T00:00:00Z | handoffs/releases/S0017-release-notes.md | check-in_test:pass(193/193 lib, 7/7 vitest); qa:pass; uat:pass-with-prerequisites(verify-work); isolation:pass; runtime_proof:pass; publish:skipped(disabled) | 0.18.0-us0018 | — |
+| S0018 | US-0019 | released | 2026-06-09T23:30:00Z | handoffs/releases/S0018-release-notes.md | check-in_test:pass(204/204 lib, 9/9 vitest); qa:pass; uat:pass-with-prerequisites(verify-work); isolation:pass; runtime_proof:pass; publish:skipped(disabled) | 0.19.0-us0019 | — |
+| S0019 | US-0020 | released | 2026-06-10T23:30:00Z | handoffs/releases/S0019-release-notes.md | check-in_test:pass(213/213 lib, 9/9 vitest); qa:pass; uat:pass-with-prerequisites(verify-work); isolation:pass; runtime_proof:pass; publish:skipped(disabled) | 0.20.0-us0020 | — |
 
 ## Status model
 

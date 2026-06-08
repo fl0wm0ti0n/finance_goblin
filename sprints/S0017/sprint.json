@@ -1,0 +1,34 @@
+{
+  "id": "S0017",
+  "story_ids": ["US-0018"],
+  "status": "PLANNED",
+  "created": "2026-06-08",
+  "orchestrator_run_id": "auto-20260608-us0018-001",
+  "goal": "Deliver DEC-0087 expense-series API with month spine SQL and __uncategorized__ sentinel; DEC-0088 CategoryFilter + bar CategoryTrendChart; DEC-0089 cross-surface semantics; DEC-0090 index deferral; user guide US-0018; OIDC smoke.",
+  "scope": [
+    "backend/src/transactions/repository.rs — expense_series_by_month month spine SQL",
+    "GET /api/v1/categories + /categories/expense-series with server summary (DEC-0087)",
+    "frontend/src/components/category/CategoryFilter + CategoryTrendChart (DEC-0088)",
+    "ForecastPage monthly tab filter + trend chart (forecast actuals-only per DEC-0089)",
+    "PlanningPage compare toolbar + CategoryTrendChart actuals widget",
+    "WealthPage category spending subsection",
+    "grafana cashflow.json + budgets.json $category variable + panel filters (DEC-0089)",
+    "docs/user-guides/US-0018.md publish (USER_GUIDE_MODE=1)",
+    "UAT OIDC external profile smoke template AC-1..AC-6",
+    "Optional EXPLAIN probe + idx_transactions_category_date migration (DEC-0090)"
+  ],
+  "risks": [
+    "Operators expect category filter to change forecast buckets — user guide + tooltip",
+    "Planning compare confusion — widget labeled actuals only; compare API unchanged",
+    "Grafana vs SPA category mismatch — document independent filters",
+    "24-month query slow — EXPLAIN gate T-0185",
+    "AC-6 operator gate — BACKEND_FRONTEND_DEPLOY prerequisite for omniflow smoke",
+    "US-0015 regression — no project.rs or bucket_inference changes"
+  ],
+  "task_count": 11,
+  "estimate_total_hours": 31,
+  "decisions": ["DEC-0087", "DEC-0088", "DEC-0089", "DEC-0090"],
+  "research": ["R-0080", "R-0083"],
+  "slices": ["US-0018-S1", "US-0018-S2", "US-0018-S3", "US-0018-S4", "US-0018-S5"],
+  "split_decision": "no_split — 11 tasks < SPRINT_MAX_TASKS 12; P1 EXPLAIN probe optional P2"
+}

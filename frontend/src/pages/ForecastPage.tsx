@@ -17,6 +17,14 @@ const DailyChart = lazy(() =>
 const MonthlyChart = lazy(() =>
   import("../components/forecast/MonthlyChart").then((m) => ({ default: m.MonthlyChart })),
 );
+const CategoryFilter = lazy(() =>
+  import("../components/category/CategoryFilter").then((m) => ({ default: m.CategoryFilter })),
+);
+const CategoryTrendChart = lazy(() =>
+  import("../components/category/CategoryTrendChart").then((m) => ({
+    default: m.CategoryTrendChart,
+  })),
+);
 const LongTermChart = lazy(() =>
   import("../components/forecast/LongTermChart").then((m) => ({ default: m.LongTermChart })),
 );
@@ -30,6 +38,7 @@ export function ForecastPage() {
   const [horizon, setHorizon] = useState<3 | 6 | 12 | 24>(12);
   const [longTermMode, setLongTermMode] = useState<LongTermMode>("baseline");
   const [explainOpen, setExplainOpen] = useState(false);
+  const [categoryId, setCategoryId] = useState("");
 
   const metaQuery = useQuery({
     queryKey: ["forecast-meta"],
@@ -256,6 +265,19 @@ export function ForecastPage() {
 
           {tab === "monthly" && (
             <>
+              <div className="card" style={{ marginBottom: "1rem" }}>
+                <Suspense fallback={<p>Loading category filter…</p>}>
+                  <CategoryFilter
+                    value={categoryId}
+                    onChange={setCategoryId}
+                    label="Category (actual spending trend)"
+                  />
+                </Suspense>
+                <p style={{ fontSize: "0.85rem", color: "#64748b", margin: "0.5rem 0 0" }}>
+                  Filters the actual spending trend chart below only — Income / Fixed / Variable
+                  forecast cards and household chart are unchanged.
+                </p>
+              </div>
               {monthlyQuery.data?.series?.[0]?.ai_mapped && (
                 <div className="card" style={{ marginBottom: "1rem", borderColor: "#a855f7" }}>
                   <span
@@ -310,6 +332,13 @@ export function ForecastPage() {
                   <MonthlyChart series={monthlyQuery.data?.series ?? []} />
                 </Suspense>
               </div>
+              {categoryId && (
+                <div style={{ marginTop: "1rem" }}>
+                  <Suspense fallback={<p>Loading trend…</p>}>
+                    <CategoryTrendChart categoryId={categoryId} />
+                  </Suspense>
+                </div>
+              )}
             </>
           )}
 
