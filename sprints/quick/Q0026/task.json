@@ -1,0 +1,112 @@
+{
+  "id": "Q0026",
+  "title": "BUG-0018 alert evaluation SQL failure",
+  "status": "PLANNED",
+  "bug_id": "BUG-0018",
+  "architecture_ref": "architecture-20260610-bug0018",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["BE", "BF"],
+  "acceptance_mapping": {
+    "BE": {
+      "tasks": ["BE1", "T1", "V1"],
+      "primary_verify": "Post-sync alert evaluation completes without SQL error 42702; sync logs free of alert evaluation failed"
+    },
+    "BF": {
+      "tasks": ["BE1", "V1"],
+      "primary_verify": "Wealth GET /api/v1/alerts and header bell surface matching alerts; subscription dedup regression per BUG-0008"
+    }
+  },
+  "task_count": 3,
+  "mandatory_task_count": 3,
+  "optional_task_ids": [],
+  "estimate_total_hours": 3.5,
+  "tasks": [
+    {
+      "id": "BE1",
+      "title": "Qualify fbd.balance + fbd.ts in evaluate_scarcity",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0018 (BE) — DEC-0107 scarcity SQL qualification",
+      "files": ["backend/src/alerts/evaluate.rs"],
+      "decisions": ["DEC-0107", "DEC-0026", "DEC-0028"],
+      "tests": [
+        "fbd.balance and fbd.ts qualified in SELECT/WHERE/GROUP BY",
+        "Forbidden: unqualified balance/ts; a.balance",
+        "cargo build PASS"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "wealth_alerts_integration regression gate",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": ["BE1"],
+      "acceptance_hook": "BUG-0018 (BE) — scarcity JOIN path integration test",
+      "files": ["backend/tests/wealth_alerts_integration.rs"],
+      "decisions": ["DEC-0107"],
+      "tests": [
+        "wealth_snapshot_and_scarcity_alert_on_post_sync PASS with DATABASE_URL",
+        "Assert scarcity alert created active",
+        "cargo test --test wealth_alerts_integration PASS"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work sync + alerts smoke",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "depends_on": ["BE1", "T1"],
+      "operator_gate": "BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC",
+      "acceptance_hook": "BUG-0018 (BE)(BF) — operator smoke matrix",
+      "files": [
+        "sprints/quick/Q0026/uat.md",
+        "sprints/quick/Q0026/uat.json"
+      ],
+      "tests": [
+        "POST /api/v1/sync/trigger — no alert evaluation failed / 42702",
+        "GET /api/v1/alerts?status=active returns rows when rules match",
+        "Header bell non-empty active preview",
+        "GET /api/v1/subscriptions/alerts dedup regression",
+        "DATABASE_URL cargo test --test wealth_alerts_integration PASS"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "BE1 evaluate.rs SQL fix",
+    "T1 integration test",
+    "Single backend release",
+    "BACKEND_FRONTEND_DEPLOY",
+    "FULL_FIREFLY_SYNC",
+    "V1 verify-work smoke"
+  ],
+  "execute_order": ["BE1", "T1", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "Rebuild flow-finance-ai with BE1 evaluate_scarcity SQL fix",
+      "rationale": "Runtime sync/alerts probes require deployed backend delta"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "action": "Full Firefly sync (not exchanges-only)",
+      "rationale": "Alerts phase runs post-sync; BE/BF proofs require successful sync + eval"
+    }
+  ],
+  "frozen_boundaries": [
+    "DEC-0107: fbd.balance only — not a.balance; qualify fbd.ts in WHERE/GROUP BY",
+    "R-0024: warn-only — do not fail sync on alert eval error",
+    "No frontend change — BF resolves when BE fixed",
+    "No migration — runtime SQL string fix only",
+    "BUG-0008: subscription path separate — regression gate in V1 only",
+    "Sibling evaluators unchanged — evaluate_budget_drift/plan_viability already unambiguous"
+  ],
+  "decisions": ["DEC-0107", "DEC-0026", "DEC-0028"],
+  "research": ["R-0088"],
+  "operator_next": "After BE1+T1 deploy: Full sync; then V1 verify-work on localhost:18080 and financegnome.omniflow.cc"
+}

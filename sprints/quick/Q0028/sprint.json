@@ -1,0 +1,85 @@
+{
+  "id": "Q0028",
+  "type": "quick",
+  "bug_ids": ["BUG-0020"],
+  "status": "PLANNED",
+  "created": "2026-06-11",
+  "goal": "Close BUG-0020 via DEC-0109: migration 016 reconcile (YouTube confirmed merge, Strom pending collapse) + confirmed display_category_id DEC-0100 RANK backfill; All-tab exclude rejected/inactive; detection forward pending guard; integration tests; operator verify-work for BI/BJ gates.",
+  "scope": [
+    "DA1: migration 016 YouTube confirmed merge + Strom pending collapse (interval_matches gate)",
+    "DB1: migration 016 confirmed display_category_id backfill (DEC-0100 RANK SQL)",
+    "DA2: SubscriptionsPage.tsx All-tab filter pending+confirmed only",
+    "DA3: detection.rs skip pending when confirmed/rejected payee-interval matches via interval_matches",
+    "T1: backend/tests/bug0020_subscription_list_quality.rs BI/BJ + discover/tags/detection regression",
+    "G1: cargo test automated gate + blast-radius check",
+    "V1: verify-work BI/BJ operator smoke + OIDC list regression"
+  ],
+  "risks": [
+    "Merge picks wrong YouTube survivor — earliest confirmed_at; transaction boundary; relink before inactive",
+    "DEC-0086 multi-interval policy violated — interval_matches gate on every merge cluster",
+    "Backfill picks unexpected category (youtube→66) — DEC-0100 contract; document in UAT",
+    "All-tab scope change surprises operator — release notes",
+    "fingerprint UNIQUE violation on survivor update — update in-place by id; merge before fingerprint rotation",
+    "spt relink PK conflict — ON CONFLICT DO NOTHING then delete loser links",
+    "Destructive migration — backup before prod; dev rebuild acceptable"
+  ],
+  "task_count": 7,
+  "mandatory_task_count": 7,
+  "conditional_task_ids": [],
+  "optional_task_ids": [],
+  "estimate_total_hours": 13,
+  "decisions": ["DEC-0109", "DEC-0100", "DEC-0085", "DEC-0086"],
+  "research": ["R-0090"],
+  "acceptance_rows": ["BI", "BJ"],
+  "execute_order": ["DA1", "DB1", "DA2", "DA3", "T1", "G1", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Rebuild backend + frontend images with Q0028 changes; apply migration 016 on target postgres"
+    },
+    {
+      "id": "MIGRATION_016_APPLY",
+      "before_tasks": ["V1"],
+      "description": "Run 016_bug0020_subscription_list_quality.sql reconcile + backfill on flow_finance_ai"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "description": "Full sync + subscription detection phase — verify no new confirmed YouTube duplicate after DA3 guard"
+    }
+  ],
+  "acceptance_mapping": {
+    "BI": {
+      "tasks": ["DA1", "DA2", "DA3", "T1", "G1", "V1"],
+      "verify": "GET /api/v1/subscriptions?status=confirmed <=1 row per payee_key; no duplicate YouTube display_name; /subscriptions All tab no triplicate Strom or duplicate YouTube visible rows"
+    },
+    "BJ": {
+      "tasks": ["DB1", "T1", "G1", "V1"],
+      "verify": "Confirmed samples netflix/kindle display_category_id=18; youtube survivor=66; hgp=56; florian gabriel=3 per R-0090 oracle"
+    }
+  },
+  "waived_ops_only": {
+    "api_list_dedup": "DEC-0109 forbidden — list_patterns SQL shape unchanged; no API-only collapse",
+    "list_time_recompute": "No display_category_id recompute on list/sync",
+    "pending_rejected_backfill": "Backfill confirmed only",
+    "firefly_writeback": "No Firefly category write-back"
+  },
+  "deploy_order": [
+    "DA1 migration 016 reconcile block",
+    "DB1 migration 016 backfill block (same file)",
+    "DA2 SubscriptionsPage All-tab filter (parallel ok)",
+    "DA3 detection.rs forward guard (parallel ok)",
+    "T1 integration tests",
+    "G1 automated gate",
+    "Operator: BACKEND_FRONTEND_DEPLOY + migration 016 apply",
+    "Operator: FULL_FIREFLY_SYNC",
+    "V1 verify-work smoke"
+  ],
+  "rollback": "git revert migration 016 + code (detection guard, frontend filter); restore pre-migration DB from backup if reconcile ran in production",
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260611-q0028-bug0020",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0020",
+  "orchestrator_run_id": "auto-20260610-bug0019"
+}

@@ -5,7 +5,14 @@
 - **Latest released story:** US-0020 / S0019 (`0.20.0-us0020`, 2026-06-10) — subscription discover explorer, manual confirm, majority category, operator tags (DEC-0098 discover explorer, DEC-0099 manual confirm, DEC-0100 majority category, DEC-0101 tag schema, DEC-0102 tag assign/filter, DEC-0103 Grafana `$tag` P2); verify-work + release PASS; intake bundle drain complete
 - **Prior released story:** US-0019 / S0018 (`0.19.0-us0019`, 2026-06-09) — goal-driven planning with per-plan stats & AI savings (DEC-0091 goal schema, DEC-0092 goal-stats API, DEC-0093 category overlay cap, DEC-0094 savings ranking, DEC-0095 goal account, DEC-0096 PVA scope, DEC-0097 AI tool path); verify-work + release PASS
 - **Prior released story:** US-0018 / S0017 (`0.18.0-us0018`, 2026-06-09) — category filters & expense trend analytics (DEC-0087 expense-series API, DEC-0088 filter + bar chart, DEC-0089 cross-surface semantics, DEC-0090 index deferral); verify-work + release PASS
-- **Latest bug fix:** BUG-0015 / Q0023 (`bug0015-q0023`, 2026-06-07) — subscription confirm persistence after rebuild (DEC-0084 card payee_key, DEC-0085 payee+interval inheritance, DEC-0086 ±3d tolerance); verify-work + release PASS
+- **Active bug:** none (intake bundle bug queue drain complete)
+- **Latest bug fix:** BUG-0021 / Q0029 (`bug0021-q0029`, 2026-06-11) — CategoryFilter static import + wealth account_role COALESCE path (DEC-0110 BK surfaces, DEC-0111 SQL + label map); verify-work + release PASS
+- **Prior bug fix:** BUG-0020 / Q0028 (`bug0020-q0028`, 2026-06-11) — subscription list reconcile + display_category backfill (DEC-0109 migration 016, All-tab filter, detection guard); verify-work + release PASS
+- **Prior bug fix:** BUG-0019 / Q0027 (`bug0019-q0027`, 2026-06-10) — Grafana provisioning metrics (DEC-0108 account variable default + mirror-count sync panel); verify-work + release PASS
+- **Prior bug fix:** BUG-0018 / Q0026 (`bug0018-q0026`, 2026-06-10) — alert evaluation SQL failure (DEC-0107 scarcity JOIN column qualification); verify-work + release PASS
+- **Prior bug fix:** BUG-0017 / Q0025 (`bug0017-q0025`, 2026-06-10) — post-sync forecast recompute cluster (DEC-0105 audit CHECK, DEC-0106 FK CASCADE + retention order); verify-work + release PASS
+- **Prior bug fix:** BUG-0016 / Q0024 (`bug0016-q0024`, 2026-06-09) — SPA deep-link HTTP 404 (DEC-0104 Axum SPA fallback, DEC-0057 route order); verify-work + release PASS
+- **Prior bug fix:** BUG-0015 / Q0023 (`bug0015-q0023`, 2026-06-07) — subscription confirm persistence after rebuild (DEC-0084 card payee_key, DEC-0085 payee+interval inheritance, DEC-0086 ±3d tolerance); verify-work + release PASS
 - **Prior bug fix:** BUG-0014 / Q0022 (`bug0014-q0022`, 2026-06-07) — omniflow post-rebuild cluster (DEC-0081 AQ holdings+FX, DEC-0082 AS1 plan delete guard, DEC-0083 AS2 target_type UI); verify-work + release PASS
 - **Prior bug fix:** BUG-0013 / Q0020 (`bug0013-q0020`, 2026-06-09) — budgets MTD cap (DEC-0079 AL1) + Bitunix futures EUR valuation (DEC-0080 AN1); verify-work + release PASS
 - **Prior release:** US-0015 / S0016 (`0.16.0-us0015`, 2026-06-06) — AI forecast bucket cascade (config→rule→LLM→Variable, bucket_sources API, AI-mapped badge, DEC-0078); verify-work + release PASS
@@ -24,16 +31,16 @@
 - **Prior bug fix:** BUG-0003 / Q0009 (2026-06-05) — `DATABASE_HOST=postgres` ops recovery (F1), env guard docs (F2), `effective_enabled` connector registry (G1); verify-work + release PASS; G2 futures auth spike skipped (gated)
 - **Prior bug fix:** BUG-0002 / Q0008 (2026-06-05) — Firefly PAT guard, risk-score 200 empty-state, exchange settings; verify-work + release PASS
 - **Prior bug fix:** BUG-0001 / Q0007 (2026-06-04) — `DevBypassAuthProvider` + `GF_SERVER_ROOT_URL`; DEC-0057 follow-through
-- **Open bug queue:** (empty — defect drain complete)
+- **Open bug queue:** (empty — intake bundle drain complete)
 - **Open epics:** (empty — backlog drain complete for current scope)
-- **Active bug:** none
-- **Active quick task:** none
+- **Active quick task:** none (Q0029 released)
 - **Active story:** none (intake bundle backlog drain complete)
 - **Open stories:** (empty)
-- **Research:** [R-0085](research.md#r-0085--us-0020-subscription-discover-majority-category--operator-tags) fulfilled by US-0020/S0019/DEC-0098..0103; [R-0080](research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake) fulfilled (US-0018/US-0019/US-0020 portions via R-0083/R-0084/R-0085); [R-0084](research.md#r-0084--us-0019-goal-plans-per-plan-stats-category-overlay--ai-savings) fulfilled by US-0019/S0018/DEC-0091..0097; [R-0083](research.md#r-0083--us-0018-category-filters-expense-series-api--trend-analytics) fulfilled by US-0018/S0017/DEC-0087..0090; prior [R-0081](research.md#r-0081--bug-0015-confirmed-subscription-reconfirm-after-rebuild) + [R-0082](research.md#r-0082--card-billing-descriptor-normalization-for-subscription-identity) fulfilled by BUG-0015/Q0023/DEC-0084/0085/0086; [R-0079](research.md#r-0079--bug-0014-post-rebuild-omniflow-ml-sidecar-crypto-display-grafana-planning) fulfilled by BUG-0014/Q0022/DEC-0081/0082/0083
-- **Architecture:** **DEC-0098**..**DEC-0103** shipped US-0020 (2026-06-10); **DEC-0091**..**DEC-0097** shipped US-0019 (2026-06-09); **DEC-0087**..**DEC-0090** shipped US-0018 (2026-06-09)
-- **Recommended next:** idle — await new intake
-- **Backlog drain:** complete — `open_stories_remaining=0`
+- **Research:** [R-0089](research.md#r-0089--bug-0019-grafana-cashflow-zeros-account_id-default--sync-entity-counts-per-run-cursor) fulfilled by BUG-0019/Q0027/DEC-0108; [R-0088](research.md#r-0088--bug-0018-evaluate_scarcity-ambiguous-balance--alert-eval-pipeline-abort) fulfilled by BUG-0018/Q0026/DEC-0107; [R-0087](research.md#r-0087--bug-0017-post-sync-forecast-recompute-cluster-audit-check-fk-retention-ml-gate-forecastpage-loading) fulfilled by BUG-0017/Q0025/DEC-0105/0106; [R-0086](research.md#r-0086--bug-0016-spa-deep-link-fallback-axum-vs-traefik) fulfilled by BUG-0016/Q0024/DEC-0104; [R-0085](research.md#r-0085--us-0020-subscription-discover-majority-category--operator-tags) fulfilled by US-0020/S0019/DEC-0098..0103; [R-0080](research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake) fulfilled (US-0018/US-0019/US-0020 portions via R-0083/R-0084/R-0085); [R-0084](research.md#r-0084--us-0019-goal-plans-per-plan-stats-category-overlay--ai-savings) fulfilled by US-0019/S0018/DEC-0091..0097; [R-0083](research.md#r-0083--us-0018-category-filters-expense-series-api--trend-analytics) fulfilled by US-0018/S0017/DEC-0087..0090; prior [R-0081](research.md#r-0081--bug-0015-confirmed-subscription-reconfirm-after-rebuild) + [R-0082](research.md#r-0082--card-billing-descriptor-normalization-for-subscription-identity) fulfilled by BUG-0015/Q0023/DEC-0084/0085/0086; [R-0079](research.md#r-0079--bug-0014-post-rebuild-omniflow-ml-sidecar-crypto-display-grafana-planning) fulfilled by BUG-0014/Q0022/DEC-0081/0082/0083
+- **Architecture:** **DEC-0110** + **DEC-0111** frozen BUG-0021 (2026-06-11); **DEC-0109** shipped BUG-0020 (2026-06-11); **DEC-0108** shipped BUG-0019 (2026-06-10); **DEC-0107** shipped BUG-0018 (2026-06-10); **DEC-0105** + **DEC-0106** shipped BUG-0017 (2026-06-10); **DEC-0104** shipped BUG-0016 (2026-06-09); **DEC-0098**..**DEC-0103** shipped US-0020 (2026-06-10); **DEC-0091**..**DEC-0097** shipped US-0019 (2026-06-09); **DEC-0087**..**DEC-0090** shipped US-0018 (2026-06-09)
+- **Research:** [R-0091](research.md#r-0091--bug-0021-categoryfilter-lazy-load-delay--wealth-role-column-empty) fulfilled by BUG-0021/Q0029/DEC-0110/0111; [R-0090](research.md#r-0090--bug-0020-subscriptions-list-duplicates--uncategorized-display-category) fulfilled by BUG-0020/Q0028/DEC-0109
+- **Recommended next:** idle — await new intake (`/intake` or operator story)
+- **Backlog drain:** complete — `open_stories_remaining=0`; `bug_queue_remaining=0`
 
 ## Compact decision index (bounded summaries)
 
@@ -141,6 +148,29 @@
 | DEC-0101 | Accepted | Operator tag schema | `operator_tags` + junction; hard delete; global scope (R-0085 §4, US-0020) |
 | DEC-0102 | Accepted | Tag assign and list filter | PUT replace set; `?tag=` slug filter (R-0085 §4–5, US-0020) |
 | DEC-0103 | Accepted | Grafana subscriptions `$tag` | P2 stretch; DEC-0089 independent pattern (R-0085 §6, US-0020) |
+| DEC-0104 | Accepted | Axum SPA index.html fallback | `ServeDir::fallback(ServeFile)` HTTP 200; health→grafana→api→SPA; Traefik pass-through (R-0086, BUG-0016) |
+| DEC-0105 | Accepted | ai_tool_audit CHECK extension | DROP+ADD tool_name + result_status; forecast_bucket_assignment + extended statuses (R-0087 §2, BUG-0017 AY/AZ) |
+| DEC-0106 | Accepted | paired_baseline_id CASCADE + retention order | ON DELETE CASCADE; ml_enhanced before baseline prune (R-0087 §3, BUG-0017 BA/BC) |
+| DEC-0107 | Accepted | Scarcity JOIN column qualification | `fbd.balance` + `fbd.ts` in evaluate_scarcity; forbid a.balance (R-0088 §2, BUG-0018 BE) |
+| DEC-0108 | Accepted | Grafana account default + sync counts | `$account_id` sort/current; mirror COUNT panel (R-0089, BUG-0019 BG/BH) |
+| DEC-0109 | Accepted | Subscription list reconcile + backfill | Migration 016; All-tab filter; forward pending guard (R-0090, BUG-0020 BI/BJ) |
+| DEC-0110 | Accepted | CategoryFilter static import BK | ForecastPage + WealthPage eager import; PlanningPage P2 optional (R-0091, BUG-0021 BK) |
+| DEC-0111 | Accepted | Wealth account_role path + labels | COALESCE attributes/root SQL; frontend formatAccountRole map (R-0091, BUG-0021 BL) |
+
+### BUG-0021 architecture (2026-06-11) — released Q0029 2026-06-11
+
+Per [R-0091](research.md#r-0091--bug-0021-categoryfilter-lazy-load-delay--wealth-role-column-empty): **DEC-0110** + **DEC-0111** accepted and shipped (`bug0021-q0029`); operator deploy smoke pass-with-prerequisites.
+
+### BUG-0018 architecture (2026-06-10) — released Q0026 2026-06-10
+
+Per [R-0088](research.md#r-0088--bug-0018-evaluate_scarcity-ambiguous-balance--alert-eval-pipeline-abort): **DEC-0107** accepted and shipped (`bug0018-q0026`); operator sync/alerts smoke pass-with-prerequisites.
+
+### BUG-0017 architecture (2026-06-09) — released Q0025 2026-06-10
+
+### BUG-0016 architecture (2026-06-09) — released Q0024 2026-06-09
+
+Per [R-0086](research.md#r-0086--bug-0016-spa-deep-link-fallback-axum-vs-traefik): **DEC-0104** accepted and shipped (`bug0016-q0024`); Axum-only SPA fallback in `build_router`; extends **DEC-0057** route ordering; supersedes BUG-0009 analytics 404 advisory; operator SPA deep-link smoke pass-with-prerequisites.
+
 
 ### US-0020 architecture (2026-06-10) — released S0019 2026-06-10
 
@@ -503,7 +533,7 @@ Freeze provisioning-only contracts for BUG-0009 execute — no backend changes u
 
 - **Query:** `ORDER BY ABS(COALESCE(a.balance, 0)) DESC, a.name ASC` on `accounts WHERE type = 'asset'`
 - **Dashboards:** `cashflow.json`, `forecast-horizons.json`
-- **Provisioning:** Omit `current` block — Grafana selects first query row on load
+- **Provisioning:** Omit `current` block — Grafana selects first query row on load — **superseded by DEC-0108 (BUG-0019):** `current` is now required with empty text/value shape (`{"text": "", "value": ""}`); ABS sort and the rest of this contract unchanged
 - **Rejected:** Hardcoded `current`; first-non-zero-forecast subquery; React iframe var passthrough (defer)
 
 #### Z1 — Portfolio breakdown SQL
@@ -634,3 +664,7 @@ Freeze provisioning-only contracts for BUG-0009 execute — no backend changes u
 - `decisions/DEC-0101.md` — Operator tag schema (US-0020)
 - `decisions/DEC-0102.md` — Subscription tag assign and list filter (US-0020)
 - `decisions/DEC-0103.md` — Grafana subscriptions `$tag` variable P2 (US-0020)
+- `decisions/DEC-0104.md` — Axum SPA index.html fallback (BUG-0016)
+- `decisions/DEC-0105.md` — ai_tool_audit CHECK extension (BUG-0017)
+- `decisions/DEC-0106.md` — paired_baseline_id CASCADE + retention order (BUG-0017)
+- `decisions/DEC-0107.md` — scarcity JOIN column qualification (BUG-0018)

@@ -1,10 +1,10 @@
-# Release Report — S0016 / US-0015
+# Release Report — Q0029 / BUG-0021
 
-**Story:** US-0015  
-**Sprint:** S0016  
+**Bug:** BUG-0021  
+**Quick task:** Q0029  
 **Phase:** `/release`  
-**Date:** 2026-06-06  
-**Orchestrator:** `auto-20260606-us0015-001`  
+**Date:** 2026-06-11  
+**Orchestrator:** `auto-20260611-bug0021`  
 **Verdict:** **PASS** — backlog reconciled; release artifacts finalized; refresh-context ready
 
 ---
@@ -13,12 +13,12 @@
 
 | Gate | Verdict | Evidence |
 |------|---------|----------|
-| QA | PASS | `sprints/S0016/qa-findings.md`, 0 blocking findings |
-| Check-in tests | PASS | `cargo test --lib` 169/169; `npm test` 5/5 @ release |
-| UAT | PASS-with-prerequisites | `sprints/S0016/uat.md`, `sprints/S0016/uat.json` — AC-1–AC-7 satisfied; AC-7 runtime pending BACKEND_FRONTEND_DEPLOY |
-| Isolation | PASS | intake → verify-work checkpoints in `docs/engineering/state.md` |
-| Strict runtime proof | PASS | verify-work `runtime-proof-verify-work-20260606-us0015-s0016-001`; release tuple at finalization |
-| Backlog reconcile | PASS | US-0015 → **DONE** |
+| QA | PASS | `sprints/quick/Q0029/qa-findings.md`, 0 blocking findings |
+| Check-in tests | PASS | `bug0021_wealth_account_role` 4/4; `cargo test --lib` 213/213; `npm test` 9/9 @ release |
+| UAT | PASS-with-prerequisites | `sprints/quick/Q0029/uat.json`, `handoffs/verify_work_to_release.md` — BK/BL satisfied; browser/API/snapshot deploy operator-deferred |
+| Isolation | PASS | execute → verify-work checkpoints in `docs/engineering/state.md` |
+| Strict runtime proof | PASS | verify-work `runtime-proof-verify-work-20260611-bug0021-001`; release tuple at finalization |
+| Backlog reconcile | PASS | BUG-0021 → **DONE** |
 | Publish | SKIPPED | `RELEASE_PUBLISH_MODE=disabled` |
 
 ---
@@ -27,29 +27,27 @@
 
 | Artifact | Path |
 |----------|------|
-| Release notes | `handoffs/releases/S0016-release-notes.md` |
-| Release findings | `sprints/S0016/release-findings.md` |
+| Release notes | `handoffs/releases/Q0029-release-notes.md` |
+| Release findings | `sprints/quick/Q0029/release-findings.md` |
 | Legacy pointer | `handoffs/release_notes.md` |
-| Release queue row | `handoffs/release_queue.md` (S0016 → released) |
-| Sprint summary | `sprints/S0016/summary.md` |
-| Backlog | `docs/product/backlog.md` (US-0015 DONE) |
-| Acceptance | `docs/product/acceptance.md` (US-0015 AC-1–AC-7 checked) |
-| README Product status | `README.md` (US-0015 bullet) |
-| Runbook | `docs/engineering/runbook.md` (§ 22 US-0015 release pointer) |
+| Release queue row | `handoffs/release_queue.md` (Q0029 → released) |
+| Backlog | `docs/product/backlog.md` (BUG-0021 DONE) |
+| Acceptance | `docs/product/acceptance.md` (BUG-0021 BK, BL checked) |
+| Runbook | `docs/engineering/runbook.md` (§34 BUG-0021 hotfix) |
 | State checkpoint | `docs/engineering/state.md` |
 
 ---
 
 ## Backlog status
 
-- **US-0015:** **DONE** (verify-work PASS S0016 + release PASS, 2026-06-06)
-- **Acceptance:** prerequisite + AC-1–AC-7 checked in `docs/product/acceptance.md` § US-0015
+- **BUG-0021:** **DONE** (verify-work PASS-WITH-PREREQUISITES Q0029 + release PASS, 2026-06-11)
+- **Acceptance:** **BK**, **BL** checked in `docs/product/acceptance.md` § BUG-0021
 
 ---
 
 ## Release version
 
-- `0.16.0-us0015`
+- `bug0021-q0029`
 
 ---
 
@@ -59,8 +57,16 @@
 |------|-----|----------|
 | — | — | — |
 
-**Open bug queue:** empty (defect drain complete)  
+**Open bug queue:** (empty — intake bundle drain complete)  
 **Open epics:** none for current backlog drain scope
+
+---
+
+## Operator prerequisites (post-release deploy)
+
+1. Rebuild + restart `flow-finance-ai` (**BACKEND_FRONTEND_DEPLOY**) — set `AUTHENTIK_SECRET_KEY` for external profile build if needed
+2. Confirm `GET /api/v1/wealth` returns non-null `account_role` for Giro/savings/cash wallet
+3. Optional: Full sync or wait for daily snapshot upsert (**SNAPSHOT_UPSERT_OR_SYNC**) before BL-SNAPSHOT/BL-GRAFANA oracle
 
 ---
 

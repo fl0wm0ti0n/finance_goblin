@@ -1096,9 +1096,13 @@ Pipeline step 5 (`emit subscription_alerts`) must become **idempotent upsert** b
   - *Free-cashflow deficit only* — rejected (month-end balance clearer for "can I afford leasing?" framing)
 - **Risks:** category MTD proration inaccurate for one-time mid-month plan deltas; household scarcity masks single-account overdraft; plan viability on stale baseline after failed forecast
 
-**Linked:** US-0005, R-0006, R-0007, R-0015, R-0017, R-0018, DEC-0021  
+**Linked:** US-0005, R-0006, R-0007, R-0015, R-0017, R-0018, DEC-0021, R-0088  
 **Confidence:** high  
 **Status:** current
+
+### Extension (BUG-0018 — 2026-06-10, [R-0088](research.md#r-0088--bug-0018-evaluate_scarcity-ambiguous-balance--alert-eval-pipeline-abort))
+
+**Implementation defect:** `evaluate_scarcity` JOINs `forecast_balance_daily fbd` with `accounts a` for `include_net_worth` / `type = 'asset'` filters but aggregates unqualified `SUM(balance::float8)` — PostgreSQL **42702** (`column reference "balance" is ambiguous`). Per scarcity rule above, the aggregate must be **`SUM(fbd.balance::float8)`** (projected daily path), **not** `accounts.balance` (would double-count Ist mirror). Sibling evaluators (`evaluate_budget_drift`, `evaluate_plan_viability`) and the standalone `current_balance` accounts query are unambiguous. Full fix/CI analysis: [R-0088](research.md#r-0088--bug-0018-evaluate_scarcity-ambiguous-balance--alert-eval-pipeline-abort).
 
 ---
 
@@ -1231,9 +1235,13 @@ Pipeline step 5 (`emit subscription_alerts`) must become **idempotent upsert** b
   - *Separate cron for alerts* — rejected (acceptance: proactive post-sync evaluation)
 - **Risks:** mutex duration grows ~100–500ms for alert pass; plan async recompute on manual edit may lag alert evaluation until next sync — document "alerts refresh on sync" in UI
 
-**Linked:** US-0005, DEC-0010, DEC-0018, DEC-0023, R-0013, R-0019, R-0021, R-0022, R-0023  
+**Linked:** US-0005, DEC-0010, DEC-0018, DEC-0023, R-0013, R-0019, R-0021, R-0022, R-0023, R-0088  
 **Confidence:** high  
 **Status:** current
+
+### Extension (BUG-0018 — 2026-06-10, [R-0088](research.md#r-0088--bug-0018-evaluate_scarcity-ambiguous-balance--alert-eval-pipeline-abort))
+
+**Confirmed abort chain:** `AlertService::run_post_sync` invokes `evaluate_scarcity` **first** (`backend/src/alerts/service.rs` L72); SQL **42702** returns `Err` before `evaluate_budget_drift` / `evaluate_plan_viability` run. `sync/mod.rs` L413–414 logs `alert evaluation failed` at **warn** and leaves sync run **success** — matches R-0024 failure semantics. **Research verdict:** preserve warn-only; do **not** fail sync status for alert SQL defects unless product overrides. Downstream **BF**: empty `GET /api/v1/alerts`, header bell "No active alerts". Subscription alerts (`/api/v1/subscriptions/alerts`) run in separate sync phase — not primary root cause; regression gate only per [R-0088](research.md#r-0088--bug-0018-evaluate_scarcity-ambiguous-balance--alert-eval-pipeline-abort) §5.
 
 ---
 
@@ -5881,5 +5889,819 @@ WHERE p.status = 'confirmed'
 **Linked:** US-0020, US-0003, US-0018, R-0080, R-0009, R-0012, DEC-0084, DEC-0085, DEC-0086, DEC-0087, DEC-0089  
 **Confidence:** high (code audit + PostgreSQL/Grafana patterns); medium on majority refresh-on-merge policy and amount-band priority  
 **Status:** fulfilled — released S0019 via **DEC-0098**..**DEC-0103** (`0.20.0-us0020`, 2026-06-10); extends [R-0080 § Subscriptions](research.md#r-0080--category-analytics-goal-planning-subscription-tags-intake); retain for traceability
+
+---
+
+## R-0086 — BUG-0016 SPA deep-link fallback (Axum vs Traefik)
+
+**Date:** 2026-06-09  
+**Topic:** BUG-0016 — Server-side SPA `index.html` fallback for React Router `BrowserRouter` deep links  
+**Query:** Where should SPA fallback live (Axum `build_router`, Traefik labels, or both)? How to preserve `/api/v1/*`, `/analytics/grafana/*`, `/callback`, and static assets? Regression matrix for acceptance **AX** on `localhost:18080` and `financegnome.omniflow.cc`.  
+**Sources:**
+- [tower-http `ServeDir` docs](https://docs.rs/tower-http/latest/tower_http/services/struct.ServeDir.html) — `.fallback()` vs `.not_found_service()` status semantics
+- [Axum static-file-server example](https://github.com/tokio-rs/axum/blob/main/examples/static-file-server/src/main.rs) — SPA `index.html` fallback patterns
+- [Axum discussion #2486 — React SPA + ServeDir](https://github.com/tokio-rs/axum/discussions/2486) — `ServeDir::fallback(ServeFile::new("index.html"))`
+- [React Router deployment overview](https://reactrouter.com/en/main/start/overview#deployment) — server must serve `index.html` for non-file paths
+- [Traefik Docker routing](https://doc.traefik.io/traefik/reference/routing-configuration/other-providers/docker/) — reverse-proxy only; no static `try_files`
+- [Traefik community — global 404 handler](https://community.traefik.io/t/global-404-handler/2144) — catch-all requires separate nginx sidecar; not native SPA fallback
+- Code: `backend/src/lib.rs` (`build_router`), `backend/Dockerfile` (`/app/static`), `frontend/src/App.tsx` (routes + `/callback`), `docker-compose.external.yml` (Traefik routers), `docker-compose.override.yml` (`:18080`), `backend/src/analytics/proxy.rs` (DEC-0057 prefix `/analytics/grafana`)
+- Prior: [R-0056 §6](research.md#r-0056--us-0011-grafana-embed-proxy-auth-csp-subpath-websocket-traefik) (proxy mount before SPA fallback), [R-0064](research.md#r-0064--bug-0009-grafana-panel-emptiness-vs-cross-account-overview-gap) (BUG-0009 analytics 404 advisory — superseded)
+
+**Findings:**
+
+### 1. Root cause (confirmed)
+
+`build_router` merges `health`, `analytics::grafana_routes`, and `api::routes` **before** a `tower_http::ServeDir` fallback — correct ordering per R-0056. The defect is the fallback itself:
+
+```rust
+router.fallback_service(tower_http::services::ServeDir::new(static_dir));
+```
+
+`ServeDir` returns **404** when no file exists at the request path (e.g. `/forecast`). It does **not** rewrite missing paths to `index.html`. `/` works because `index.html` exists at the directory root. Client-side sidebar navigation works because the shell is already loaded. This matches UI audit **UI-001** curl evidence.
+
+**Not root cause:** React Router misconfiguration, page components, Traefik host rules, or OIDC redirect handling.
+
+### 2. Where fallback should live — recommendation
+
+| Option | Verdict | Rationale |
+|--------|---------|-----------|
+| **A — Axum `build_router` only** | **Accept (recommended)** | Single fix covers Docker prod (`/app/static`), local override (`:18080`), and omniflow external profile — Traefik forwards all paths to `flow-finance-ai:8080` unchanged |
+| **B — Traefik labels only** | **Reject** | Traefik is a router, not a static file server; native SPA `try_files` requires a sidecar nginx/Caddy — adds ops surface with no benefit when backend already serves static |
+| **C — Both Axum + Traefik** | **Reject (redundant)** | Duplicate responsibility; drift risk between local and prod; no acceptance gain |
+
+**Architecture gate:** Accept **DEC candidate** for Axum-only SPA fallback in `build_router`; document Traefik as transparent pass-through (no label change required for MVP).
+
+### 3. Axum implementation contract (for architecture)
+
+Use `ServeDir` with an `index.html` fallback that returns **HTTP 200** (acceptance **AX** requires 200, not 404-with-body):
+
+```rust
+use tower_http::services::{ServeDir, ServeFile};
+
+let index = static_dir.join("index.html");
+let spa = ServeDir::new(static_dir)
+    .fallback(ServeFile::new(index)); // 200 + index.html for missing paths
+router = router.fallback_service(spa);
+```
+
+| API | Status on deep link | Use for BUG-0016? |
+|-----|---------------------|-------------------|
+| `ServeDir::fallback(ServeFile::new(index.html))` | **200** | **Yes** — matches AX |
+| `ServeDir::not_found_service(ServeFile::new(index.html))` | **404** (body = index.html) | **No** — fails curl 200 gate |
+| Plain `ServeDir` fallback (current) | **404** empty | Current bug |
+
+**Static assets:** Existing hashed files under `/assets/*`, `favicon`, etc. are served normally when present; fallback runs only when no file matches.
+
+**Dev parity:** Apply same pattern to `frontend/dist` branch in `build_router`.
+
+**Alternatives considered:**
+
+| Option | Verdict |
+|--------|---------|
+| `axum_extra::routing::SpaRouter` | Defer — requires nesting assets; Vite already emits `/assets/*` at root; current `ServeDir` + `fallback` is simpler |
+| Custom `Fallback` handler reading `index.html` bytes | Acceptable but no gain over `ServeFile` |
+| Redirect unknown paths to `/` | **Reject** — breaks bookmarked URLs; React Router needs original path |
+
+### 4. Protected path ordering (must-not-break)
+
+Current merge order in `build_router` is correct — **do not** move SPA fallback ahead of API/proxy routers:
+
+| Prefix | Handler | SPA fallback? |
+|--------|---------|---------------|
+| `/health` | `health::routes` | No |
+| `/analytics/grafana/*` | `analytics::grafana_routes` (DEC-0057) | No — proxy JSON/assets/WebSocket |
+| `/api/v1/*` | `api::routes` (JWT when OIDC on) | No — JSON 404/401 preserved |
+| `/callback` | **No backend route** — React-only (`OidcCallback`) | **Yes** — serve `index.html`; React handles OIDC token exchange |
+| `/forecast`, `/analytics/cashflow`, etc. | SPA shell routes | Yes — `index.html` + client router |
+
+**`/callback` ordering:** No Axum redirect or catch-all rewrite to `/` before SPA load. Serving `index.html` at `/callback` is correct — `App.tsx` registers `/callback` **outside** `ProtectedRoute` so OIDC can complete. Architecture must **not** add a backend `/callback` handler that conflicts.
+
+**Traefik split note:** `financegnome-api` router (`priority=100`) matches `PathPrefix(/analytics)` — includes both `/analytics/grafana/*` (proxy) and `/analytics/cashflow` (SPA). Backend route specificity still resolves correctly because `grafana_routes` only nests `/analytics/grafana`; SPA slug paths fall through to fallback after fix.
+
+### 5. Traefik / omniflow — no label change for MVP
+
+`docker-compose.external.yml` defines two routers to the **same** `flow-finance-ai` service:
+
+| Router | Priority | Rule | Middleware |
+|--------|----------|------|------------|
+| `financegnome-api` | 100 | `PathPrefix(/api)` \|\| `PathPrefix(/analytics)` \|\| `Path(/health)` | none |
+| `financegnome` | 1 | `Host(financegnome.omniflow.cc)` | `auth` |
+
+Traefik does not interpret SPA paths — it forwards the request path to Axum. Fixing Axum fixes omniflow without Traefik label edits. **Risk:** if a future operator adds Traefik `errors` middleware or a catch-all nginx sidecar, ensure it does not override backend SPA responses — out of scope for BUG-0016.
+
+### 6. Regression matrix (acceptance AX + expanded routes)
+
+**Primary AX paths (curl — no auth on localhost `AUTH_DEV_BYPASS`):**
+
+| Path | Expected after fix | Must not regress |
+|------|-------------------|------------------|
+| `GET /forecast` | 200, `text/html`, body contains `<div id="root">` or Vite shell marker | — |
+| `GET /subscriptions` | 200 HTML shell | — |
+| `GET /planning` | 200 HTML shell | — |
+| `GET /sync` | 200 HTML shell | — |
+| `GET /analytics/cashflow` | 200 HTML shell | Grafana iframe loads post-auth |
+| `GET /` | 200 (unchanged) | — |
+
+**Expanded same-contract paths:** `/wealth`, `/alerts`, `/chat`, `/settings`, `/analytics/{platform-health,budgets,portfolio,subscriptions,forecast-horizons}`.
+
+**Protected prefixes (must stay non-HTML):**
+
+| Path | Expected |
+|------|----------|
+| `GET /api/v1/health` or representative `GET /api/v1/forecast/meta` | JSON (401/200 per auth), not HTML |
+| `GET /analytics/grafana/api/health` or dashboard asset | Proxy response (not SPA index) |
+| `GET /assets/{hashed}.js` | 200 static file with correct `Content-Type` |
+| `GET /api/v1/nonexistent` | JSON 404, not `index.html` |
+
+**Browser smoke (operator):** Hard-refresh on Forecast, Planning, Analytics embed; bookmark reopen; omniflow with Traefik `auth` + optional OIDC.
+
+**OIDC regression:** `/callback?code=…&state=…` loads shell → `OidcCallback` completes — no backend change to OIDC env contract.
+
+### 7. Supersedes BUG-0009 analytics 404 advisory
+
+[R-0064](research.md#r-0064--bug-0009-grafana-panel-emptiness-vs-cross-account-overview-gap) and BUG-0009 discovery treated unauthenticated curl on `/analytics/{slug}` → 404 as acceptable (client-nav only). **BUG-0016 / acceptance AX** requires **200 + SPA shell** on all client routes including `/analytics/{slug}`. Operator authenticated smoke remains the product gate for Grafana **panel data** (BUG-0009 **Y**); routing **404** is no longer an acceptable excuse for missing shell.
+
+### 8. Architecture decision gates
+
+| Gate | Research recommendation | Alternative |
+|------|-------------------------|-------------|
+| Fallback placement | **Axum-only** in `build_router` | Traefik/nginx sidecar |
+| HTTP status | **200** via `ServeDir::fallback(ServeFile)` | 404-with-body (`not_found_service`) |
+| Route ordering | Keep health → grafana proxy → API → SPA fallback | Reorder or nest SPA at `/` only |
+| `/callback` | SPA shell only; no backend redirect | Backend OIDC callback route |
+| Traefik labels | **No change** for MVP | New catch-all/error middleware |
+| Test coverage | `build_router` integration test + curl script in QA | Manual-only |
+| Sprint shape | `/quick` (1–2 tasks: code + verify) | Full sprint |
+
+### 9. Risks
+
+| Risk | Mitigation |
+|------|------------|
+| API paths receive `index.html` | Preserve merge order; add test `GET /api/v1/…` ≠ HTML |
+| Grafana proxy swallowed by SPA fallback | `grafana_routes` stays merged before fallback; test `/analytics/grafana/…` |
+| `index.html` missing in image | Dockerfile already copies `dist` → `/app/static`; fail-fast if `index.html` absent at startup (optional) |
+| 404 status regression in monitoring | Use `.fallback()` not `.not_found_service()` per AX |
+| Traefik `/analytics/*` no-auth router exposes SPA slug without basic-auth | Pre-existing US-0011 tradeoff; SPA routes are HTML shell only — API still JWT/OIDC gated; document, do not widen in BUG-0016 |
+| OIDC `/callback` broken by redirect middleware | Do not add `Redirect` fallback; serve `index.html` at exact path |
+
+**Linked:** BUG-0016, BUG-0009, US-0010, US-0011, UI-001, DEC-0057, R-0056, R-0064  
+**Confidence:** high (code audit + tower-http/Axum docs + Traefik routing model)  
+**Status:** current
+
+---
+
+## R-0087 — BUG-0017 post-sync forecast recompute cluster (audit CHECK, FK retention, ML gate, ForecastPage loading)
+
+**Date:** 2026-06-09  
+**Topic:** BUG-0017 — Post-sync forecast recompute failures: `ai_tool_audit` CHECK gaps, `paired_baseline_id` FK delete order, ML `insufficient_history` verification, plan-stale downstream, ForecastPage false empty flash  
+**Query:** Migration strategy for extending `006_ai_audit.sql` CHECK constraints; FK retention delete order vs `ON DELETE CASCADE`; ML `min_monthly_points` gate with 922 transactions; TanStack Query loading contract for meta-pending empty state; sync failure semantics  
+**Sources:**
+- [PostgreSQL CHECK constraint migration (Close.com)](https://making.close.com/posts/native-enums-or-check-constraints-in-postgresql/) — DROP + ADD with `NOT VALID` / `VALIDATE CONSTRAINT`
+- [Zero-downtime migrations — CHECK / FK NOT VALID pattern](https://palakorn.com/blog/zero-downtime-database-migrations/) — expand/contract for constraints
+- [PostgreSQL self-referential delete order (Stack Overflow)](https://stackoverflow.com/questions/24074778/ordered-delete-of-records-in-self-referencing-table) — application delete order vs deferrable FK
+- [TanStack Query placeholderData](https://tanstack.com/query/latest/docs/framework/react/guides/placeholder-query-data) — `isPending` vs `isFetched`; avoid empty flash
+- [TanStack Query v5 migration — isPending rename](https://tanstack.com/query/v5/docs/framework/react/guides/migrating-to-v5) — `isLoading = isPending && isFetching`
+- Prior: [R-0030](research.md#r-0030--ai-tool-audit-log-persistence-migration-006) (audit schema), [R-0050](research.md#r-0050--sync-mutex-ml-phase-integration-and-history-gates) (ML gates + sync semantics), [R-0074](research.md#r-0074--us-0015-ai-forecast-bucket-mapping-rulellm-cascade-privacy) (bucket audit `result_status` values)
+- Code: `backend/migrations/006_ai_audit.sql`, `backend/migrations/009_forecast_ml.sql`, `backend/src/forecast/repository.rs` (`enforce_retention`), `backend/src/forecast/service.rs` (`persist_bucket_audit`), `backend/src/forecast/bucket_inference.rs` (`push_audit`), `backend/src/forecast_ml/service.rs` (`recompute`, `min_monthly_points`), `backend/src/sync/mod.rs` (forecast + ML phases), `frontend/src/pages/ForecastPage.tsx` (`emptyState`)
+- Discovery: `handoffs/archive/po-to-tl-pack-20260609-h.md`, `handoffs/intake_evidence/intake-20260609-forecast-recompute.json`
+
+**Findings:**
+
+### 1. Root-cause chain (confirmed)
+
+Post-sync pipeline per [R-0050](research.md#r-0050--sync-mutex-ml-phase-integration-and-history-gates):
+
+```text
+sync → subscriptions → forecast (baseline) → plan hook → forecast_ml → exchanges/alerts
+```
+
+| AC | Defect | Mechanism | Symptom |
+|----|--------|-----------|---------|
+| **AY** | `ai_tool_audit_tool_name_check` | `006_ai_audit.sql` allows six chat tools only; US-0015 inserts `forecast_bucket_assignment` | WARN audit insert; row dropped |
+| **AZ** | `ai_tool_audit_result_status_check` | CHECK allows `ok`/`error` only; `bucket_inference.rs` emits `low_confidence`, `provider_unavailable`, `parse_error` | WARN audit insert; row dropped |
+| **BA** | `forecast_computations_paired_baseline_id_fkey` | `enforce_retention()` deletes stale **baseline** rows while **ml_enhanced** rows still reference them via `paired_baseline_id` (default `NO ACTION`) | `mark_success` then `enforce_retention` fails → recompute `Err` → sync serves stale baseline |
+| **BB** | ML `insufficient_history` | Gate: `max(monthly net-cashflow points per account) < min_monthly_points` (default **12**); may be legitimate OR stale baseline artifact | `ml_skipped_reason=insufficient_history`; ML buttons disabled |
+| **BC** | Plan stale (downstream) | Plan hook runs only on successful baseline recompute; `is_plan_stale` compares plan `computed_at` vs latest forecast `computed_at` | **Plan stale** badge persists after failed recompute |
+| **BD** | Forecast empty flash (UX) | `emptyState = !metaQuery.data?.computation_id` — true while meta query `isPending` | Brief **No forecast data yet** despite existing forecast |
+
+Sync remains **success** because `sync/mod.rs` catches forecast `Err` and falls back to `latest_successful()` — by design per R-0050, but masks BA until logs inspected.
+
+### 2. `ai_tool_audit` CHECK migration strategy (AY/AZ)
+
+**Gap:** US-0015 S0016 T-0173 shipped `persist_bucket_audit` without a migration extending `006_ai_audit.sql` ([R-0030](research.md#r-0030--ai-tool-audit-log-persistence-migration-006) scoped six chat tools).
+
+**Required new values (from `bucket_inference.rs`):**
+
+| Column | Current CHECK | Required additions |
+|--------|---------------|-------------------|
+| `tool_name` | six chat tools | `forecast_bucket_assignment` |
+| `result_status` | `ok`, `error` | `low_confidence`, `provider_unavailable`, `parse_error` |
+
+**Recommended migration (new `0XX_bug0017_ai_audit_forecast.sql`):**
+
+```sql
+ALTER TABLE ai_tool_audit DROP CONSTRAINT ai_tool_audit_tool_name_check;
+ALTER TABLE ai_tool_audit ADD CONSTRAINT ai_tool_audit_tool_name_check
+  CHECK (tool_name IN (
+    'get_transactions','get_subscriptions','get_forecast',
+    'get_budget_status','get_portfolio','simulate_plan',
+    'forecast_bucket_assignment'
+  )) NOT VALID;
+ALTER TABLE ai_tool_audit VALIDATE CONSTRAINT ai_tool_audit_tool_name_check;
+
+ALTER TABLE ai_tool_audit DROP CONSTRAINT ai_tool_audit_result_status_check;
+ALTER TABLE ai_tool_audit ADD CONSTRAINT ai_tool_audit_result_status_check
+  CHECK (result_status IN (
+    'ok','error','low_confidence','provider_unavailable','parse_error'
+  )) NOT VALID;
+ALTER TABLE ai_tool_audit VALIDATE CONSTRAINT ai_tool_audit_result_status_check;
+```
+
+| Option | Verdict | Rationale |
+|--------|---------|-----------|
+| **A — DROP + ADD CHECK migration** | **Accept (recommended)** | Matches existing TEXT+CHECK pattern ([R-0030](research.md#r-0030--ai-tool-audit-log-persistence-migration-006)); `NOT VALID` + `VALIDATE` safe on small audit table; preserves audit fidelity per [R-0074](research.md#r-0074--us-0015-ai-forecast-bucket-mapping-rulellm-cascade-privacy) AC-6 |
+| **B — Map statuses to `ok`/`error` in Rust** | **Reject** | Loses operator-visible distinction between `low_confidence` vs `provider_unavailable`; violates AZ acceptance |
+| **C — Native PostgreSQL ENUM** | **Reject** | Adding values requires type rebuild; CHECK is project convention |
+| **D — Separate `forecast_bucket_audit` table** | **Reject** | Over-engineering; duplicates retention/query surface |
+
+**Risks:** Constraint name drift if DB auto-names differ — verify with `\d ai_tool_audit` on operator mirror before migration; concurrent deploy must run migration before code that inserts new values (standard SQLx ordering).
+
+### 3. FK retention delete order (BA)
+
+**Current `enforce_retention()`** (`repository.rs`):
+
+```rust
+for kind in ["baseline", "ml_enhanced"] {
+    // DELETE stale success rows per model_kind beyond retention_count
+}
+```
+
+**Failure mode:** Loop processes **baseline before ml_enhanced**. Deleting a stale baseline `id` violates FK when any `ml_enhanced` row has `paired_baseline_id = id` (migration `009_forecast_ml.sql` — `REFERENCES forecast_computations(id)` with default `NO ACTION`, no `ON DELETE`).
+
+| Option | Verdict | Rationale |
+|--------|---------|-----------|
+| **A — `ON DELETE CASCADE` on `paired_baseline_id`** | **Accept (recommended)** | ML computation is derivative of baseline per [R-0050](research.md#r-0050--sync-mutex-ml-phase-integration-and-history-gates); CASCADE auto-prunes paired ML when baseline pruned; robust against future delete paths |
+| **B — Application pre-delete children** | **Accept (minimal-diff alternative)** | Before baseline DELETE: `DELETE FROM forecast_computations WHERE paired_baseline_id = ANY($stale_ids)`; no schema migration; must cover all delete entry points |
+| **C — Reorder loop to ml_enhanced first only** | **Reject alone** | Insufficient — non-stale ML row can still reference stale baseline beyond retention window |
+| **D — `ON DELETE SET NULL`** | **Reject** | Orphan ML rows with null baseline break compare API and meta pairing |
+
+**Recommended combo for architecture:** migration **A** (CASCADE) **plus** retain kind-ordered retention (ml_enhanced prune then baseline) as defense in depth.
+
+**Alternative migration sketch:**
+
+```sql
+ALTER TABLE forecast_computations
+  DROP CONSTRAINT forecast_computations_paired_baseline_id_fkey,
+  ADD CONSTRAINT forecast_computations_paired_baseline_id_fkey
+    FOREIGN KEY (paired_baseline_id) REFERENCES forecast_computations(id)
+    ON DELETE CASCADE NOT VALID;
+ALTER TABLE forecast_computations VALIDATE CONSTRAINT forecast_computations_paired_baseline_id_fkey;
+```
+
+**Risks:** CASCADE deletes ML rows synchronously on baseline prune — acceptable (ML recomputable from next sync); test retention with paired rows in integration test.
+
+### 4. ML `insufficient_history` gate (BB — verify after AY–BA)
+
+Per [R-0050](research.md#r-0050--sync-mutex-ml-phase-integration-and-history-gates) and `forecast_ml/service.rs`:
+
+- Gate runs **before** ML row insert: `max(per-account monthly net-cashflow point count) < min_monthly_points` (default **12** in `default.toml`).
+- Monthly points = `COUNT(DISTINCT date_trunc('month', date))` from `transactions` per account (`fetch_historical_monthly_net_cashflow`), **not** raw transaction count.
+- **922 transactions ≠ 12 months** — operator may have dense recent data spanning &lt;12 calendar months.
+
+**Post-fix verification probe (mandatory for BB):**
+
+```sql
+SELECT account_id,
+       COUNT(DISTINCT date_trunc('month', date)) AS month_buckets
+FROM transactions
+WHERE date IS NOT NULL
+GROUP BY account_id
+ORDER BY month_buckets;
+```
+
+| Outcome | Interpretation | Action |
+|---------|----------------|--------|
+| All asset accounts `month_buckets >= 12` | Gate should pass after BA fix | If still `insufficient_history`, investigate sidecar `InsufficientHistory` path or `FORECAST_ML_ENABLED` |
+| Any account `month_buckets < 12` | Legitimate skip | BB satisfied with honest `ml_skipped_reason`; do **not** lower threshold to mask defect |
+| Baseline recompute still failing | Stale `baseline_id` for ML phase | Fix BA first — BB blocked |
+
+**Risks:** Lowering `min_monthly_points` to pass BB — **reject** (masks true sparse history); conflating transaction count with month buckets in operator docs.
+
+### 5. Plan stale downstream (BC)
+
+`refresh_active_after_forecast` runs only inside successful `forecast.recompute` path (`service.rs`). When BA causes recompute `Err`, plan computation timestamp stays older than latest successful forecast → `is_plan_stale` returns true.
+
+**Research verdict:** BC resolves when **BA** fixed and full sync produces fresh baseline + plan hook runs. No separate plan-engine defect expected.
+
+**Optional architecture gate (defer):** Should sync phase fail when recompute errors? Discovery defers — current R-0050 semantics (sync success + stale serve) preserved unless product overrides.
+
+### 6. ForecastPage loading contract (BD)
+
+**Root cause:** `ForecastPage.tsx` line 146–147:
+
+```tsx
+const hasForecast = !!metaQuery.data?.computation_id;
+const emptyState = !hasForecast;
+```
+
+While `metaQuery` is `pending`, `data` is `undefined` → `emptyState === true` → false empty card.
+
+**Recommended contract (TanStack Query v5):**
+
+```tsx
+const showLoading = metaQuery.isPending;
+const showEmpty =
+  metaQuery.isFetched && !metaQuery.isError && !metaQuery.data?.computation_id;
+```
+
+| Option | Verdict | Rationale |
+|--------|---------|-----------|
+| **A — Gate empty on `isFetched`** | **Accept (recommended)** | Minimal diff; matches TanStack guidance — empty only after fetch settles |
+| **B — `placeholderData` from cache** | **Defer** | Overkill for first-mount flash; no cross-page meta cache today |
+| **C — `initialData` from SSR** | **Reject** | No SSR in this SPA |
+
+Show skeleton/loading card when `showLoading`; preserve existing content when `computation_id` present.
+
+**Risks:** Error state must not show empty — include `!metaQuery.isError` in empty guard; accounts query pending is orthogonal (select disabled already).
+
+### 7. Architecture decision gates (for `/architecture`)
+
+| # | Gate | Research resolution | Formalize |
+|---|------|---------------------|-----------|
+| 1 | Audit CHECK extension | New migration DROP+ADD both constraints per §2 | **DEC candidate** |
+| 2 | FK retention policy | `ON DELETE CASCADE` on `paired_baseline_id` per §3 | **DEC candidate** |
+| 3 | Retention loop order | ml_enhanced prune before baseline (defense in depth) | Note in architecture |
+| 4 | BB verification | SQL month-bucket probe post-deploy; no threshold change | QA operator gate |
+| 5 | BC plan stale | Downstream of BA; re-smoke Planning Compare | Verify-work only |
+| 6 | BD loading UX | `isFetched` empty guard per §6 | Code contract in architecture |
+| 7 | Sync fail-on-recompute | Defer — keep R-0050 warn-and-serve | Product decision gate (default defer) |
+| 8 | Sprint shape | Backend migration + repository + ForecastPage; ≤6 tasks → `/quick` | Sprint-plan |
+
+### 8. Operator smoke matrix (post-fix)
+
+1. `POST /api/v1/sync/trigger` — logs free of audit CHECK WARN and FK WARN
+2. `GET /api/v1/forecast/meta` — fresh `computation_id`, `stale=false`
+3. `SELECT tool_name, result_status FROM ai_tool_audit WHERE tool_name = 'forecast_bucket_assignment' LIMIT 5` — rows present
+4. ML: `ml_computation_id` set OR honest `ml_skipped_reason` after month-bucket probe
+5. Planning Compare — no **Plan stale** after successful recompute
+6. Forecast nav from Home — no false empty when meta has `computation_id`
+
+### 9. Risks summary
+
+| Risk | Mitigation |
+|------|------------|
+| Migration constraint names differ | Verify `\d ai_tool_audit` on operator DB before ship |
+| CASCADE over-deletes ML history | Acceptable — ML recomputable; document in architecture |
+| BB false positive after fix | Month-bucket SQL probe; do not lower `min_monthly_points` |
+| Masking true sparse history | Keep gate; accurate skip copy in UI |
+| BD error shows empty | Guard with `!isError` |
+| Deploy ordering | Migration before backend image with unchanged insert paths |
+
+**Linked:** BUG-0017, US-0015, UI-002, UI-006, UI-009, UI-010, R-0030, R-0050, R-0074, DEC-0010, DEC-0023, DEC-0078  
+**Confidence:** high (code audit + PostgreSQL/TanStack Query patterns); medium on BB outcome until post-fix operator probe  
+**Status:** current
+
+---
+
+## R-0088 — BUG-0018 `evaluate_scarcity` ambiguous balance & alert eval pipeline abort
+
+**Date:** 2026-06-10  
+**Topic:** BUG-0018 — Post-sync alert evaluation PostgreSQL **42702** (`column reference "balance" is ambiguous`); downstream empty wealth alerts inbox; CI/test gap  
+**Query:** Minimal SQL fix vs alias refactor; sibling evaluator audit; preserve R-0022 scarcity semantics and R-0024 warn-only sync failure; BF acceptance scope (wealth vs subscription); mandatory integration test path  
+**Sources:**
+- [PostgreSQL joins tutorial — qualify columns in joins](https://www.postgresql.org/docs/18/tutorial-join.html) — duplicate column names require table qualification
+- [PostgreSQL 42702 diagnosis](https://philipmcclarence.com/how-to-diagnose-and-fix-the-42702-ambiguous_column-error-code-in-postgres/) — qualify with alias in SELECT, WHERE, GROUP BY
+- [sqlx offline mode / `cargo sqlx prepare --check`](https://github.com/launchbadge/sqlx/blob/main/sqlx-cli/README.md) — compile-time macro validation (project uses runtime `query_as` strings today)
+- Prior: [R-0022](research.md#r-0022--alert-engine-evaluation-rules-scarcity-budget-drift-plan-viability) (scarcity household aggregate rule), [R-0024](research.md#r-0024--post-sync-alert-engine-pipeline--net-worth-snapshot-hook) (post-sync pipeline + failure semantics), [R-0068](research.md#r-0068--bug-0008-subscription-alert-dedup-unread-count-contract-orphan-lifecycle) (subscription alert boundary)
+- Code: `backend/src/alerts/evaluate.rs`, `backend/src/alerts/service.rs`, `backend/src/sync/mod.rs`, `backend/migrations/001_initial.sql`, `backend/migrations/002_forecast_hypertables.sql`, `backend/tests/wealth_alerts_integration.rs`, `tests/run-tests.sh`
+- Discovery: `handoffs/archive/po-to-tl-pack-20260609-j.md`, `handoffs/intake_evidence/intake-20260609-alert-evaluation.json`, ui-audit **UI-003**
+
+**Findings:**
+
+### 1. Root-cause chain (confirmed)
+
+Post-sync alerts phase per [R-0024](research.md#r-0024--post-sync-alert-engine-pipeline--net-worth-snapshot-hook):
+
+```text
+forecast success → phase "alerts" → wealth snapshot upsert → AlertService::run_post_sync
+  → evaluate_scarcity (FIRST) → evaluate_budget_drift → evaluate_plan_viability → upsert/resolve
+```
+
+| AC | Defect | Mechanism | Symptom |
+|----|--------|-----------|---------|
+| **BE** | Unqualified `balance` in JOIN | `evaluate_scarcity` L23–30: `FROM forecast_balance_daily fbd JOIN accounts a …` + `SUM(balance::float8)` — both tables define `balance` (`002_forecast_hypertables.sql` L26, `001_initial.sql` L28) | PostgreSQL **42702** at runtime; log `alert evaluation failed` |
+| **BF** | First-evaluator abort | `service.rs` L72 `evaluate_scarcity(...).await?` propagates error; entire wealth pass skipped; [R-0024](research.md#r-0024--post-sync-alert-engine-pipeline--net-worth-snapshot-hook) warn-only preserves sync **success** | `GET /api/v1/alerts?status=active` → `[]`; header bell "No active alerts" despite account **114** overdrawn (−3395.75 EUR) |
+
+Intake live probe: sync run `9ee95e6b-c6bd-4f4e-9b8c-4c068bf718cf`, ui-audit **UI-003**.
+
+### 2. Scarcity SQL fix options (BE)
+
+**Defective query** (`evaluate.rs` L21–32):
+
+```sql
+SELECT ts::date AS day, SUM(balance::float8) AS balance
+FROM forecast_balance_daily fbd
+JOIN accounts a ON a.firefly_id = fbd.account_id
+WHERE fbd.computation_id = $1
+  AND a.type = 'asset'
+  AND COALESCE((a.payload->>'include_net_worth')::boolean, true) = true
+  ...
+GROUP BY ts::date
+```
+
+**Semantic requirement ([R-0022](research.md#r-0022--alert-engine-evaluation-rules-scarcity-budget-drift-plan-viability)):** household aggregate = sum of **projected** `forecast_balance_daily.balance` per day across included asset accounts. The JOIN filters which accounts contribute; aggregation must read **`fbd.balance` only**.
+
+| Option | Verdict | Rationale |
+|--------|---------|-----------|
+| **A — Qualify `fbd.balance` (and `fbd.ts`)** | **Accept (recommended)** | One-line fix: `SUM(fbd.balance::float8)`, `fbd.ts::date`, `GROUP BY fbd.ts::date`; preserves R-0022 semantics; minimal diff; satisfies intake constraint "qualify JOIN columns only" |
+| **B — Broader alias refactor across `evaluate.rs`** | **Defer** | Sibling queries already unambiguous; no other JOIN+`balance` pattern in alerts module |
+| **C — Subquery filter instead of JOIN** | **Reject** | `account_id IN (SELECT firefly_id FROM accounts WHERE …)` — equivalent semantics, larger diff, harder to read |
+| **D — Aggregate `accounts.balance`** | **Reject** | Wrong semantics — Ist mirror balance, not projected path; would break scarcity horizon logic |
+
+**Sibling evaluator audit:**
+
+| Function | JOIN with `balance` column? | Verdict |
+|----------|----------------------------|---------|
+| `evaluate_scarcity` | Yes (`fbd` + `accounts`) | **Fix required** |
+| `evaluate_budget_drift` | No (`transactions` only) | OK |
+| `evaluate_plan_viability` | No (`plan_daily_cashflow.planned_balance AS bal`) | OK |
+| `current_balance` scalar | No (`accounts` single-table) | OK |
+
+**Risks:** mistyping alias (`a.balance` vs `fbd.balance`) would change aggregation semantics — code review + integration test must assert projected-path sum.
+
+### 3. CI / test gap (why defect shipped)
+
+| Layer | Current state | Catches BUG-0018? |
+|-------|---------------|-------------------|
+| `cargo test --lib` | Unit tests mock logic only (`scarcity_severity_critical_when_current_below`) | **No** — no SQL execution |
+| `wealth_alerts_integration` | Seeds fixture + `run_post_sync`; **would fail** on ambiguous SQL | **Yes** — but gated |
+| `tests/run-tests.sh` | Runs `wealth_alerts_integration` only when `DATABASE_URL` set; CI/sandbox skips with log line | **No** in default CI |
+| `sqlx::query!` + `.sqlx/` offline | Not used for alert evaluators (runtime `query_as` strings); no `.sqlx/` in repo | **No** — macros not applicable without migration |
+
+**Recommendations for architecture:**
+
+| # | Recommendation | Verdict |
+|---|----------------|---------|
+| 1 | **Mandatory operator gate:** run `DATABASE_URL=… cargo test --test wealth_alerts_integration` post-deploy (already in runbook L3520) | **Accept** — extend to sprint V1 task |
+| 2 | **CI service container:** provision TimescaleDB + `DATABASE_URL` in CI for `wealth_alerts_integration` | **Accept (stretch)** — matches forecast/subscriptions pattern; closes gap permanently |
+| 3 | **`cargo sqlx prepare --check`** | **Reject for this bug** — project uses runtime strings; ambiguous columns are runtime errors unless query analyzed against live schema during prepare — integration test is simpler |
+| 4 | **Static grep rule** for unqualified `balance` in JOIN blocks | **Defer** — brittle; integration test sufficient |
+
+Existing test `wealth_snapshot_and_scarcity_alert_on_post_sync` exercises exact JOIN path — fix validation = test passes with DB present.
+
+### 4. R-0024 failure semantics (preserve)
+
+Per [R-0024](research.md#r-0024--post-sync-alert-engine-pipeline--net-worth-snapshot-hook) § failure semantics and `sync/mod.rs` L413–414:
+
+- Alert eval failure → **`warn!`**, sync run remains **`success`** if ingest+forecast succeeded.
+- Last alert state preserved (no mass resolve on error).
+
+**Research verdict:** **Do not change** sync status or error propagation for BUG-0018 fix. Optional future UX (surface eval failure in Sync Status UI) is out of scope — defer unless operator requests.
+
+**Downstream note:** budget_drift and plan_viability evaluators never run while scarcity SQL fails — fixing BE may surface additional alerts post-sync (expected, not regression).
+
+### 5. BF acceptance scope
+
+Acceptance row **BF** mentions header Alerts panel **and** `GET /api/v1/subscriptions/alerts`. Discovery confirms subscription alerts use **separate** sync phase + table ([R-0068](research.md#r-0068--bug-0008-subscription-alert-dedup-unread-count-contract-orphan-lifecycle)) — not blocked by wealth eval SQL error.
+
+| Proof target | Scope for BUG-0018 | Gate |
+|--------------|-------------------|------|
+| **BF primary** | Wealth inbox: `GET /api/v1/alerts?status=active` returns scarcity row when account **114** overdrawn; header bell non-empty preview | **Mandatory** post **BE** + **FULL_FIREFLY_SYNC** |
+| **Subscription regression** | `GET /api/v1/subscriptions/alerts` dedup per BUG-0008 / DEC-0071 | **Operator gate** — confirm no regression; not primary fix validation |
+| **Frontend change** | Error/loading state when eval fails | **Defer** — BF resolves when BE fixed; no UI work unless eval failure visibility requested |
+
+### 6. Architecture decision gates (for `/architecture`)
+
+| # | Gate | Research resolution | Formalize |
+|---|------|---------------------|-----------|
+| 1 | SQL fix shape | Option **A** — `fbd.balance` + `fbd.ts` qualification | Code contract |
+| 2 | Scarcity semantics | Must remain projected-path household sum per R-0022 | Regression via integration test |
+| 3 | Sync failure semantics | Preserve R-0024 warn-only | **No DEC** — document only |
+| 4 | BF proof split | Wealth alerts primary; subscription dedup regression gate | QA / UAT matrix |
+| 5 | CI gap | Mandate `wealth_alerts_integration` in V1; optional CI DB container | Sprint task + runbook |
+| 6 | Sprint shape | Single-file backend fix + integration proof → **`/quick`** (≤3 tasks) | Sprint-plan |
+
+### 7. Operator smoke matrix (post-fix)
+
+1. **BACKEND_FRONTEND_DEPLOY** — ship alert SQL fix on localhost:18080 / omniflow
+2. **FULL_FIREFLY_SYNC** — `POST /api/v1/sync/trigger`; logs free of `alert evaluation failed` / 42702
+3. **BE proof** — sync completes alerts phase without SQL error
+4. **BF proof** — `GET /api/v1/alerts?status=active` returns rows when household scarcity rule matches (account **114** overdrawn fixture)
+5. **Header bell** — non-empty active preview (not permanent "No active alerts" from eval skip)
+6. **Subscription regression** — `GET /api/v1/subscriptions/alerts` still dedupes per BUG-0008
+7. **Integration** — `DATABASE_URL=… cargo test --test wealth_alerts_integration` PASS
+
+### 8. Risks summary
+
+| Risk | Mitigation |
+|------|------------|
+| Wrong column qualified (`a.balance`) | Code review + integration test asserts projected aggregation |
+| CI still skips integration test | V1 operator gate + optional CI DB service |
+| New alerts appear after fix (budget/plan evaluators run) | Expected behavior — not regression |
+| Changing sync to fail on alert error | **Reject** — violates R-0024 unless product overrides |
+| BUG-0008 subscription dedup broken by fix | Out of scope — separate code path; regression gate only |
+
+**Linked:** BUG-0018, US-0005, UI-003, R-0022, R-0024, R-0068, DEC-0010, DEC-0071  
+**Confidence:** high (code audit + PostgreSQL 42702 references); medium on operator scarcity row content until post-fix sync smoke  
+**Status:** current
+
+---
+
+## R-0089 — BUG-0019 Grafana cashflow zeros ($account_id default) & sync entity counts (per-run cursor)
+
+**Date:** 2026-06-10  
+**Topic:** BUG-0019 — Analytics → Cashflow balance panels flat **0** vs non-zero API forecast (sub-defect **CA** / acceptance **BG**); Platform Health "Records synced per entity" shows `transactions: 0` vs 922 mirror rows (sub-defect **CB** / acceptance **BH**)  
+**Query:** Which computation/account do cashflow panels resolve at runtime; `$account_id` default chain in kiosk embed; `forecast_balance_daily` data vs query problem; retention race; `records_synced` per-run vs cumulative semantics; fix directions for architecture  
+**Sources:**
+- Code: `grafana/provisioning/dashboards/analytics/cashflow.json`, `grafana/provisioning/dashboards/analytics/forecast-horizons.json`, `grafana/provisioning/dashboards/platform-health.json`, `frontend/src/pages/AnalyticsEmbedPage.tsx`, `backend/src/firefly/mod.rs` (`sync_transactions`, `last_watermark`), `backend/src/db/mod.rs` (`upsert_cursor`), `backend/src/forecast/repository.rs` (`insert_computation`, `mark_success`, `enforce_retention`, `latest_successful_by_kind`), `backend/src/forecast/service.rs` (`recompute`, `run_projection`)
+- Runtime probes (read-only, `docker exec postgres psql -U flow -d flow_finance_ai`, 2026-06-10T20:22Z): `sync_cursors`, `transactions` counts/dates, `forecast_computations` status×model_kind, `forecast_balance_daily` / `forecast_cashflow_monthly` for latest success, `$account_id` template SQL
+- Prior: [R-0088](research.md#r-0088--bug-0018-evaluate_scarcity-ambiguous-balance--alert-eval-pipeline-abort) / DEC-0107 (BUG-0018 — separate read path, fixed), [R-0051](research.md#r-0051--grafana-dashboard-5-ml-extensions-and-forecast_variant) (`$forecast_variant` pattern), [R-0064](research.md#r-0064--bug-0009-grafana-panel-emptiness-vs-cross-account-overview-gap)
+- Discovery: `handoffs/po_to_tl.md` (discovery-20260610-bug0019), `handoffs/intake_evidence/intake-20260609-grafana-metrics.json`
+
+**Findings:**
+
+### 1. CA root cause (confirmed): `$account_id` defaults to an unfunded account, not 114 — query/selection problem, not data problem
+
+Runtime probe of the latest `status='success'` computation (`6130c6ff…`, `baseline`, 2026-06-10T18:46Z):
+
+| account_id | rows | min_bal | max_bal |
+|------------|------|---------|---------|
+| **114** | 731 | −140857.63 | **−3395.75** (all non-zero) |
+| 115 | 731 | 0.00 | 0.00 |
+| 116 | 731 | 0.00 | 0.00 |
+
+`forecast_balance_daily` rows for 114 are genuinely **non-zero** (negative, consistent with the documented −3395.75 starting balance) and span 2026-06-10 → 2028-06-09, inside the dashboard window `now-30d → now+6M`. Answer to open Q4: **query/selection problem** — the data is there.
+
+Default-account chain:
+1. Template SQL orders `ABS(COALESCE(a.balance,0)) DESC` → 114 (Raiffeisenbank Giro, −3395.75) first.
+2. **But** the variable has `"sort": 1` (Grafana "Alphabetical asc"), which **re-sorts options by display text after the query**, overriding SQL order → option order becomes **Cash wallet (116)**, Raiffeisenbank Giro (114), Raiffeisenbank savings (115).
+3. Dashboard JSON has **no `current`** for `account_id`; the kiosk embed (`AnalyticsEmbedPage.tsx`) passes only `?kiosk=tv`, **no `var-account_id`** → Grafana selects the **first option = 116 (Cash wallet)**, whose balances are all 0.
+
+This explains every symptom shard: balance chart flat 0 + daily table zeros (account 116 series is all-zero), while monthly decomposition shows income 3266.16 from Jul — probe shows `forecast_cashflow_monthly` carries the **identical household income series for every account** (114/115/116 all min 0 / max 3266.16), so the monthly table looks "half-populated" for an unfunded account. The same `account_id` + `sort: 1` template (no `current`) exists in `forecast-horizons.json` — same latent defect.
+
+Open Q2 (computation resolution): panels resolve latest success **without `model_kind` filter**. Currently harmless — probe shows 43 × `baseline/success` and 43 × `ml_enhanced/running` (zero ml successes locally), so latest success is always baseline, same as the API default (`latest_successful_by_kind("baseline")`). Latent divergence: the day an `ml_enhanced` computation succeeds, panels silently switch to it while `/api/v1/forecast/monthly` stays baseline.
+
+Open Q5 (retention race): **no race.** `run_projection` bulk-inserts daily/monthly rows while the computation is still `'running'`; `mark_success` flips status only after all rows exist; `enforce_retention` deletes only successes **beyond** the keep count (OFFSET), never the latest. Panels can never observe a success with missing rows.
+
+Adjacent observation (out of BUG-0019 scope, flag to PO): 43 `ml_enhanced` computations are stuck in `status='running'` forever on the local profile (never marked failed/success) — they accumulate because retention only prunes successes. Not panel-visible (panels filter `success`), but worth a backlog note.
+
+### 2. CB root cause (confirmed): per-run overwrite + date-based incremental window
+
+Runtime probe: `sync_cursors` → `transactions | 0 | 2026-06-10 18:45:52` while `COUNT(*) FROM transactions` = **922**; newest mirror transaction date = **2026-05-22**, 0 transactions dated in the last 7 days.
+
+Mechanism: `sync_transactions` computes `start = last_successful_sync_at − overlap_days` and queries Firefly `/api/v1/transactions?start=…` (filters by **transaction date**). With no transactions dated inside the recent window, `items.len() == 0`, and `upsert_cursor` **overwrites** `records_synced = 0`. The panel (`platform-health.json` panel 2) reads the column verbatim under the title "Records synced per entity" — a cumulative-sounding label fed by a per-run value. Every scheduler tick re-asserts 0. Answer to open Q1 framing: the column semantics are *correct for what they are* (per-run window count, also used as watermark bookkeeping); the **panel semantics are wrong**.
+
+### 3. Fix directions — CA (for `/architecture`)
+
+| Option | Change | Pros | Cons |
+|--------|--------|------|------|
+| **A (recommended): fix variable default in dashboard JSON** | `cashflow.json` (+ `forecast-horizons.json`): set `"sort": 0` so the SQL `ABS(balance) DESC` order holds → funded account first; optionally add explicit `current` like `$forecast_variant` does | Pure provisioning change, no backend/frontend code; generic ("most funded account") — no hardcoded 114; fixes both dashboards | Default re-derived per load; if all balances are 0 (fresh install) default is arbitrary (acceptable) |
+| B: forward `var-account_id` from the app embed | `AnalyticsEmbedPage.tsx` appends `&var-account_id=<id>`; needs the frontend to pick/know an account (extra API call or user picker) | Explicit, deterministic per user selection | New frontend↔Grafana coupling; must decide source of the id; kiosk URL grows; doesn't fix dashboards opened directly in Grafana |
+| C: make panels household-level (SUM across accounts) | Rewrite panel SQL to aggregate all asset accounts | No account variable at all | Changes panel meaning (BG is per funded account); larger SQL surface; diverges from API per-account contract |
+
+**Recommendation: A**, plus a one-line hardening from the same audit: qualify the latest-success subquery with `AND model_kind = 'baseline'` (or wire a `$forecast_variant` variable per R-0051) so panels and API stay on the same computation kind once ML succeeds. Option B can be layered later if a per-account picker becomes a product need.
+
+### 4. Fix directions — CB (for `/architecture`)
+
+| Option | Change | Pros | Cons |
+|--------|--------|------|------|
+| **A (recommended): panel queries mirror tables directly** | `platform-health.json` panel 2 SQL → per-entity `COUNT(*)` over mirror tables (UNION ALL: transactions, accounts, categories, budgets, tags, piggy_banks) joined with `sync_cursors.last_successful_sync_at`; optionally keep `records_synced` as an extra "last run" column | Matches the panel title and BH literally (`COUNT(*) FROM transactions` = 922); zero backend change; cursor semantics (watermark + per-run count) untouched | Slightly longer SQL; COUNT(*) per refresh (trivial at this scale, 30s refresh) |
+| B: make `records_synced` cumulative in `upsert_cursor` | `records_synced = sync_cursors.records_synced + EXCLUDED…` | Panel unchanged | **Wrong by construction**: overlap-days window re-fetches existing rows → systematic overcount; full-table entities (accounts/categories) would also inflate per run; drifts from mirror truth; migration/reset semantics needed |
+| C: both per-run and total columns via backend | Add `total_records` maintained from `COUNT(*)` post-sync | Single source for panel | Duplicates what SQL can compute live; backend change + migration for a display concern |
+
+**Recommendation: A.** B is rejected (overlap re-fetch makes cumulative arithmetic unsound). If per-run visibility is wanted, render `records_synced` as a clearly-labeled "records last run" column alongside the mirror total.
+
+### 5. Regression gates (open Q6)
+
+| Gate | Proof |
+|------|-------|
+| **BG** | After provisioning fix + Grafana restart: Cashflow panel 1/2 non-zero (negative) series for default account = 114; compare `GET /api/v1/forecast/monthly?account_id=114` (25 points, non-zero from Jul 2026). DB oracle: the R-0089 probe SQL (latest-success rows for 114 non-zero) |
+| **BH** | Platform Health panel 2 `transactions` row = `SELECT COUNT(*) FROM transactions` (922) after Full sync; survives a subsequent incremental run with 0 new transactions (the regression that produced CB) |
+| Provisioning | `docker compose restart grafana` re-provisions JSON; verify via embed (kiosk) **and** direct Grafana to cover the no-`var-account_id` path |
+| OIDC deploy | Re-run BG/BH checks on omniflow profile per backlog row; no backend code change expected for either fix (provisioning-only blast radius) |
+| Suggested test | Lightweight JSON assertion (CI or review checklist): cashflow/forecast-horizons `account_id` variable has `sort: 0`; platform-health panel 2 SQL references mirror tables — guards against template regressions |
+
+### 6. Risks summary
+
+| Risk | Mitigation |
+|------|------------|
+| Grafana caches old dashboard version after provisioning change | Restart/redeploy Grafana; bump dashboard `version` |
+| `sort: 0` default still wrong if balances unsynced (all 0) | Acceptable — arbitrary default on empty install; document in runbook |
+| Adding `model_kind='baseline'` to panels freezes them off ML | Pair with `$forecast_variant` variable (R-0051 pattern) or accept baseline-only panels until ML panels are a story |
+| Mirror COUNT(*) diverges from "synced" notion (deleted-in-Firefly rows linger) | Panel measures mirror truth, which is what BH specifies; deletion reconciliation is a separate concern |
+| `ml_enhanced` stuck-`running` rows accumulate unbounded | Out of scope — recommend new backlog bug note |
+
+**Linked:** BUG-0019, BG, BH, UI-004, UI-005, R-0051, R-0064, R-0088, DEC-0107, DEC-0108  
+**Confidence:** high — both root causes confirmed by live DB probes + code audit; Grafana `sort:1` default behavior verified against option ordering semantics (static)  
+**Status:** fulfilled (BUG-0019/Q0027/DEC-0108 released 2026-06-10)
+
+---
+
+## R-0090 — BUG-0020 subscriptions list duplicates & uncategorized display category
+
+**Date:** 2026-06-11  
+**Work item:** BUG-0020 (acceptance **BI**, **BJ**; sub-defects **DA**, **DB**)  
+**Phase:** research (tech-lead)  
+**Orchestrator:** `auto-20260610-bug0019`  
+**Probe environment:** read-only `docker exec postgres psql -U flow -d flow_finance_ai` (2026-06-11T07:54Z); `GET http://localhost:18080/api/v1/subscriptions` (200); code audit `backend/src/subscriptions/`, `frontend/src/pages/SubscriptionsPage.tsx`, migrations 003/014; no `.env` / secrets read.
+
+**Findings:**
+
+### 1. DA live state (open Q1, Q8) — pre-fix data debt + All-tab status mix; not active detection regression
+
+Runtime probe (`subscription_patterns`, 24 rows total):
+
+| Cluster | Rows | Statuses | Distinct `payee_key` | `interval_days` | Root note |
+|---------|------|----------|----------------------|-----------------|-----------|
+| **Strom** (display_name identical) | **3** | rejected + pending ×2 | **3** (`220003055316 strom…`, `strom… birago…`, `strom…` short) | all 31 | SEPA/card normalization drift (DEC-0072/0084); **no confirmed** Strom row — triplicate is **All-tab noise** (rejected + duplicate pending), not confirmed dup |
+| **YouTube** (display_name identical) | **2** | confirmed ×2 | **2** (`kauf irl ireland google`, `kauf irl ireland google*youtubegoogle*youtube`) | both 30 | Stale payee_key retained on older row (pre-card-rule `*` strip); second confirmed 2026-06-07 when DEC-0085 merge key mismatch prevented merge |
+| Exact `payee_key` dup groups (any status) | 1 | both **rejected** | `betriebskosten biragog. 18/1` | 31 | Not operator-visible confirmed dup |
+
+`GET /api/v1/subscriptions?status=confirmed` (7 rows): **zero** exact `payee_key` duplicates; **two** logical dup (YouTube same display_name/amount/interval).
+
+`list_patterns` SQL (`repository.rs` L747–783): `SELECT … FROM subscription_patterns` — **no dedup**, no default status filter. Frontend **All** tab omits `status` (`SubscriptionsPage.tsx` L107–116); `displayPatterns = patterns` (L299–300) — **no client dedup**; row key `p.id`.
+
+BUG-0015 (DEC-0085/0086): `merge_confirmed_pattern` + payee-interval map prevents **new** pending for matching `(payee_key, interval_days ±3d)`; **does not** reconcile historical confirmed rows with divergent `payee_key` strings or collapse rejected+pending siblings. Fingerprint UNIQUE conflict → fail-safe pending path (architecture-noted deferred cleanup).
+
+### 2. DB live state (open Q4–Q6) — link coverage complete; `display_category_id` never populated
+
+| Metric | Value |
+|--------|-------|
+| `display_category_id` non-null | **0 / 24** (confirmed 0/7, pending 0/11, rejected 0/4, inactive 0/2) |
+| Patterns with `subscription_pattern_transactions` links | **24 / 24** |
+| Linked txs with `category_id IS NOT NULL` | **100%** of links (0 uncategorized linked txs) |
+| Migration 014 applied | **2026-06-09T19:45:49Z** |
+| Latest `confirmed_at` | **2026-06-07** (all confirms **before** migration 014) |
+
+Simulated DEC-0100 majority (`compute_display_category_id` SQL) for **confirmed** patterns:
+
+| `payee_key` | Expected `display_category_id` | Category name |
+|-------------|-------------------------------|---------------|
+| netflix | 18 | Hobby & Freizeit - Streaming |
+| kindle unltd | 18 | Hobby & Freizeit - Streaming |
+| kauf irl ireland google*… / google | 66 | Reisen & Urlaub - Sonstiges |
+| hgp unfall / hgp haushalt | 56 | Sonstiges - Versicherung Sonstiges |
+| mitgliedsbeitrag - florian gabriel | 3 | Wohnen - Dienstleistungen |
+
+Strom pending/rejected linked txs: majority cat **17** (Wohnen - Versorgungsunternehmen), 3× **146** (Wohnen - Stromkosten) — backfill would yield **17** per DEC-0100 RANK.
+
+`refresh_display_category_id` wired on `confirm_pattern`, `confirm_from_discover`, `merge_confirmed_pattern` only (DEC-0100 §3) — **not** on list/sync. Confirms predating migration 014 left column NULL with no retroactive pass.
+
+### 3. Open questions — answers
+
+| # | Question | Answer |
+|---|----------|--------|
+| 1 | DA live state | Strom 3× = status mix + 3 payee_key variants (not confirmed dup). YouTube 2× confirmed = stale vs current normalization keys. Pre-fix debt; detection not re-creating confirmed dup on current probe. |
+| 2 | DA fix axis | See §4 — recommend **one-time DB reconcile** + **list contract tightening**; API-only collapse insufficient alone for forecast/alert `pattern_id` stability without cleanup. |
+| 3 | All-tab contract | Today = all statuses. BI text mixes "logical confirmed merchant" with `payee_key`. Recommend: BI gate on **`status=confirmed`** dup policy; All tab either default-exclude rejected/inactive or document inclusion — architecture decision. |
+| 4 | DB links | Full link coverage; all linked txs categorized. Null `display_category_id` is **persist/backfill gap**, not missing links or mirror `category_id`. |
+| 5 | DB backfill | **Yes** — batch `refresh_display_category_id` (or equivalent SQL) for all `status='confirmed'` required; optionally pending with links for operator preview. |
+| 6 | Representative samples | netflix/kindle → 18; youtube → 66; hgp → 56; strom (if confirmed later) → 17. |
+| 7 | Regression gates | See §6. |
+| 8 | BUG-0015 | Prevents new pending dup for same payee-interval; **historical** confirmed YouTube + Strom pending variants remain — cleanup task still required. |
+
+### 4. Fix directions — DA (for `/architecture`)
+
+| Option | Change | Pros | Cons |
+|--------|--------|------|------|
+| **A (recommended): one-time reconcile migration/script** | Merge duplicate **confirmed** rows (YouTube → single row, relink txs, mark loser `inactive`); dedupe Strom **pending** → one row / reject extras; normalize stored `payee_key` via `normalize::payee_key` on survivors | Fixes BI at source; stable `pattern_id`; aligns with DEC-0085 intent | Requires careful txn relink + alert FK audit; one-time operator risk |
+| B: API `DISTINCT ON (payee_key)` / collapse for list only | `list_patterns` or response mapper dedupes confirmed by `payee_key`, pick `MAX(last_seen_at)` | Fast; no DB surgery | Orphan rows remain; forecast/alerts still duplicated; masks stale keys |
+| C: UI-only grouping by `display_name` | Frontend collapse | Cosmetic | Fails BI API contract; worst option |
+| D: Stricter detection-only | Block inserts when normalized payee matches | Forward fix | Does not heal existing rows; insufficient alone |
+
+**DA recommendation:** **A** (+ forward guard in detection: reject pending insert when normalized payee_key matches existing confirmed/rejected row with `interval_matches`). Supplement: **All tab** default filter excluding `rejected` (and optionally `inactive`) to reduce Strom-style noise — product call in architecture.
+
+### 5. Fix directions — DB (for `/architecture`)
+
+| Option | Change | Pros | Cons |
+|--------|--------|------|------|
+| **A (recommended): one-time backfill migration** | `UPDATE` via existing `refresh_display_category_id` for all `status='confirmed'` (Rust migration helper or SQL batch mirroring DEC-0100 RANK) | Closes BJ for legacy confirms; uses shipped algorithm | One-time cost; must run after 014 (already applied) |
+| B: recompute on every list | Call refresh in `list_patterns` | Always fresh | Violates DEC-0100 §3 stability; perf churn |
+| C: operator re-confirm each pattern | Manual | No code | Unacceptable operator burden |
+
+**DB recommendation:** **A** — confirmed-only backfill sufficient for BJ; optional extend to pending if product wants category preview on Pending tab.
+
+### 6. Regression gates (open Q7)
+
+| Gate | Proof |
+|------|-------|
+| **BI** | `GET /api/v1/subscriptions?status=confirmed` — at most one row per `payee_key`; `/subscriptions` All (or Confirmed) — no duplicate YouTube/Strom merchant rows |
+| **BJ** | Representative confirmed samples (netflix, kindle, youtube) return non-null `display_category_id` matching DEC-0100 probe SQL |
+| Discover/tags | Existing US-0020 smoke — `GET /api/v1/subscriptions/discover`, tag CRUD unchanged |
+| Detection | Post-fix detection run — no new duplicate confirmed for YouTube payee family |
+| OIDC | Standard omniflow template smoke on list endpoints |
+| Suggested test | Repository integration: insert confirmed pattern with categorized links → backfill → `display_category_id` = mode; list confirmed dup guard |
+
+### 7. Risks summary
+
+| Risk | Mitigation |
+|------|------------|
+| Merge deletes wrong YouTube row | Merge into older confirmed `id` (alert history); relink txs; transaction boundary |
+| DEC-0086 multi-interval policy | Only merge rows with `interval_matches`; do not collapse distinct cadences |
+| Backfill picks unexpected category (youtube→66) | DEC-0100 contract — mode of linked txs; document in UAT |
+| All-tab scope change surprises operator | Document rejected/inactive exclusion in release notes |
+| `payee_key` normalization changes fingerprint | Run merge before fingerprint rotation; use PK update path per DEC-0086 |
+
+**Linked:** BUG-0020, BI, BJ, DA, DB, UI-007, UI-008, R-0081, R-0085, DEC-0085, DEC-0086, DEC-0100  
+**Confidence:** high — root causes confirmed by live DB probes + API samples + code audit  
+**Status:** fulfilled (research complete; next `/architecture`)
+
+---
+
+## R-0091 — BUG-0021 CategoryFilter lazy-load delay & Wealth Role column empty
+
+**Date:** 2026-06-11  
+**Work item:** BUG-0021 (acceptance **BK**, **BL**; sub-defects **EA**, **EB**)  
+**Phase:** research (tech-lead)  
+**Orchestrator:** `auto-20260611-bug0021`  
+**Probe environment:** read-only `docker exec postgres psql -U flow -d flow_finance_ai` (2026-06-11T11:00Z); `GET http://localhost:18080/api/v1/wealth` (200); `GET http://localhost:18080/api/v1/categories` (200, 2–5 ms); chunk probe `GET /assets/CategoryFilter-B6dgjo-5.js` (~1.5 KB, ~1 ms); code audit `frontend/src/pages/{ForecastPage,WealthPage}.tsx`, `CategoryFilter.tsx`, `backend/src/wealth/repository.rs`, `backend/src/firefly/mod.rs`; Firefly API docs (account_role under `attributes`, roles `defaultAsset`/`cashWalletAsset`/`savingAsset` per [Firefly Accounts API](https://www.mintlify.com/firefly-iii/firefly-iii/api/accounts), [issue #2953 sample](https://github.com/firefly-iii/firefly-iii/issues/2953)); React.lazy/Suspense semantics per [web.dev code-splitting](https://web.dev/articles/code-splitting-suspense); no `.env` / secrets read.
+
+**Findings:**
+
+### 1. EA timing proof (open Q1) — Suspense tracks `React.lazy` import, not categories API
+
+| Probe | Result |
+|-------|--------|
+| `GET /api/v1/categories` (×3) | **2–5 ms** — not a multi-second bottleneck |
+| `CategoryFilter` lazy chunk (`CategoryFilter-B6dgjo-5.js`) | **1488 B**; direct fetch **~1 ms** (warm) |
+| Chunk dependency | Imports shared runtime from `index-BvEXBvxX.js` (378 KB main split — already loaded with SPA shell) |
+| Suspense fallback text | **"Loading category filter…"** — shown until `import()` resolves, **before** `useQuery`/`fetchCategories` runs |
+| `CategoryTrendChart` (ECharts) | **Separate** lazy boundary; mounts only when `categoryId` set — not the reported fallback |
+| Concurrent lazy on BK surfaces | Forecast Monthly also lazy-loads `MonthlyChart`; Wealth Overview lazy-loads `WealthChart` — main-thread / connection contention possible on tab visit |
+
+**Interpretation:** Operator-reported **3–5 s** Suspense duration is **chunk-bound** (dynamic `import()` round-trip + module evaluation on first tab render), not categories network latency. Direct chunk fetch is fast once parent bundle is warm; perceived delay aligns with React.lazy waterfall on tab switch (per web.dev: Suspense shows until lazy Promise resolves). Vite has no `webpackPrefetch` magic comments — prefetch must be explicit `import()` on route mount or static import.
+
+### 2. EB live payload proof (open Q4) — JSON path mismatch confirmed
+
+| Account | `payload->>'account_role'` (root) | `payload->'attributes'->>'account_role'` | API `account_role` |
+|---------|-----------------------------------|------------------------------------------|-------------------|
+| Cash wallet | NULL | `cashWalletAsset` | `null` |
+| Raiffeisenbank Giro | NULL | `defaultAsset` | `null` |
+| Raiffeisenbank savings account | NULL | `savingAsset` | `null` |
+
+Coverage: **0/3** root non-null · **3/3** attributes non-null (all `type='asset'`).
+
+Sync stores full Firefly API **item** (`firefly/mod.rs` L278–287 `upsert_account(…, item)`); sync logs read `attrs["account_role"]` (L257). Repository SQL (`wealth/repository.rs` L31) uses root `payload->>'account_role'` — **wrong path** vs stored shape. Same root-level pattern for `active` / `include_net_worth` (also under `attributes`) but `COALESCE(…, true)` masks filter gap.
+
+Downstream: latest `net_worth_snapshots.payload.accounts[]` has **null** `account_role` (inherits API assembly); Grafana `portfolio.json` panel SQL uses `elem->>'account_role'` — will stay empty until repository fix + next snapshot upsert.
+
+### 3. Open questions — answers
+
+| # | Question | Answer |
+|---|----------|--------|
+| 1 | EA chunk vs API timing | **Chunk-bound.** API 2–5 ms; Suspense text ≠ API wait. |
+| 2 | EA fix choice | See §4 — recommend **static import** (simplest BK ≤1 s; ~1.5 KB negligible vs intake bundle constraint). |
+| 3 | EA PlanningPage scope | Same lazy pattern L31–32, L854–855 — **out of BK**; recommend shared import policy in architecture for consistency. |
+| 4 | EB live payload | **Confirmed** — roles present under `attributes.account_role` only. |
+| 5 | EB fix axis | See §5 — recommend **SQL path fix** in repository (not sync denormalize). |
+| 6 | EB display contract | Firefly enums are opaque (`defaultAsset`, etc.) — architecture should decide human labels vs raw enum vs hide-when-null after SQL fix. |
+| 7 | EB Grafana | Snapshot panel inherits API row shape — **auto-heals** on next `upsert_daily_snapshot` after repository fix; optional one-time re-sync for immediate operator proof. |
+| 8 | Regression gates | See §7. |
+
+### 4. Fix directions — EA (for `/architecture`)
+
+| Option | Change | Pros | Cons |
+|--------|--------|------|------|
+| **A (recommended): static import** | Replace `React.lazy` with top-level `import { CategoryFilter }` on ForecastPage + WealthPage | Eliminates Suspense fallback entirely; BK ≤1 s; ~1.5 KB added to page chunk | Slight bundle increase (within intake "avoid material regression" — immaterial vs 378 KB+ vendor splits) |
+| B: prefetch on page mount | `useEffect(() => { import("../components/category/CategoryFilter") }, [])` + keep lazy | Preserves code-split boundary | Still brief Suspense on race; more complex than A for tiny component |
+| C: skeleton-only UX | Keep lazy; replace text fallback with inline skeleton | Cosmetic | Does **not** satisfy BK interactive ≤1 s if import still slow |
+| D: Vite `/* @vite prefetch */` / magic comments | Bundler prefetch hint | May help idle prefetch | Vite/Rollup support less reliable than A; not needed at 1.5 KB |
+
+**EA recommendation:** **A** — CategoryFilter is ~96 LOC, no ECharts; lazy split buys nothing meaningful. Apply same policy to PlanningPage for consistency (architecture scope call).
+
+### 5. Fix directions — EB (for `/architecture`)
+
+| Option | Change | Pros | Cons |
+|--------|--------|------|------|
+| **A (recommended): SQL attributes path** | `payload->'attributes'->>'account_role'` in `load_asset_accounts` (+ test SQL constant L133) | Matches sync storage + `plan/repository.rs` nested pattern; no migration; snapshot/Grafana inherit on next upsert | Existing snapshots retain null until next daily snapshot |
+| B: denormalize at sync | Copy `attributes.account_role` to root in `upsert_account` | Root queries work | Duplicates data; diverges from Firefly item shape; unnecessary |
+| C: Rust mapping only | Parse payload in service layer | Keeps SQL unchanged | Duplicates path logic; Grafana SQL still broken |
+| D: hide Role column | Frontend removes column when all null | Quick | Fails BL when metadata exists; workaround not fix |
+
+**EB recommendation:** **A** + optional **display label map** (frontend helper or API DTO) for BL "useful" column — e.g. `defaultAsset` → "Checking", `cashWalletAsset` → "Cash wallet", `savingAsset` → "Savings" (per R-0001 / Firefly account types). Reject hide-column unless post-fix probe still null.
+
+### 6. Regression gates (open Q8)
+
+| Gate | Proof |
+|------|-------|
+| **BK** | Forecast → Monthly and Wealth → Overview: no multi-second **Loading category filter…**; combobox interactive ≤1 s of tab visit (browser smoke or Performance trace on lazy resolve) |
+| **BL** | `GET /api/v1/wealth` — `firefly.accounts[*].account_role` non-null for Giro/savings/cash wallet probe accounts; Wealth table shows label not em dash |
+| **BL snapshot** | After fix + sync: latest `net_worth_snapshots.payload.accounts` carries role; Grafana portfolio breakdown panel non-empty role column |
+| **OIDC** | Standard omniflow template smoke — frontend-only EA; backend-only EB path |
+| **Suggested test** | Repository unit/integration: seed account with `payload: {"attributes":{"account_role":"savingAsset",…}}` → `load_asset_accounts` returns role; optional vitest that CategoryFilter is not behind lazy on BK pages |
+
+### 7. Risks summary
+
+| Risk | Mitigation |
+|------|------------|
+| Static import slightly grows Forecast/Wealth chunks | ~1.5 KB — negligible; monitor build report in execute |
+| `attributes` path null on legacy/corrupt rows | COALESCE to null; UI em dash acceptable when truly absent |
+| Snapshot/Grafana lag until next daily upsert | Operator manual sync or wait for scheduler; document in UAT |
+| Human label map wrong for `ccAsset`/`sharedAsset` | Use Firefly role table from R-0001; fallback to raw enum |
+| Root-level `active`/`include_net_worth` same bug class | Out of scope unless filters misbehave — note for future hygiene |
+
+**Linked:** BUG-0021, BK, BL, EA, EB, UI-011, UI-012, R-0001, DEC-0021, DEC-0065  
+**Confidence:** high — EA chunk vs API timing confirmed; EB root cause confirmed by live DB + API + code audit  
+**Status:** fulfilled (Q0029 released via DEC-0110/0111; `bug0021-q0029`, 2026-06-11)
 
 ---

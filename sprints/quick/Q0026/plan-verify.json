@@ -1,0 +1,153 @@
+{
+  "sprint": "Q0026",
+  "bug_id": "BUG-0018",
+  "orchestrator_run_id": "intake-20260609-ui-audit",
+  "verified_at": "2026-06-10T04:30:00Z",
+  "result": "PASS",
+  "supersedes": "plan-verify-20260610T03:00:00Z-BLOCKED (GAP-1..GAP-4 — sprint-plan race)",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0018",
+  "tasks_source": "sprints/quick/Q0026/tasks.md",
+  "architecture_ref": "docs/engineering/architecture-archive/architecture-pack-20260609-a.md#bug-0018--alert-evaluation-sql-failure-balance-ambiguous",
+  "decision_alignment": {
+    "decisions": ["DEC-0107"],
+    "extensions": ["DEC-0026", "DEC-0028"],
+    "research_basis": ["R-0088"],
+    "contract_elements_covered": [
+      "DEC-0107 BE1: fbd.ts::date + SUM(fbd.balance::float8) in evaluate_scarcity SELECT",
+      "DEC-0107: fbd.ts::date qualified in WHERE date bounds and GROUP BY",
+      "DEC-0107: Forbidden unqualified balance/ts; forbidden a.balance",
+      "DEC-0107: No migration — runtime SQL string fix only",
+      "DEC-0107: R-0024 warn-only preserved — sync does not fail on alert eval error",
+      "T1: wealth_alerts_integration wealth_snapshot_and_scarcity_alert_on_post_sync regression gate",
+      "V1: sync logs clean (BE); GET /api/v1/alerts + header bell (BF); subscription dedup regression",
+      "Operator gates BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC before V1"
+    ],
+    "frozen_boundaries_respected": [
+      "DEC-0107: fbd.balance only — not a.balance",
+      "R-0024: warn-only — no sync fail-on-alert-error",
+      "No frontend change — BF resolves when BE fixed",
+      "No migration — runtime SQL string fix only",
+      "BUG-0008: subscription path separate — regression gate in V1 only",
+      "Sibling evaluators unchanged — evaluate_budget_drift/plan_viability already unambiguous"
+    ],
+    "sprint_artifact_verification": "PASS — sprint.json, task.json, tasks.md, sprint.md, uat.md, uat.json materialized; acceptance_mapping 1:1 with architecture BE1/T1/V1 table"
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "BE1 → T1 → single backend release → BACKEND_FRONTEND_DEPLOY → FULL_FIREFLY_SYNC → V1 verify-work",
+    "notes": "T1 depends on BE1; V1 blocked on deploy + full sync. No parallelism."
+  },
+  "operator_gates_review": {
+    "documented": true,
+    "gates": [
+      {
+        "id": "BACKEND_FRONTEND_DEPLOY",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md", "uat.json"]
+      },
+      {
+        "id": "FULL_FIREFLY_SYNC",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md", "uat.json"]
+      }
+    ],
+    "waived_ops_only": {
+      "sync_fail_on_alert_error": "Reject — preserve R-0024 warn-only",
+      "frontend_change": "No AlertBell/AlertsPage change — BF resolves when BE fixed",
+      "migration": "Runtime SQL string fix only — no schema change",
+      "ci_timescaledb_container": "Defer — V1 operator gate + runbook note sufficient"
+    }
+  },
+  "conditional_tasks_review": {},
+  "test_coverage": {
+    "unit_fixtures": "BE1 cargo build; evaluate_scarcity SQL qualification code review",
+    "integration": "T1 wealth_snapshot_and_scarcity_alert_on_post_sync PASS when DATABASE_URL set",
+    "frontend": "No frontend tasks — regression via npm test baseline only",
+    "operator_tests": "V1 uat.md: sync trigger logs; GET /api/v1/alerts; header bell; subscriptions/alerts dedup",
+    "doc_review": "uat.md acceptance traceability + operator gate checklist; uat.json placeholder mapped to BE/BF",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "BE",
+      "criterion": "Post-sync alert evaluation completes without SQL error (balance ambiguous / 42702); logs show no alert evaluation failed for normal sync runs",
+      "tasks": ["BE1", "T1", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY", "FULL_FIREFLY_SYNC"],
+      "covered": true,
+      "notes": "BE1 DEC-0107 fbd.balance+fbd.ts qualification; T1 integration test catches JOIN regression; V1 sync trigger log probe after deploy"
+    },
+    {
+      "acceptance_id": "BF",
+      "criterion": "Header Alerts panel and GET /api/v1/alerts surface matching alerts when overdraft or subscription rules apply — not permanent No active alerts due to evaluation skip",
+      "tasks": ["BE1", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY", "FULL_FIREFLY_SYNC"],
+      "covered": true,
+      "notes": "BE1 fixes first-evaluator abort; V1 wealth GET /api/v1/alerts + header bell + subscription dedup regression per BUG-0008"
+    }
+  ],
+  "coverage_matrix": {
+    "acceptance_rows": [
+      { "acceptance_id": "BE", "tasks": ["BE1", "T1", "V1"], "decisions": ["DEC-0107"], "covered": true },
+      { "acceptance_id": "BF", "tasks": ["BE1", "V1"], "decisions": ["DEC-0107"], "covered": true }
+    ],
+    "tasks": [
+      { "task_id": "BE1", "acceptance_rows": ["BE", "BF"], "decision": "DEC-0107", "surface": "backend/src/alerts/evaluate.rs" },
+      { "task_id": "T1", "acceptance_rows": ["BE"], "decision": "DEC-0107", "surface": "backend/tests/wealth_alerts_integration.rs" },
+      { "task_id": "V1", "acceptance_rows": ["BE", "BF"], "decision": null, "surface": "verify-work operator smoke" }
+    ]
+  },
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Pre-execute evaluate_scarcity L23/L29 still unqualified balance+ts — expected; BE1 execute delta per DEC-0107."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "wealth_alerts_integration skips without DATABASE_URL — T1 documents runbook; V1 operator gate covers live path."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "uat.md/uat.json are PLACEHOLDER at plan-verify — runtime probes populate at verify-work; structure and BE/BF traceability verified."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "New alerts may appear after fix (budget_drift/plan_viability evaluators run) — expected behavior; document in release notes."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "Acceptance BUG-0018 OIDC-enabled deploy regression footer — V1 OIDC-1 probe; full OIDC session operator-only per prior bug precedent."
+    },
+    {
+      "id": "ADV-6",
+      "severity": "low",
+      "note": "BF subscription dedup is regression gate only — separate code path per BUG-0008; V1-SUB-REG probe."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 2,
+    "covered_count": 2,
+    "gap_count": 0,
+    "task_count": 3,
+    "mandatory_task_count": 3,
+    "conditional_task_count": 0,
+    "optional_task_count": 0,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0107_aligned": true,
+    "operator_gates_documented": true,
+    "conditional_gates_documented": true,
+    "v1_e2e_smoke": true,
+    "scope_creep_beyond_architecture": false,
+    "dependency_graph_valid": true,
+    "execute_ready": true
+  },
+  "notes": "QA plan-verify 2026-06-10 (re-run): Q0026 sprint artifacts present; BE/BF mapped to BE1/T1/V1 per DEC-0107; 2/2 acceptance rows covered; 3/3 tasks traced; 0 gaps; 0 orphans. Supersedes prior BLOCKED race. Approved for /execute."
+}

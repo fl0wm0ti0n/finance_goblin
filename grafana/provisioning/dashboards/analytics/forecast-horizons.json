@@ -235,7 +235,8 @@
         "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
         "query": "SELECT a.firefly_id AS __value, a.name AS __text FROM accounts a WHERE a.type = 'asset' ORDER BY ABS(COALESCE(a.balance, 0)) DESC, a.name ASC",
         "refresh": 1,
-        "sort": 1
+        "sort": 0,
+        "current": { "text": "", "value": "" }
       }
     ]
   },
@@ -244,6 +245,6 @@
   "timezone": "browser",
   "title": "Forecast Horizons",
   "uid": "forecast-horizons",
-  "version": 2,
+  "version": 3,
   "folder": "Analytics"
 }

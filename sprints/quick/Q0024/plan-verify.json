@@ -1,0 +1,131 @@
+{
+  "sprint": "Q0024",
+  "bug_id": "BUG-0016",
+  "orchestrator_run_id": "intake-20260609-ui-audit",
+  "verified_at": "2026-06-09T23:30:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0016",
+  "tasks_source": "sprints/quick/Q0024/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#bug-0016--spa-deep-links-return-http-404",
+  "decision_alignment": {
+    "decisions": ["DEC-0104"],
+    "extensions": ["DEC-0057"],
+    "research_basis": ["R-0086"],
+    "contract_elements_covered": [
+      "DEC-0104 AX1: ServeDir::fallback(ServeFile::new(index.html)) in build_router — HTTP 200",
+      "DEC-0104: both /app/static and frontend/dist branches",
+      "DEC-0104: not_found_service rejected — frozen boundary",
+      "DEC-0104: no backend /callback redirect — React OidcCallback",
+      "DEC-0057: route order health → grafana proxy → api → SPA fallback preserved",
+      "DEC-0104: no Traefik label change — pass-through only",
+      "AX2: integration deep links 200 HTML; API/assets non-HTML",
+      "V1: curl matrix :18080 + omniflow browser hard-refresh/bookmark + OIDC /callback",
+      "Operator gate BACKEND_FRONTEND_DEPLOY before V1 runtime probes"
+    ],
+    "frozen_boundaries_respected": [
+      "Axum-only fix — no Traefik label change",
+      "Use ServeDir::fallback not not_found_service",
+      "No backend /callback redirect",
+      "Preserve DEC-0057 route order",
+      "No frontend App.tsx route changes",
+      "Grafana panel data (BUG-0009 Y) out of scope"
+    ],
+    "sprint_artifact_verification": "PASS — sprint.json, task.json, tasks.md, sprint.md, uat.md, uat.json materialized; acceptance_mapping 1:1 with architecture AX1/AX2/V1 table"
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "AX1 → AX2 → single backend release deploy → operator BACKEND_FRONTEND_DEPLOY → V1 verify-work",
+    "notes": "task.json depends_on: AX2←AX1; V1←AX1,AX2. No parallelism — sequential execute per tasks.md."
+  },
+  "operator_gates_review": {
+    "documented": true,
+    "gates": [
+      {
+        "id": "BACKEND_FRONTEND_DEPLOY",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md", "uat.json"]
+      }
+    ],
+    "waived_ops_only": {
+      "traefik_labels": "No Traefik label change per R-0086 §5 — pass-through only",
+      "frontend_routes": "React routes already correct — no App.tsx change"
+    }
+  },
+  "conditional_tasks_review": {},
+  "test_coverage": {
+    "unit_fixtures": "AX1 cargo build; route order preserved",
+    "integration": "AX2 GET /forecast,/subscriptions,/planning,/sync,/analytics/cashflow → 200 HTML; GET /api/v1/* and /assets/* non-HTML",
+    "operator_tests": "V1 uat.md: curl primary AX paths on :18080; expanded same-contract paths; protected prefixes; omniflow hard-refresh + bookmark; OIDC /callback regression",
+    "doc_review": "uat.md acceptance traceability + operator gate checklist; uat.json placeholder structure mapped to AX",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AX",
+      "criterion": "Direct navigation, hard-refresh, and bookmarks to /forecast, /subscriptions, /planning, /sync, /analytics/{slug} return HTTP 200 with SPA shell and render correct React page — not 404 blank body; applies on :18080 and financegnome.omniflow.cc; OIDC-enabled deploy regression checks pass",
+      "tasks": ["AX1", "AX2", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "AX1 DEC-0104 HTTP 200 fallback; AX2 integration regression matrix; V1 curl :18080 + omniflow browser + OIDC /callback smoke after deploy"
+    }
+  ],
+  "coverage_matrix": {
+    "acceptance_rows": [
+      { "acceptance_id": "AX", "tasks": ["AX1", "AX2", "V1"], "decisions": ["DEC-0104", "DEC-0057"], "covered": true }
+    ],
+    "tasks": [
+      { "task_id": "AX1", "acceptance_rows": ["AX"], "decision": "DEC-0104", "surface": "backend/src/lib.rs build_router" },
+      { "task_id": "AX2", "acceptance_rows": ["AX"], "decision": "DEC-0104", "surface": "backend/tests/ or lib integration" },
+      { "task_id": "V1", "acceptance_rows": ["AX"], "decision": null, "surface": "verify-work curl + browser smoke" }
+    ]
+  },
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "AX2 defers /analytics/grafana/* integration smoke to V1 if test harness lacks upstream — architecture regression matrix includes grafana proxy; V1 operator smoke covers proxy path."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Acceptance AX 'render the correct React page' — AX2 asserts HTTP 200 + HTML shell marker only; V1 browser hard-refresh/bookmark probes correct page rendering on omniflow."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "uat.md/uat.json are PLACEHOLDER at plan-verify — runtime probes populate at verify-work; structure and AX traceability verified."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "V1 expanded curl matrix (/wealth, /alerts, /chat, /settings, additional analytics slugs) exceeds primary AX path list — same-contract coverage per architecture § regression matrix; not scope creep."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "OIDC-enabled deploy regression footer is operator verify-work gate — V1 includes /callback SPA shell probe; full OIDC session smoke operator-only per prior bug precedent."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 1,
+    "covered_count": 1,
+    "gap_count": 0,
+    "task_count": 3,
+    "mandatory_task_count": 3,
+    "conditional_task_count": 0,
+    "optional_task_count": 0,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0104_aligned": true,
+    "operator_gates_documented": true,
+    "conditional_gates_documented": true,
+    "v1_e2e_smoke": true,
+    "scope_creep_beyond_architecture": false,
+    "dependency_graph_valid": true,
+    "execute_ready": true
+  },
+  "notes": "QA plan-verify 2026-06-09: Q0024 sprint artifacts present; AX mapped to AX1+AX2+V1 per DEC-0104; 1/1 acceptance row covered; 3/3 tasks traced; 0 gaps; 0 orphans. Approved for /execute."
+}

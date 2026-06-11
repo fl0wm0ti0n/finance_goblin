@@ -20,14 +20,14 @@ pub async fn evaluate_scarcity(ctx: &EvaluateContext<'_>) -> Result<Vec<AlertCan
 
     let daily: Vec<(NaiveDate, f64)> = sqlx::query_as(
         r#"
-        SELECT ts::date AS day, SUM(balance::float8) AS balance
+        SELECT fbd.ts::date AS day, SUM(fbd.balance::float8) AS balance
         FROM forecast_balance_daily fbd
         JOIN accounts a ON a.firefly_id = fbd.account_id
         WHERE fbd.computation_id = $1
           AND a.type = 'asset'
           AND COALESCE((a.payload->>'include_net_worth')::boolean, true) = true
-          AND ts::date >= $2 AND ts::date <= $3
-        GROUP BY ts::date
+          AND fbd.ts::date >= $2 AND fbd.ts::date <= $3
+        GROUP BY fbd.ts::date
         ORDER BY day
         "#,
     )

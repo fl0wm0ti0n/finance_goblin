@@ -1,5 +1,67 @@
 # Summary — Sprint S0001
 
+## Context pack (refresh 2026-06-11 — BUG-0021 released; intake bundle drain complete)
+
+- **Active bug:** none (intake bundle bug queue drain complete)
+- **Active sprint:** none (Q0029 released `bug0021-q0029`)
+- **Latest release:** BUG-0021 / Q0029 (`bug0021-q0029`, 2026-06-11) — DEC-0110 static CategoryFilter + DEC-0111 account_role COALESCE
+- **Bug queue:** (empty)
+- **Open stories:** (empty)
+- **Orchestrator:** `auto-20260611-bug0021`
+- **S0001 status:** CLOSED / released (`0.1.0-us0001`) — foundation segment complete
+
+## Context pack (refresh 2026-06-11 — BUG-0021 execute complete)
+
+- **Active bug:** BUG-0021 — Frontend UX polish (OPEN; qa phase next)
+- **Active sprint:** Q0029 (EXECUTE COMPLETE — static CategoryFilter + account_role COALESCE + label map)
+- **Execute evidence:** `handoffs/dev_to_qa.md` Q0029 section; `sprints/quick/Q0029/progress.md`
+- **Runtime proof:** `runtime-proof-execute-20260611-bug0021-001`
+
+## Context pack (refresh 2026-06-11 — BUG-0020 released)
+
+- **Active bug:** BUG-0021 — Frontend UX polish (OPEN; next discovery)
+- **Active sprint:** none (Q0028 released `bug0020-q0028`)
+- **Latest release:** BUG-0020 / Q0028 (`bug0020-q0028`, 2026-06-11) — DEC-0109 subscription list reconcile + display_category backfill
+- **Bug queue:** BUG-0021 (1 OPEN)
+- **Orchestrator:** `auto-20260610-bug0019`
+- **S0001 status:** CLOSED / released (`0.1.0-us0001`) — foundation segment complete
+
+## Context pack (refresh 2026-06-10 — BUG-0019 released)
+
+- **Active bug:** BUG-0020 — Subscriptions list quality (OPEN; next discovery)
+- **Active sprint:** none (Q0027 released `bug0019-q0027`)
+- **Latest release:** BUG-0019 / Q0027 (`bug0019-q0027`, 2026-06-10) — DEC-0108 Grafana provisioning (sort:0 + current + mirror-count panel)
+- **Bug queue:** BUG-0020, BUG-0021 (2 OPEN)
+- **Orchestrator:** `auto-20260610-bug0019`
+- **S0001 status:** CLOSED / released (`0.1.0-us0001`) — foundation segment complete
+
+## Context pack (refresh 2026-06-10 — BUG-0018 released)
+
+- **Active bug:** BUG-0019 — Grafana metrics wrong (OPEN; next discovery)
+- **Active sprint:** none (Q0026 released `bug0018-q0026`)
+- **Latest release:** BUG-0018 / Q0026 (`bug0018-q0026`, 2026-06-10) — DEC-0107 `fbd.balance`+`fbd.ts` qualification
+- **Bug queue:** BUG-0019, BUG-0020, BUG-0021 (3 OPEN)
+- **Orchestrator:** `intake-20260609-ui-audit`
+- **S0001 status:** CLOSED / released (`0.1.0-us0001`) — foundation segment complete
+
+## Context pack (refresh 2026-06-10 — BUG-0017 released)
+
+- **Latest release:** BUG-0017 / Q0025 (`bug0017-q0025`, 2026-06-10) — post-sync forecast recompute cluster; DEC-0105 audit CHECK + DEC-0106 FK CASCADE/retention
+- **Active bug:** BUG-0018 — alert evaluation SQL failure (OPEN; next discovery)
+- **Bug queue:** BUG-0018, BUG-0019, BUG-0020, BUG-0021 (4 OPEN)
+- **Orchestrator:** `intake-20260609-ui-audit`
+- **Open stories:** (empty — intake bundle drain complete)
+- **S0001 status:** CLOSED / released (`0.1.0-us0001`) — foundation segment complete
+
+## Context pack (refresh 2026-06-09 — BUG-0016)
+
+- **Latest release:** BUG-0016 / Q0024 (`bug0016-q0024`, 2026-06-09) — SPA deep-link HTTP 404; DEC-0104 Axum SPA fallback
+- **Active bug:** BUG-0017 — post-sync forecast recompute cluster (OPEN; next discovery)
+- **Bug queue:** BUG-0017, BUG-0018, BUG-0019, BUG-0020, BUG-0021 (5 OPEN)
+- **Orchestrator:** `intake-20260609-ui-audit`
+- **Open stories:** (empty — intake bundle drain complete)
+- **S0001 status:** CLOSED / released (`0.1.0-us0001`) — foundation segment complete
+
 ## Context pack (refresh 2026-06-09)
 
 - **Latest release:** US-0018 / S0017 (`0.18.0-us0018`, 2026-06-09) — category filters & expense trend analytics; DEC-0087..0090

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use flow_finance_ai::config::ForecastConfig;
+use flow_finance_ai::forecast::repository::ForecastRepository;
 use flow_finance_ai::forecast::ForecastService;
 use serde_json::json;
 use sqlx::PgPool;
@@ -167,4 +168,81 @@ async fn forecast_meta_stale_when_latest_failed() {
     let success = repo.latest_successful().await.expect("success");
     let any = repo.latest_any().await.expect("any");
     assert!(repo.is_stale(&success, &any));
+}
+
+#[tokio::test]
+async fn forecast_retention_prunes_paired_ml_without_fk_violation() {
+    let pool = match setup_db().await {
+        Some(p) => p,
+        None => {
+            eprintln!("SKIP: DATABASE_URL not set for forecast retention integration test");
+            return;
+        }
+    };
+
+    let sync_run_id = Uuid::new_v4();
+    sqlx::query("INSERT INTO sync_runs (id, status, trigger) VALUES ($1, 'success', 'test')")
+        .bind(sync_run_id)
+        .execute(&pool)
+        .await
+        .expect("sync run");
+
+    let mut config = test_forecast_config();
+    config.retention_count = 2;
+    let repo = ForecastRepository::new(pool.clone(), config);
+
+    for i in 0..4 {
+        let baseline_id = Uuid::new_v4();
+        let ml_id = Uuid::new_v4();
+        let hours_ago = (4 - i) * 24;
+
+        sqlx::query(
+            r#"
+            INSERT INTO forecast_computations (id, sync_run_id, status, model_kind, computed_at)
+            VALUES ($1, $2, 'success', 'baseline', NOW() - ($3::text || ' hours')::interval)
+            "#,
+        )
+        .bind(baseline_id)
+        .bind(sync_run_id)
+        .bind(hours_ago)
+        .execute(&pool)
+        .await
+        .expect("seed baseline");
+
+        sqlx::query(
+            r#"
+            INSERT INTO forecast_computations
+              (id, sync_run_id, status, model_kind, paired_baseline_id, computed_at)
+            VALUES ($1, $2, 'success', 'ml_enhanced', $3, NOW() - ($4::text || ' hours')::interval)
+            "#,
+        )
+        .bind(ml_id)
+        .bind(sync_run_id)
+        .bind(baseline_id)
+        .bind(hours_ago)
+        .execute(&pool)
+        .await
+        .expect("seed ml_enhanced");
+    }
+
+    repo.enforce_retention()
+        .await
+        .expect("retention should succeed without FK violation");
+
+    let baseline_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM forecast_computations WHERE status = 'success' AND model_kind = 'baseline'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count baseline");
+
+    let ml_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM forecast_computations WHERE status = 'success' AND model_kind = 'ml_enhanced'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count ml");
+
+    assert_eq!(baseline_count, 2, "expected two baseline rows after retention");
+    assert_eq!(ml_count, 2, "expected two ml_enhanced rows after retention");
 }

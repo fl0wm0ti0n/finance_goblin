@@ -1,0 +1,178 @@
+{
+  "id": "Q0025",
+  "title": "BUG-0017 post-sync forecast recompute cluster",
+  "status": "PLANNED",
+  "bug_id": "BUG-0017",
+  "architecture_ref": "architecture-20260609-bug0017",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["AY", "AZ", "BA", "BB", "BC", "BD"],
+  "acceptance_mapping": {
+    "AY": {
+      "tasks": ["AY1", "V1"],
+      "primary_verify": "Post-sync ai_tool_audit rows for forecast_bucket_assignment without tool_name CHECK violation"
+    },
+    "AZ": {
+      "tasks": ["AY1", "V1"],
+      "primary_verify": "low_confidence and extended result_status values persist without CHECK violation"
+    },
+    "BA": {
+      "tasks": ["BA1", "BA2", "T1", "V1"],
+      "primary_verify": "Recompute completes without FK error; GET /api/v1/forecast/meta fresh computation_id"
+    },
+    "BB": {
+      "tasks": ["V1"],
+      "primary_verify": "Month-bucket SQL probe; ML selectable when gate passes or honest ml_skipped_reason"
+    },
+    "BC": {
+      "tasks": ["V1"],
+      "primary_verify": "Planning Compare no Plan stale badge after successful recompute"
+    },
+    "BD": {
+      "tasks": ["BD1", "V1"],
+      "primary_verify": "Forecast page no false No forecast data yet when meta has computation_id"
+    }
+  },
+  "task_count": 6,
+  "mandatory_task_count": 6,
+  "optional_task_ids": [],
+  "estimate_total_hours": 9.5,
+  "tasks": [
+    {
+      "id": "AY1",
+      "title": "ai_tool_audit CHECK migration",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0017 (AY)(AZ) — DEC-0105 audit CHECK extension",
+      "files": ["backend/migrations/015_bug0017_ai_audit_forecast.sql"],
+      "decisions": ["DEC-0105", "DEC-0034", "DEC-0078"],
+      "tests": [
+        "sqlx migrate PASS",
+        "tool_name includes forecast_bucket_assignment",
+        "result_status includes low_confidence, provider_unavailable, parse_error"
+      ]
+    },
+    {
+      "id": "BA1",
+      "title": "paired_baseline_id ON DELETE CASCADE migration",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0017 (BA) — DEC-0106 FK CASCADE",
+      "files": ["backend/migrations/015_bug0017_forecast_fk_cascade.sql"],
+      "decisions": ["DEC-0106", "DEC-0050", "DEC-0011"],
+      "tests": [
+        "FK ON DELETE CASCADE applied",
+        "NOT VALID + VALIDATE pattern",
+        "sqlx migrate PASS"
+      ]
+    },
+    {
+      "id": "BA2",
+      "title": "Retention loop ml_enhanced before baseline",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": ["BA1"],
+      "acceptance_hook": "BUG-0017 (BA) — DEC-0106 retention order",
+      "files": ["backend/src/forecast/repository.rs"],
+      "decisions": ["DEC-0106"],
+      "tests": [
+        "enforce_retention loop order ml_enhanced first",
+        "cargo test --lib forecast paths PASS"
+      ]
+    },
+    {
+      "id": "BD1",
+      "title": "ForecastPage isFetched empty guard",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0017 (BD) — isFetched && !isError empty guard",
+      "files": ["frontend/src/pages/ForecastPage.tsx"],
+      "decisions": [],
+      "tests": [
+        "showLoading when metaQuery.isPending",
+        "showEmpty only when isFetched && !isError && !computation_id",
+        "npm test PASS"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "Retention integration test — paired prune",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["BA1", "BA2"],
+      "acceptance_hook": "BUG-0017 (BA) — paired baseline+ML prune without FK error",
+      "files": ["backend/tests/", "backend/src/forecast/repository.rs"],
+      "decisions": ["DEC-0106"],
+      "tests": [
+        "Seed baseline + ml_enhanced pair with paired_baseline_id",
+        "enforce_retention prunes without FK violation",
+        "cargo test retention PASS"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work sync + meta + planning smoke",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["AY1", "BA1", "BA2", "BD1", "T1"],
+      "operator_gate": "BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC",
+      "acceptance_hook": "BUG-0017 (AY)–(BD) — operator smoke matrix",
+      "files": [
+        "sprints/quick/Q0025/uat.md",
+        "sprints/quick/Q0025/uat.json"
+      ],
+      "tests": [
+        "Sync logs free of audit/FK WARN",
+        "GET /api/v1/forecast/meta fresh computation_id",
+        "ai_tool_audit forecast_bucket_assignment rows present",
+        "Month-bucket SQL probe for BB",
+        "Planning Compare no Plan stale",
+        "Forecast nav no false empty"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "AY1 + BA1 migrations",
+    "BA2 + BD1 + T1 code",
+    "Single backend+frontend release",
+    "BACKEND_FRONTEND_DEPLOY",
+    "FULL_FIREFLY_SYNC + forecast recompute",
+    "V1 verify-work smoke"
+  ],
+  "execute_order": ["AY1", "BA1", "BA2", "BD1", "T1", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "Rebuild flow-finance-ai with Q0025 migrations + repository + ForecastPage changes",
+      "rationale": "Runtime sync/meta/planning probes require deployed delta"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "action": "Full Firefly sync (not exchanges-only) + forecast recompute",
+      "rationale": "BB month-bucket gate and BC planning stale require fresh baseline recompute"
+    }
+  ],
+  "frozen_boundaries": [
+    "DEC-0105: DROP+ADD both CHECK constraints — no Rust status mapping",
+    "DEC-0106: CASCADE + ml_enhanced-before-baseline — no SET NULL or reorder-only fix",
+    "BD: isFetched guard only — no placeholderData or SSR initialData",
+    "BB: month-bucket verify in V1 — do not lower min_monthly_points",
+    "BC: verify-work re-smoke only — no plan-engine change",
+    "Sync fail-on-recompute deferred — preserve R-0050 warn-and-serve",
+    "Migration before backend image deploy",
+    "Pre-ship constraint name probe on operator DB if names drift"
+  ],
+  "decisions": ["DEC-0105", "DEC-0106", "DEC-0034", "DEC-0050", "DEC-0078"],
+  "research": ["R-0087"],
+  "operator_next": "After AY1–T1 deploy: Full sync + recompute; then V1 verify-work on localhost:18080 and omniflow"
+}

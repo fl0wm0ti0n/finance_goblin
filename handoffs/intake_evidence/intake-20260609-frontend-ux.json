@@ -1,0 +1,76 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260609-frontend-ux",
+  "intake_work_item_kind": "bug",
+  "source_audit": "handoffs/intake_evidence/ui-audit-20260609-local.json",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "CategoryFilter interactive within ~1s on Forecast Monthly and Wealth; Wealth Role column populated or intentionally hidden when Firefly omits role.",
+      "intake_run_id": "intake-20260609-frontend-ux",
+      "turn_index": 0,
+      "ref": "ie:intake-20260609-frontend-ux:0:d92fedda8b513026"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "lazy CategoryFilter imports on ForecastPage/WealthPage; Wealth account table role mapping.",
+      "intake_run_id": "intake-20260609-frontend-ux",
+      "turn_index": 1,
+      "ref": "ie:intake-20260609-frontend-ux:1:01c093944cbf9726",
+      "delegation_scope": "frontend/src/pages/{ForecastPage,WealthPage}.tsx, wealth accounts API",
+      "delegation_rationale": "UI audit 3-5s Suspense fallback and empty Role column.",
+      "delegation_confidence": "medium"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "P3 polish — avoid material bundle regression; Role depends on Firefly account metadata availability.",
+      "intake_run_id": "intake-20260609-frontend-ux",
+      "turn_index": 2,
+      "ref": "ie:intake-20260609-frontend-ux:2:39daa1cd21ed0059"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Smoke: category combobox within 1s of tab switch; wealth role field mapped or documented empty-state.",
+      "intake_run_id": "intake-20260609-frontend-ux",
+      "turn_index": 3,
+      "ref": "ie:intake-20260609-frontend-ux:3:8fb89400e59f9c4c"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator perceives snappy category filter; Wealth breakdown Role column useful or removed.",
+      "intake_run_id": "intake-20260609-frontend-ux",
+      "turn_index": 4,
+      "ref": "ie:intake-20260609-frontend-ux:4:8edae67b003436ff"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug-cluster",
+    "work_items": [
+      "BUG-0021"
+    ],
+    "rationale": "Minor frontend UX gaps from same UI audit — grouped as P3 polish cluster.",
+    "split_axis": "cluster with sub-defects EA–EB",
+    "sub_defects": {
+      "EA": "CategoryFilter lazy Suspense 3–5s Loading category filter",
+      "EB": "Wealth Role column always em dash"
+    },
+    "ui_findings_merged": [
+      "UI-011",
+      "UI-012"
+    ]
+  }
+}

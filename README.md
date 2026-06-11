@@ -15,6 +15,10 @@ backend, React frontend, and provisioning under the its-magic phased workflow.
 
 Recent closed work (newest first). Full history: [`docs/product/backlog.md`](docs/product/backlog.md).
 
+- BUG-0021 — Frontend UX polish: static CategoryFilter on Forecast/Wealth + wealth Role column COALESCE/labels (Q0029)
+- BUG-0018 — Alert evaluation SQL: qualify `fbd.balance` in `evaluate_scarcity` to fix PostgreSQL 42702 (Q0026)
+- BUG-0017 — Post-sync forecast recompute: audit CHECK migration, FK CASCADE retention, ForecastPage loading guard (Q0025)
+- BUG-0016 — SPA deep links: Axum `index.html` fallback HTTP 200 for client routes (Q0024)
 - US-0020 — Subscription discover: manual search/confirm, majority display category, operator tags + Grafana `$tag` (S0019)
 - US-0019 — Goal-driven planning: target-balance plans, per-plan goal-stats strip, category overlay cap, savings modal + AI tool (S0018)
 - US-0018 — Category filters & expense trend analytics: shared filter, expense-series API, bar trend chart, Grafana `$category` (S0017)

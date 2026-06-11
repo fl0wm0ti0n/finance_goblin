@@ -1,0 +1,76 @@
+{
+  "id": "Q0027",
+  "type": "quick",
+  "bug_ids": ["BUG-0019"],
+  "status": "PLANNED",
+  "created": "2026-06-10",
+  "goal": "Close BUG-0019 via DEC-0108 provisioning-only contract: account_id sort:0 + current default in cashflow and forecast-horizons (CA/BG), model_kind='baseline' in cashflow panels 1-3 latest-success subqueries, platform-health panel 2 mirror COUNT(*) UNION ALL (CB/BH), version bumps, static JSON guard, operator verify-work after Grafana re-provision.",
+  "scope": [
+    "CA1: cashflow.json account_id variable sort:0 + current default + version bump",
+    "CA2: cashflow.json panels 1-3 latest-success subquery AND model_kind = 'baseline'",
+    "CA3: forecast-horizons.json account_id variable sort:0 + current default + version bump",
+    "CB1: platform-health.json panel 2 rawSql mirror COUNT(*) UNION ALL over six entities LEFT JOIN sync_cursors + version bump",
+    "G1: static jq assertions per DEC-0108 verification gates",
+    "V1: verify-work — BG kiosk+direct Grafana default 114 non-zero vs API; BH 922 after Full sync and after 0-new-tx incremental rerun; OIDC re-run"
+  ],
+  "risks": [
+    "Grafana serves cached dashboard after provisioning edit — restart Grafana + version bump",
+    "current JSON shape wrong shows None — mirror forecast_variant current structure (DEC-0108)",
+    "Fresh install all-zero balances yields arbitrary default account — acceptable; runbook note",
+    "model_kind='baseline' freezes cashflow panels off ML — accepted; future $forecast_variant wiring per R-0051",
+    "Mirror COUNT(*) includes Firefly-deleted rows — BH specifies mirror truth; reconciliation out of scope"
+  ],
+  "task_count": 6,
+  "mandatory_task_count": 6,
+  "conditional_task_ids": [],
+  "optional_task_ids": [],
+  "estimate_total_hours": 4.5,
+  "decisions": ["DEC-0108", "DEC-0107"],
+  "research": ["R-0089", "R-0051"],
+  "acceptance_rows": ["BG", "BH"],
+  "execute_order": ["CA1", "CA2", "CA3", "CB1", "G1", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "GRAFANA_PROVISIONING_RELOAD",
+      "before_tasks": ["V1"],
+      "description": "docker compose restart grafana (or full redeploy) after the three JSON edits — provisioned dashboards load at startup/scan interval"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC_PLUS_INCREMENTAL_RERUN",
+      "before_tasks": ["V1"],
+      "description": "Full sync for BH baseline (transactions=922), then a subsequent incremental run with 0 new transactions for the BH regression proof"
+    }
+  ],
+  "acceptance_mapping": {
+    "BG": {
+      "tasks": ["CA1", "CA2", "CA3", "G1", "V1"],
+      "verify": "Cashflow panels 1-2 non-zero (negative) series with default account 114; matches GET /api/v1/forecast/monthly?account_id=114 (25 points, non-zero from Jul 2026); kiosk embed and direct Grafana"
+    },
+    "BH": {
+      "tasks": ["CB1", "G1", "V1"],
+      "verify": "Platform Health panel 2 transactions = SELECT COUNT(*) FROM transactions (922) after Full sync and again after 0-new-tx incremental run"
+    }
+  },
+  "waived_ops_only": {
+    "backend_change": "DEC-0108 forbidden — no upsert_cursor / firefly sync edits; cursor watermark semantics untouched",
+    "frontend_change": "No AnalyticsEmbedPage.tsx change — CA-B embed var-account_id forwarding rejected/deferred",
+    "migration": "Provisioning JSON only — no schema change",
+    "hardcoded_account": "Account id 114 must not be hardcoded anywhere",
+    "ml_stuck_computations": "43 ml_enhanced status='running' rows accumulate — flagged to PO as separate backlog bug (out of scope)"
+  },
+  "deploy_order": [
+    "CA1+CA2 cashflow.json edits",
+    "CA3 forecast-horizons.json edits (parallel ok)",
+    "CB1 platform-health.json panel 2 (parallel ok)",
+    "G1 static JSON guard",
+    "Operator: GRAFANA_PROVISIONING_RELOAD (docker compose restart grafana)",
+    "Operator: Full sync + 0-new-tx incremental rerun",
+    "V1 verify-work smoke (kiosk + direct Grafana + omniflow OIDC)"
+  ],
+  "rollback": "git revert of the three JSON files + Grafana restart — no schema/data/code state",
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260610-q0027-bug0019",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0019",
+  "orchestrator_run_id": "auto-20260610-bug0019"
+}

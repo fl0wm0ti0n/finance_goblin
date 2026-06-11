@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use chrono::Utc;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::recurrence::{compute_fingerprint, detect_recurrence_groups, RecurrenceConfig, RecurrenceGroup};
@@ -76,6 +77,14 @@ impl<'a> DetectionPipeline<'a> {
                 if merged {
                     continue;
                 }
+                warn!(
+                    payee_key = %group.payee_key,
+                    interval_days,
+                    display_name = %group.display_name,
+                    confirmed_id = %confirmed.id,
+                    "confirmed payee-interval match but merge failed (fingerprint conflict) — skip pending insert"
+                );
+                continue;
             }
 
             let kind = classify_kind(group, config);

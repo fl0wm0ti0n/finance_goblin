@@ -1512,3 +1512,177 @@ Post-rebuild operator cluster on **`financegnome.omniflow.cc`** separates into *
 - **Delete plan UX:** Per-plan **Delete** control with confirmation (destructive); reuse `showPlanningFeedback` + `DELETE /api/v1/plans/:id`; block or cascade when plan is active (research).
 - **Target type UX:** Enum **household / subscription / account** is engine contract — do not add types without plan-engine decision. Mitigate with inline help: *"Household adjusts total outflow; Subscription removes a payee; Account targets a Firefly asset account."* Three types are intentional, not a bug — confusion is doc/copy gap unless **US-0019** category targets ship.
 
+## Discovery notes (BUG-0016 — 2026-06-09)
+
+SPA deep links fail because the server treats client routes as static file paths and returns **HTTP 404** instead of the SPA shell. In-app sidebar navigation from `/` works (React Router client-side); direct URL entry, hard refresh, and bookmarks do not.
+
+### Operator UX impact
+
+| Scenario | Current | Target |
+|----------|---------|--------|
+| Bookmark `/forecast` | Blank 404 page | Forecast page loads after auth shell |
+| Share `/planning` URL | Recipient sees blank page | Recipient lands on Planning (post-auth) |
+| Hard refresh on any tab | Blank until manual nav to `/` | Same page re-renders from URL |
+| curl smoke on client routes | **404** empty body | **200** + HTML shell (`index.html`) |
+
+**Product principle:** Finance operators expect shareable, bookmarkable URLs for every primary nav destination — same baseline as Finanzguru-style apps and standard React SPAs. This is infrastructure routing, not a page-level UX redesign.
+
+### Client routes in scope (React Router `BrowserRouter`)
+
+Acceptance **AX** names `/forecast`, `/subscriptions`, `/planning`, `/sync`, `/analytics/{slug}`. Discovery expands to **all** app shell routes for consistent behavior:
+
+| Route | Page | Notes |
+|-------|------|-------|
+| `/` | Home | Already **200** (static `index.html`) |
+| `/forecast` | Forecast | Primary repro path (UI-001) |
+| `/subscriptions` | Subscriptions | Primary repro path |
+| `/planning` | Planning | Primary repro path |
+| `/sync` | Sync Status | Primary repro path |
+| `/analytics/:slug` | Grafana embed | Six slugs (`cashflow`, `budgets`, `portfolio`, `subscriptions`, `forecast-horizons`, `platform-health`); iframe loads after shell |
+| `/wealth` | Wealth | Same fallback contract |
+| `/alerts` | Alerts | Same fallback contract |
+| `/chat` | AI Chat | Same fallback contract |
+| `/settings` | Settings | Same fallback contract |
+| `/callback` | OIDC callback | **Must remain routable** — not swallowed by catch-all to `/` |
+
+### Must-not-break boundaries (carry to research/architecture)
+
+| Path prefix | Contract |
+|-------------|----------|
+| `/api/v1/*` | API JSON responses unchanged — no HTML fallback |
+| `/analytics/grafana/*` | Grafana reverse-proxy (DEC-0057 prefix-strip) — **200** for dashboards/assets |
+| `/callback` | OIDC redirect handler — exact path match before SPA fallback |
+| Static assets | `/assets/*`, favicon, etc. — serve files when present; fallback only for unknown non-API paths |
+
+### Environments
+
+- **Local:** `http://localhost:18080` (`docker-compose.override.yml` port mapping)
+- **Production:** `https://financegnome.omniflow.cc` (US-0010 external profile)
+
+Research must determine whether fallback belongs in **Axum `build_router`**, **Traefik labels**, or **both** — intake delegation confidence **high** on backend static server gap; omniflow Traefik rules secondary check.
+
+### Prior advisory superseded
+
+**BUG-0009** discovery noted unauthenticated curl on `/analytics/{slug}` → **404** as "expected" (client-side nav only). **BUG-0016** supersedes that advisory: all listed client routes must return **200** + SPA shell per acceptance **AX** — authenticated operator smoke is the gate, not curl-without-session as excuse for 404.
+
+### UX references (routing patterns, not clones)
+
+- **Standard SPA hosting:** nginx `try_files $uri /index.html`; Caddy `try_files {path} /index.html`; Axum `ServeDir` + custom fallback handler
+- **React Router v6:** `BrowserRouter` expects server to serve `index.html` for all non-file, non-API paths ([React Router deployment docs](https://reactrouter.com/en/main/start/overview#deployment))
+- **No UI chrome change:** fix is invisible to operators except restored bookmark/refresh behavior
+
+## Discovery notes (BUG-0017 — 2026-06-09)
+
+Post-sync **forecast recompute** fails silently while sync reports **success**, leaving stale baseline metadata, disabled ML controls, **Plan stale** on Planning Compare, and a transient **No forecast data yet** flash on Forecast navigation. UI audit **UI-002**, **UI-006**, **UI-009**, **UI-010** on `localhost:18080` after US-0020 rebuild; sync run `9ee95e6b-c6bd-4f4e-9b8c-4c068bf718cf`.
+
+### Operator UX impact
+
+| Symptom | Current operator experience | Target |
+|---------|----------------------------|--------|
+| Sync completes | Green success; logs show WARN recompute/audit failures | Recompute success visible in logs; `forecast/meta` fresh |
+| Forecast Long-term | ML-enhanced / Compare disabled | Selectable when ML enabled + history gate passes; honest skip copy otherwise |
+| Planning Compare | **Plan stale** + high risk negative projection | Fresh plan baseline after successful recompute |
+| Forecast nav | Brief false empty state despite existing forecast | Loading/meta-aware shell until accounts resolve |
+
+**Product principle:** Sync success must not mask forecast pipeline failure — operators trust post-sync numbers for cashflow, planning, and ML compare. Residual cluster from **BUG-0010** / **BUG-0014** baseline path; US-0015 audit insert landed in code without matching DB constraint migration.
+
+### Sub-defect discovery verdicts
+
+| AC | Intake ID | Verdict | Root cause (discovery) | Fix axis |
+|----|-----------|---------|------------------------|----------|
+| **AY** | BA | **CONFIRMED** | `006_ai_audit.sql` CHECK allows chat tools only; US-0015 inserts `forecast_bucket_assignment` with no follow-on migration | DB migration extending `tool_name` enum |
+| **AZ** | BB | **CONFIRMED** | Same CHECK allows `result_status IN ('ok','error')` only; bucket audit uses `low_confidence`, `provider_unavailable`, `parse_error` | DB migration extending `result_status` enum or map to `ok`/`error` |
+| **BA** | BC | **CONFIRMED** | `enforce_retention()` deletes baseline rows while ML rows still reference them via `paired_baseline_id` FK (`009_forecast_ml.sql`) | Delete ML-before-baseline, CASCADE, or ordered retention |
+| **BB** | BD | **VERIFY AFTER AY–BA** | Live meta shows `ml_skipped_reason=insufficient_history` with 922 txs — may be legitimate ML gate **or** stale baseline from failed recompute | Research history threshold; re-smoke after backend fixes |
+| **BC** | BE | **DOWNSTREAM CONFIRMED** | Recompute failure → stale plan baseline; `refresh_active_after_forecast` never runs on error path | Resolves when **BA** fixed; else plan hook research |
+| **BD** | BF | **CONFIRMED UX** | `ForecastPage` `emptyState = !metaQuery.data?.computation_id` during meta query pending — flashes empty before meta resolves | Frontend loading guard / staleTime; independent of backend cluster |
+
+### Partial implementation matrix (discovery audit)
+
+| Surface | Status | Gap |
+|---------|--------|-----|
+| `backend/src/forecast/service.rs` `persist_bucket_audit` | **Present** | Inserts blocked by DB CHECK — warns only |
+| `backend/migrations/011_forecast_bucket_provenance.sql` | **Present** | Adds bucket provenance columns only — **no** `ai_tool_audit` CHECK extension |
+| `backend/src/forecast/repository.rs` `enforce_retention` | **Present** | Naive DELETE per kind — FK violation on ML→baseline |
+| `backend/src/sync/mod.rs` forecast phase | **Present** | Sync success despite recompute Err; serves stale snapshot |
+| `frontend/src/pages/ForecastPage.tsx` | **Present** | No `isPending` guard on empty state |
+| `frontend/src/pages/PlanningPage.tsx` | **Present** | `plan_stale` badge honest for stale baseline |
+
+### Must-not-break boundaries (carry to research/architecture)
+
+| Contract | Boundary |
+|----------|----------|
+| **True insufficient_history** | When mirror history is genuinely too short for ML sidecar, `ml_skipped_reason` must remain accurate — do not force ML on after enum fix |
+| **Audit privacy** | `forecast_bucket_assignment` rows stay redacted per US-0015 / DEC-0078 — no raw merchant in migration or logging changes |
+| **Baseline retention** | `retention_count` semantics preserved — fix delete **order**, not disable retention |
+| **Sync status** | Research whether sync should surface recompute failure — out of scope unless operator asks; focus on fixing root defects first |
+
+### Environments
+
+- **Local repro:** `http://localhost:18080` (override compose), sync run `9ee95e6b-…`, account **114** Giro **−3395.75 EUR**, 922 mirror transactions
+- **Production gate:** `https://financegnome.omniflow.cc` after **BACKEND_FRONTEND_DEPLOY** + Full sync smoke
+
+### UX references (trust patterns, not clones)
+
+- **Honest degraded states:** Finanzguru-style apps show why ML/advanced views are unavailable — not disabled buttons with silent backend failure
+- **Loading vs empty:** Product analytics pages distinguish **loading**, **empty (no data)**, and **stale** — Forecast should not conflate meta pending with missing forecast
+- **Planning freshness:** Compare tab stale badge should clear when baseline computation id advances post-sync
+
+**Carry to `/research`:** migration strategy for `ai_tool_audit` CHECK extension; FK retention delete order; ML `insufficient_history` gate vs 922-tx dataset; ForecastPage react-query loading contract; optional sync-phase failure surfacing.
+
+## Discovery notes (BUG-0018 — 2026-06-10)
+
+Post-sync **wealth alert evaluation** fails with PostgreSQL **42702** (`column reference "balance" is ambiguous`) while sync reports **success**, leaving the header Alerts bell and `/alerts` inbox permanently empty for scarcity, budget drift, and plan viability rules. UI audit **UI-003** on `localhost:18080` after US-0020 rebuild; sync run `9ee95e6b-c6bd-4f4e-9b8c-4c068bf718cf`; account **114** Giro **−3395.75 EUR** (overdrawn — should surface scarcity when evaluation succeeds).
+
+### Operator UX impact
+
+| Symptom | Current operator experience | Target |
+|---------|----------------------------|--------|
+| Sync completes | Green success; log WARN `alert evaluation failed` | Alerts phase completes; no 42702 in logs |
+| Header Alerts bell | **No active alerts** preview; badge count 0 | Scarcity/plan alerts visible when rules match |
+| `/alerts` page | Empty inbox despite negative projected balance | Active rows for scarcity, budget drift, plan viability |
+| Subscription alerts | Separate path (`/subscriptions/alerts`) — **not blocked by this defect** | Unchanged; cross-link in bell when unread |
+
+**Product principle:** Silent SQL failure must not masquerade as "no alerts" — operators with overdrawn accounts (acct 114) need proactive scarcity warnings per US-0005 / R-0022.
+
+### Sub-defect discovery verdicts
+
+| AC | Intake ID | Verdict | Root cause (discovery) | Fix axis |
+|----|-----------|---------|------------------------|----------|
+| **BE** | SQL 42702 | **CONFIRMED** | `evaluate_scarcity` daily aggregate JOINs `forecast_balance_daily fbd` + `accounts a` but uses unqualified `SUM(balance::float8)` — both tables expose `balance` (`002_forecast_hypertables.sql` L26, `001_initial.sql` L28) | Qualify as `fbd.balance` in SELECT/GROUP BY; audit other evaluators for same pattern |
+| **BF** | UI-003 empty panel | **DOWNSTREAM CONFIRMED** | `AlertService::run_post_sync` calls `evaluate_scarcity` first; SQL error aborts entire wealth alert pass (`sync/mod.rs` L413–414 warn-only); `/api/v1/alerts` returns `[]`; `AlertBell` shows "No active alerts" | Resolves when **BE** fixed; no frontend change required unless loading/error state desired (defer) |
+
+### Partial implementation matrix (discovery audit)
+
+| Surface | Status | Gap |
+|---------|--------|-----|
+| `backend/src/alerts/evaluate.rs` `evaluate_scarcity` | **Present** | Unqualified `balance` in JOIN query (L23) |
+| `backend/src/alerts/evaluate.rs` `evaluate_budget_drift` | **Present** | No ambiguous columns — no change expected |
+| `backend/src/alerts/evaluate.rs` `evaluate_plan_viability` | **Present** | Uses `planned_balance` alias — no change expected |
+| `backend/src/sync/mod.rs` alerts phase | **Present** | Warn-only on eval failure; sync still success (R-0024 contract) |
+| `backend/tests/wealth_alerts_integration.rs` | **Present** | Exercises scarcity path but **skips without `DATABASE_URL`** — gap allowed defect to ship |
+| `frontend/src/components/AlertBell.tsx` | **Present** | Honest empty when API returns no rows — not a UI bug |
+| `frontend/src/pages/AlertsPage.tsx` | **Present** | Same — reads `/api/v1/alerts?status=active` |
+| Subscription alert path | **Separate** | `subscriptions` phase + `/api/v1/subscriptions/alerts` — outside wealth eval SQL |
+
+### Must-not-break boundaries (carry to research/architecture)
+
+| Contract | Boundary |
+|----------|----------|
+| **BUG-0008 dedup** | `subscription_alerts` fingerprint dedup unchanged — fix is wealth-eval SQL only |
+| **R-0024 failure semantics** | Sync may stay `success` on alert eval failure — out of scope unless operator asks |
+| **Scarcity semantics** | Household aggregate via `fbd.balance` + asset filter — do not switch to `accounts.balance` for forecast path |
+| **JOIN filter intent** | `accounts` join filters `include_net_worth` — preserve filter; only qualify column refs |
+
+### Environments
+
+- **Local repro:** `http://localhost:18080`, sync run `9ee95e6b-…`, docker log 42702 on alerts phase
+- **Production gate:** `https://financegnome.omniflow.cc` after **BACKEND_FRONTEND_DEPLOY** + Full sync smoke
+
+### UX references (trust patterns, not clones)
+
+- **Empty vs failed:** Banking apps distinguish "all clear" from "couldn't check" — future enhancement only; primary fix is backend SQL
+- **Dual inbox:** Wealth alerts (`/alerts`) vs subscription alerts (`/subscriptions`) — header bell aggregates wealth count + subscription cross-link per US-0005 / BUG-0008
+
+**Carry to `/research`:** confirm single-line `fbd.balance` qualification; grep alert SQL for other ambiguous JOIN columns; extend integration test to run in CI or add compile-time SQL lint; verify acct 114 overdraft triggers scarcity post-fix; subscription alert path regression scope for **BF**.
+

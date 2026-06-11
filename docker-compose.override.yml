@@ -1,0 +1,16 @@
+# Operator local override — expose app + Grafana on host for internal testing
+# without Traefik basic-auth. Omniflow external profile still uses traefik network.
+#
+# IMPORTANT: when using explicit -f flags, include this file:
+#   docker compose -f docker-compose.yml -f docker-compose.external.yml \
+#     -f docker-compose.override.yml --profile external up -d --build
+# (8080 is taken by host Traefik → local UI on http://localhost:18080)
+
+services:
+  flow-finance-ai:
+    ports:
+      # 8080 is used by host Traefik — use 18080 for local UI/API testing without basic-auth
+      - "${FLOW_LOCAL_PORT:-18080}:8080"
+  grafana:
+    ports:
+      - "${GRAFANA_LOCAL_PORT:-13000}:3000"

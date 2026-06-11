@@ -1,0 +1,89 @@
+{
+  "id": "Q0025",
+  "type": "quick",
+  "bug_ids": ["BUG-0017"],
+  "status": "PLANNED",
+  "created": "2026-06-10",
+  "goal": "Close BUG-0017 post-sync forecast recompute cluster: DEC-0105 audit CHECK migration (AY1), DEC-0106 FK CASCADE + retention order (BA1, BA2), ForecastPage isFetched guard (BD1), retention integration test (T1), operator verify-work (V1) for AY–BD after deploy + Full sync.",
+  "scope": [
+    "AY1: migration 015 — extend ai_tool_audit tool_name + result_status CHECK per DEC-0105",
+    "BA1: migration — paired_baseline_id ON DELETE CASCADE per DEC-0106",
+    "BA2: enforce_retention loop order ml_enhanced before baseline",
+    "BD1: ForecastPage showEmpty guard with isFetched && !isError",
+    "T1: integration test — paired baseline+ML rows prune without FK error",
+    "V1: verify-work — sync logs clean, meta fresh, month-bucket SQL, planning, forecast nav"
+  ],
+  "risks": [
+    "Constraint name drift on operator DB — pre-ship \\d ai_tool_audit / \\d forecast_computations",
+    "CASCADE over-deletes ML history — acceptable; ML recomputable per DEC-0106",
+    "BB false positive after BA fix — month-bucket SQL probe; do not lower min_monthly_points",
+    "BD error state shows empty — guard with !isError",
+    "Deploy ordering — migrations before backend image that relies on CASCADE + CHECK",
+    "Sync still success on recompute Err — unchanged per R-0050; separate product gate deferred"
+  ],
+  "task_count": 6,
+  "mandatory_task_count": 6,
+  "conditional_task_ids": [],
+  "optional_task_ids": [],
+  "estimate_total_hours": 9.5,
+  "decisions": ["DEC-0105", "DEC-0106", "DEC-0034", "DEC-0050", "DEC-0078"],
+  "research": ["R-0087"],
+  "acceptance_rows": ["AY", "AZ", "BA", "BB", "BC", "BD"],
+  "execute_order": ["AY1", "BA1", "BA2", "BD1", "T1", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Rebuild flow-finance-ai with Q0025 migrations + repository + ForecastPage changes before runtime probes"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "description": "Full Firefly sync (not exchanges-only) + forecast recompute before meta/planning/ML probes"
+    }
+  ],
+  "acceptance_mapping": {
+    "AY": {
+      "tasks": ["AY1", "V1"],
+      "verify": "Post-sync ai_tool_audit rows for forecast_bucket_assignment; sync logs free of tool_name CHECK WARN"
+    },
+    "AZ": {
+      "tasks": ["AY1", "V1"],
+      "verify": "low_confidence and extended result_status values persist without CHECK violation"
+    },
+    "BA": {
+      "tasks": ["BA1", "BA2", "T1", "V1"],
+      "verify": "Recompute completes without FK error; GET /api/v1/forecast/meta reflects fresh computation_id"
+    },
+    "BB": {
+      "tasks": ["V1"],
+      "verify": "Month-bucket SQL probe; ML-enhanced selectable when gate passes or honest ml_skipped_reason"
+    },
+    "BC": {
+      "tasks": ["V1"],
+      "verify": "Planning Compare loses Plan stale badge after successful recompute — downstream of BA"
+    },
+    "BD": {
+      "tasks": ["BD1", "V1"],
+      "verify": "Forecast page does not show No forecast data yet when meta already has computation_id"
+    }
+  },
+  "waived_ops_only": {
+    "sync_fail_on_recompute": "Deferred product decision gate — preserve R-0050 warn-and-serve",
+    "bc_plan_engine": "No plan-engine change — BC resolves with BA fix; V1 re-smoke only",
+    "bb_threshold_change": "Do not lower min_monthly_points — honest insufficient_history when <12 months"
+  },
+  "deploy_order": [
+    "AY1 + BA1 migrations",
+    "BA2 + BD1 + T1 code",
+    "Single backend+frontend release",
+    "Operator: BACKEND_FRONTEND_DEPLOY",
+    "Full Firefly sync + forecast recompute",
+    "V1 verify-work smoke"
+  ],
+  "next_phase": "execute",
+  "sprint_plan_ref": "sprint-plan-20260610-q0025-bug0017",
+  "architecture_ref": "architecture-20260609-bug0017",
+  "orchestrator_run_id": "intake-20260609-ui-audit"
+}

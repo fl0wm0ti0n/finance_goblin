@@ -1726,6 +1726,432 @@ Priority: P1
 
 ---
 
+### BUG-0016 — SPA deep links return HTTP 404
+
+Status: DONE
+Priority: P1
+**sprint_id:** Q0024
+**quick_task_id:** Q0024
+
+**environment:** Post-US-0020 rebuild; local `http://localhost:18080` (`docker-compose.override.yml`); omniflow external profile `https://financegnome.omniflow.cc`. UI audit 2026-06-09 (`handoffs/intake_evidence/ui-audit-20260609-local.json`).
+
+**steps_to_reproduce:**
+
+1. Open `http://localhost:18080/forecast` (or `/subscriptions`, `/planning`, `/sync`, `/analytics/cashflow`) directly in the browser — not via sidebar from `/`.
+2. Alternatively: navigate in-app to Forecast, then hard-refresh the page.
+
+**expected:**
+
+- Server returns **200** with SPA `index.html`; React Router renders the target page.
+- Bookmarks and shared URLs work for all client routes.
+
+**actual:**
+
+- HTTP **404** with empty body; browser shows blank page until user navigates to `/`.
+- In-app sidebar navigation from `/` works (client-side routing only).
+
+**evidence_refs:** `handoffs/intake_evidence/intake-20260609-spa-deep-link.json`; ui-audit finding **UI-001**; `curl` 404 on `/forecast`, `/subscriptions`, `/planning`, `/sync`, `/analytics/cashflow`
+
+#### Intake evidence (BUG-0016)
+
+- `intake_run_id`: `intake-20260609-spa-deep-link`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260609-spa-deep-link.json`
+- UI audit source: `handoffs/intake_evidence/ui-audit-20260609-local.json` (UI-001)
+
+#### Discovery (2026-06-09)
+
+**Verdict:** **CONFIRMED** — single infrastructure defect; all client routes fail identically (server 404, no `index.html` fallback). Not a React Router or page-level bug.
+
+**Decomposition:** **single-bug** (unchanged from intake) — one SPA fallback fix addresses every affected path.
+
+| Axis | Detail |
+|------|--------|
+| Root cause (hypothesis) | `build_router` uses `ServeDir` fallback without SPA `index.html` rewrite for non-existent paths; Traefik may need matching rule on omniflow |
+| Affected routes | `/forecast`, `/subscriptions`, `/planning`, `/sync`, `/analytics/{slug}` (acceptance **AX**) + `/wealth`, `/alerts`, `/chat`, `/settings` (same contract) |
+| Working path | `/` returns **200**; client-side nav from shell works |
+| Protected paths | `/api/v1/*`, `/analytics/grafana/*`, `/callback`, static `/assets/*` — must not receive HTML fallback |
+
+**Supersedes:** BUG-0009 advisory treating analytics SPA 404 as expected — operator acceptance **AX** requires **200** shell on all client routes.
+
+**Out of scope:** OIDC auth flow changes; Grafana embed proxy (DEC-0057); page-level UX; Traefik-only fix without backend parity on localhost.
+
+**Recommended next phase:** `/research`
+
+#### Release closure (2026-06-09 — Q0024 / `intake-20260609-ui-audit`)
+
+- **Status:** DONE
+- **Quick task:** Q0024
+- **Acceptance:** AX checked (`docs/product/acceptance.md`)
+- **Release notes:** `handoffs/releases/Q0024-release-notes.md`
+- **Release version:** `bug0016-q0024`
+- **Decisions:** DEC-0104 (Axum SPA fallback), DEC-0057 (route order)
+- **Operator follow-up:** **BACKEND_FRONTEND_DEPLOY** then 7-step smoke per `sprints/quick/Q0024/uat.json`
+
+---
+
+### BUG-0017 — Post-sync forecast recompute cluster (audit, FK, ML, planning stale)
+
+Status: DONE
+Priority: P1
+**sprint_id:** Q0025
+**quick_task_id:** Q0025
+
+**environment:** Post-US-0020 rebuild on localhost:18080; sync run `9ee95e6b-c6bd-4f4e-9b8c-4c068bf718cf` (2026-06-09). Residual from **BUG-0010** / **BUG-0014** forecast pipeline. 922 mirror transactions; account 114 Giro −3395.75 EUR.
+
+**steps_to_reproduce:**
+
+1. **Defect BA/BB (audit constraints):** `POST /api/v1/sync/trigger`; inspect `finance_goblin-flow-finance-ai-1` logs during forecast recompute.
+2. **Defect BC (FK delete):** Same sync — observe `forecast recompute failed` FK `forecast_computations_paired_baseline_id_fkey`.
+3. **Defect BD (ML skipped):** Forecast → Long-term → ML-enhanced / Compare buttons disabled; `GET /api/v1/forecast/meta` → `ml_skipped_reason=insufficient_history`.
+4. **Defect BE (planning stale):** Planning → Compare with active plan — badges **Plan stale**, Risk 85, projected balance −4442.36.
+5. **Defect BF (empty flash):** From Home, click Forecast immediately — brief **No forecast data yet** while meta API already has `computation_id`.
+
+**expected:**
+
+- Recompute completes without DB constraint errors; `ai_tool_audit` accepts `forecast_bucket_assignment` and `low_confidence` rows.
+- `GET /api/v1/forecast/meta` fresh after sync; ML overlay available when `FORECAST_ML_ENABLED` and history gate passes.
+- Planning Compare reflects current baseline (no stale badge after successful recompute).
+- Forecast page shows loading/meta-aware state — not false empty when data exists.
+
+**actual:**
+
+- WARN `forecast bucket audit insert failed` — `ai_tool_audit_tool_name_check` (forecast_bucket_assignment); `ai_tool_audit_result_status_check` (low_confidence).
+- WARN `forecast recompute failed` — FK `forecast_computations_paired_baseline_id_fkey` on delete; sync status still **success**.
+- ML-enhanced disabled; `ml_computation_id=null`.
+- Plan stale + high risk negative projection.
+- Transient false empty state on Forecast navigation.
+
+**evidence_refs:** `handoffs/intake_evidence/intake-20260609-forecast-recompute.json`; ui-audit **UI-002**, **UI-006**, **UI-009**, **UI-010**; docker logs 2026-06-09T19:52:41Z
+
+#### Sub-defect table (intake)
+
+| ID | Symptom | UI audit |
+|----|---------|----------|
+| **BA** | `ai_tool_audit_tool_name_check` rejects forecast_bucket_assignment | UI-002 |
+| **BB** | `ai_tool_audit_result_status_check` rejects low_confidence | UI-002 |
+| **BC** | `forecast_computations_paired_baseline_id_fkey` on recompute delete | UI-002 |
+| **BD** | ML skipped insufficient_history | UI-006 |
+| **BE** | Planning Plan stale + negative projected balance | UI-009 |
+| **BF** | Forecast false empty-state flash | UI-010 |
+
+#### Intake evidence (BUG-0017)
+
+- `intake_run_id`: `intake-20260609-forecast-recompute`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260609-forecast-recompute.json`
+
+#### Discovery (BUG-0017 — 2026-06-09)
+
+**Orchestrator:** `intake-20260609-ui-audit`. **Split decision:** single bug cluster retained — shared operator gate (`POST /api/v1/sync/trigger` → inspect recompute). Sub-defects map acceptance **AY–BD** to intake IDs **BA–BF**.
+
+| AC | Verdict | Discovery note | Likely fix surface |
+|----|---------|----------------|-------------------|
+| **AY** | CONFIRMED | `ai_tool_audit_tool_name_check` rejects `forecast_bucket_assignment` — US-0015 code without CHECK migration | New migration extending `006_ai_audit.sql` |
+| **AZ** | CONFIRMED | `ai_tool_audit_result_status_check` rejects `low_confidence` (also `provider_unavailable`, `parse_error`) | Same migration or map statuses in insert |
+| **BA** | CONFIRMED | `forecast_computations_paired_baseline_id_fkey` on retention DELETE | `repository.rs` delete order / FK policy |
+| **BB** | VERIFY AFTER AY–BA | `ml_skipped_reason=insufficient_history` with 922 txs — gate vs stale baseline | `forecast_ml` + re-smoke after backend fix |
+| **BC** | DOWNSTREAM | Plan stale + negative projection when recompute fails | Resolves with **BA**; else plan hook |
+| **BD** | CONFIRMED UX | False empty flash — meta pending treated as no forecast | `ForecastPage.tsx` loading guard |
+
+**Decomposition evidence:** feature count = 1 operator workflow (sync → recompute → meta/planning/forecast UI); cross-cutting = backend migrations + forecast retention + optional frontend; acceptance breadth = 6 AC; risk = must not mask true `insufficient_history`.
+
+**Operator gates (mandatory before sprint verify):**
+
+1. **BACKEND_FRONTEND_DEPLOY** — post-Q0024 image with BUG-0017 delta
+2. `POST /api/v1/sync/trigger` on `localhost:18080` — logs free of audit/FK WARN
+3. `GET /api/v1/forecast/meta` — `stale=false`, fresh `computation_id`
+4. Planning Compare — no **Plan stale** after successful recompute
+5. Forecast nav — no false empty when meta has `computation_id`
+
+**Alternatives considered:** split into separate bugs per sub-defect — rejected (single sync gate, shared root causes AY–BA); merge into BUG-0010 — rejected (DONE Q0013; distinct US-0015 audit + ML retention defects).
+
+**Research (BUG-0017 — 2026-06-09):** [R-0087](docs/engineering/research.md#r-0087--bug-0017-post-sync-forecast-recompute-cluster-audit-check-fk-retention-ml-gate-forecastpage-loading) — audit CHECK migration (AY/AZ); `ON DELETE CASCADE` on `paired_baseline_id` (BA); BB month-bucket verify post-fix; BC downstream; BD `isFetched` empty guard; 8 architecture gates.
+
+**Architecture (BUG-0017 — 2026-06-09):** **DEC-0105** (audit CHECK), **DEC-0106** (FK CASCADE + retention order); **BD** `isFetched` guard; `/quick` ≤6 tasks — see `docs/engineering/architecture-archive/architecture-pack-20260609.md` § BUG-0017.
+
+**Sprint (BUG-0017 — 2026-06-10):** **Q0025** DONE — tasks AY1, BA1, BA2, BD1, T1, V1; see `sprints/quick/Q0025/sprint.md`.
+
+#### Release closure (2026-06-10 — Q0025 / `intake-20260609-ui-audit`)
+
+- **Status:** DONE
+- **Quick task:** Q0025
+- **Acceptance:** AY–BD checked (`docs/product/acceptance.md`)
+- **Release notes:** `handoffs/releases/Q0025-release-notes.md`
+- **Release version:** `bug0017-q0025`
+- **Decisions:** DEC-0105 (audit CHECK), DEC-0106 (FK CASCADE + retention order)
+- **Operator follow-up:** **BACKEND_FRONTEND_DEPLOY** + **FULL_FIREFLY_SYNC** then 9-step smoke per `sprints/quick/Q0025/uat.json`
+
+---
+
+### BUG-0018 — Alert evaluation SQL failure (balance ambiguous)
+
+Status: DONE
+Priority: P1
+
+**environment:** Post-US-0020 rebuild localhost:18080; sync run `9ee95e6b-c6bd-4f4e-9b8c-4c068bf718cf`.
+
+**steps_to_reproduce:**
+
+1. `POST /api/v1/sync/trigger` (or Sync now in UI).
+2. Inspect backend logs for alert evaluation phase.
+3. Click header **Alerts** bell.
+
+**expected:**
+
+- Alert evaluation completes; matching rules create/update alerts.
+- Alerts panel shows active alerts when overdraft or subscription conditions met.
+
+**actual:**
+
+- Log: `alert evaluation failed` — PostgreSQL **42702** `column reference "balance" is ambiguous`.
+- UI: **No active alerts** (evaluation silently skipped).
+
+**evidence_refs:** `handoffs/intake_evidence/intake-20260609-alert-evaluation.json`; ui-audit **UI-003**; relates **BUG-0008** alert contract
+
+#### Intake evidence (BUG-0018)
+
+- `intake_run_id`: `intake-20260609-alert-evaluation`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260609-alert-evaluation.json`
+
+#### Discovery notes (2026-06-10 — `discovery-20260610-bug0018`, orchestrator `intake-20260609-ui-audit`)
+
+**Probe environment:** Code-path audit in isolated PO context; intake live probes from ui-audit **UI-003** (log 42702, run `9ee95e6b`); no `.env` / `.env_prod` secrets; `DATABASE_URL` unset — integration test skipped at discovery time.
+
+| AC | Verdict | Confidence | Root cause | Fix axis |
+|----|---------|------------|------------|----------|
+| **BE** | **CONFIRMED** | high | `evaluate_scarcity` L21–32: `SUM(balance::float8)` ambiguous across `forecast_balance_daily.balance` + `accounts.balance` in JOIN | Qualify `fbd.balance`; audit sibling evaluators |
+| **BF** | **DOWNSTREAM CONFIRMED** | high | Eval abort → empty `/api/v1/alerts` + header "No active alerts"; subscription alerts on separate sync phase | Resolves with **BE**; optional error-state UX deferred |
+
+**Discovery decomposition evidence:**
+
+| Evaluator | Result |
+|-----------|--------|
+| Feature/workflow count | 1 (post-sync alert eval SQL) — **single bug retained** |
+| Cross-cutting | `alerts/evaluate.rs`, sync alerts phase, `/api/v1/alerts`, header bell |
+| Acceptance breadth | 2 rows **BE**, **BF** unchanged |
+| Risk | Test gap (`wealth_alerts_integration` skips without DB); must preserve BUG-0008 subscription dedup |
+
+**Code anchors:**
+
+- `backend/src/alerts/evaluate.rs` — `evaluate_scarcity` daily aggregate query
+- `backend/migrations/002_forecast_hypertables.sql` — `forecast_balance_daily.balance`
+- `backend/migrations/001_initial.sql` — `accounts.balance`
+- `backend/src/sync/mod.rs` L375–421 — alerts phase warn-only failure
+- `backend/tests/wealth_alerts_integration.rs` — scarcity fixture (should fail post-fix validation when DB present)
+- `frontend/src/components/AlertBell.tsx`, `frontend/src/pages/AlertsPage.tsx` — read-only consumers
+
+**Alternatives considered:** qualify `accounts.balance` instead — **rejected** (forecast path must sum projected `fbd.balance` per R-0022); merge into BUG-0017 — **rejected** (distinct SQL defect); broaden to subscription alert SQL — **rejected** (no balance JOIN in subscription path).
+
+**Related work:** **BUG-0008** DONE (subscription dedup — must not regress); **R-0022**, **R-0024** (alert eval contract); **US-0005** (Alert Engine).
+
+**Recommended next phase:** `/architecture` → `/sprint-plan`
+
+#### Architecture notes (2026-06-10 — `architecture-20260610-bug0018`, orchestrator `intake-20260609-ui-audit`)
+
+| Gate | Resolution |
+|------|------------|
+| SQL fix | **DEC-0107** — qualify `fbd.balance` + `fbd.ts` (Option A per R-0088) |
+| Sync semantics | R-0024 warn-only preserved — no DEC |
+| BF scope | Wealth alerts primary; subscription dedup regression gate |
+| Sprint | `/quick` **Q0026** — BE1 + T1 + V1 (≤3 tasks) — **materialized** 2026-06-10 |
+
+**Architecture ref:** `docs/engineering/architecture.md` § BUG-0018; `decisions/DEC-0107.md`; spec-pack `BUG-0018-*`
+
+#### Sprint-plan notes (2026-06-10 — `sprint-plan-20260610-q0026-bug0018`, orchestrator `intake-20260609-ui-audit`)
+
+| Task | Surface | Acceptance |
+|------|---------|------------|
+| **BE1** | `backend/src/alerts/evaluate.rs` | **BE** — DEC-0107 |
+| **T1** | `backend/tests/wealth_alerts_integration.rs` | **BE** regression |
+| **V1** | `sprints/quick/Q0026/uat.md` | **BE**, **BF** |
+
+**Sprint ref:** `sprints/quick/Q0026/` · **Next phase:** `/plan-verify` (qa)
+
+#### Release notes (2026-06-10 — `bug0018-q0026`, orchestrator `intake-20260609-ui-audit`)
+
+- **Q0026** DONE — BE1 DEC-0107 SQL qualification; T1 wealth_alerts_integration 3/3; V1 operator smoke pass-with-prerequisites
+- **Acceptance:** **BE**, **BF** checked at release (runtime operator-deferred)
+- **Evidence:** `handoffs/releases/Q0026-release-notes.md`, `sprints/quick/Q0026/release-findings.md`, `sprints/quick/Q0026/uat.json`
+- **Operator follow-up:** **BACKEND_FRONTEND_DEPLOY** + **FULL_FIREFLY_SYNC** then 7-step smoke per `sprints/quick/Q0026/uat.json`
+
+---
+
+### BUG-0019 — Grafana metrics wrong (cashflow zeros, sync entity counts)
+
+Status: DONE
+Priority: P1
+
+**environment:** Post-US-0020 rebuild localhost:18080; Grafana embed works (no `/public/` 404). Mirror: 922 transactions, 75 categories. Residual **BUG-0013** / **BUG-0014** Grafana data cluster.
+
+**steps_to_reproduce:**
+
+1. **Defect CA (cashflow zeros):** Analytics → Cashflow — balance forecast chart flat at **0**; recent daily balances all **0**; compare with `GET /api/v1/forecast/monthly?account_id=114` (25 series points, non-zero from Jul 2026).
+2. **Defect CB (sync counts):** Analytics → Platform Health — **Records synced per entity** shows `transactions: 0`; compare with `SELECT COUNT(*) FROM transactions` → **922**.
+
+**expected:**
+
+- Cashflow panels match API forecast for default/funded account (114).
+- Platform Health entity counts reflect last successful sync mirror row counts.
+
+**actual:**
+
+- **CA:** Balance line flat zero; daily table zeros; monthly decomposition inconsistent (zeros current month, income 3266 from Jul).
+- **CB:** Transactions synced **0** despite 922 mirror rows.
+
+**evidence_refs:** `handoffs/intake_evidence/intake-20260609-grafana-metrics.json`; ui-audit **UI-004**, **UI-005**; screenshots from ui-audit 2026-06-09
+
+#### Sub-defect table (intake)
+
+| ID | Symptom | UI audit | Acceptance row |
+|----|---------|----------|----------------|
+| **CA** | Cashflow balance panels zero vs API data | UI-004 | **BG** |
+| **CB** | Platform Health transactions synced 0 vs 922 mirror | UI-005 | **BH** |
+
+#### Intake evidence (BUG-0019)
+
+- `intake_run_id`: `intake-20260609-grafana-metrics`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260609-grafana-metrics.json`
+
+**Sprint:** `/quick` **Q0027** (DONE — CA1, CA2, CA3, CB1, G1, V1; DEC-0108)
+
+#### Release notes (2026-06-10 — `bug0019-q0027`, orchestrator `auto-20260610-bug0019`)
+
+- **Q0027** DONE — DEC-0108 Grafana provisioning (sort:0 + current + baseline filter + mirror-count panel); static guard 21/21; `grafana_provisioning_bug0009` 6/6; V1 verify-work PASS-WITH-PREREQUISITES
+- **Acceptance:** **BG**, **BH** checked at release (OIDC browser + kiosk visual operator-deferred)
+- **Evidence:** `handoffs/releases/Q0027-release-notes.md`, `sprints/quick/Q0027/release-findings.md`, `sprints/quick/Q0027/uat.json`
+- **Operator follow-up:** optional omniflow OIDC BG/BH smoke; optional kiosk visual; duplicate-UID provider dedupe follow-up bug recommended
+
+---
+
+### BUG-0020 — Subscriptions list quality (duplicates, uncategorized)
+
+Status: DONE
+Priority: P2
+
+**environment:** Post-US-0020 rebuild localhost:18080; US-0020 `display_category_id` migration deployed. Operator UI audit 2026-06-09.
+
+**steps_to_reproduce:**
+
+1. Open `/subscriptions` → **All** tab (in-app navigation).
+2. Inspect duplicate merchant rows and Category column.
+
+**expected:**
+
+- One list row per logical confirmed recurring merchant (no triplicate Strom / duplicate YouTube).
+- Category column shows majority category from mirror txs where US-0020 backfill applies (`display_category_id` non-null).
+
+**actual:**
+
+- **Strom Teilbetrag** appears **3×** identical; **Google YouTube Premium** **2×** identical.
+- Every visible row shows **Uncategorized**; API samples have `display_category_id: null`.
+
+**evidence_refs:** `handoffs/intake_evidence/intake-20260609-subscriptions-list.json`; ui-audit **UI-007**, **UI-008**; extends **BUG-0008**, **BUG-0015** fingerprint work; US-0020 backfill gap; discovery `handoffs/po_to_tl.md` (2026-06-10) — `list_patterns` no payee_key dedup; migration 014 no retroactive `display_category_id` backfill
+
+#### Sub-defect table (intake)
+
+| ID | Symptom | UI audit |
+|----|---------|----------|
+| **DA** | Duplicate subscription rows same payee_key | UI-007 |
+| **DB** | display_category_id null — all Uncategorized | UI-008 |
+
+#### Intake evidence (BUG-0020)
+
+- `intake_run_id`: `intake-20260609-subscriptions-list`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260609-subscriptions-list.json`
+
+#### Architecture notes (2026-06-11 — `architecture-20260610-bug0020`, orchestrator `auto-20260610-bug0019`)
+
+- **DEC-0109** — one-time migration 016 reconcile (YouTube confirmed merge, Strom pending collapse) + confirmed `display_category_id` backfill; All-tab `pending`+`confirmed` only; forward pending guard in detection
+- **Research:** R-0090 (live DB probes + code audit)
+- **Acceptance:** **BI** (DA), **BJ** (DB)
+
+#### Sprint plan (2026-06-11 — `sprint-plan-20260611-q0028-bug0020`)
+
+| # | Task | Row | Priority |
+|---|------|-----|----------|
+| 1 | **DA1** — migration 016 YouTube merge + Strom pending collapse | **BI** | P0 |
+| 2 | **DB1** — migration 016 confirmed `display_category_id` backfill | **BJ** | P0 |
+| 3 | **DA2** — SubscriptionsPage All-tab filter | **BI** | P0 |
+| 4 | **DA3** — detection.rs forward pending guard | **BI** | P0 |
+| 5 | **T1** — integration tests BI/BJ + regression | **BI**, **BJ** | P0 |
+| 6 | **G1** — automated gate | **BI**, **BJ** | P0 |
+| 7 | **V1** — verify-work operator smoke | **BI**, **BJ** | P0 |
+
+**Sprint:** `/quick` **Q0028** (DONE — DA1, DB1, DA2, DA3, T1, G1, V1; DEC-0109)
+
+#### Release notes (2026-06-11 — `bug0020-q0028`, orchestrator `auto-20260610-bug0019`)
+
+- **Q0028** DONE — DEC-0109 migration 016 reconcile (YouTube merge, Strom pending collapse) + confirmed `display_category_id` backfill; DA2 All-tab filter; DA3 forward pending guard; bug0020 7/7 + regression PASS; V1 verify-work PASS-WITH-PREREQUISITES
+- **Acceptance:** **BI**, **BJ** checked at release (All-tab UI deploy operator-deferred pending ForecastPage TS6133 fix)
+- **Evidence:** `handoffs/releases/Q0028-release-notes.md`, `sprints/quick/Q0028/release-findings.md`, `sprints/quick/Q0028/uat.json`
+- **Operator follow-up:** fix ForecastPage TS6133 → rebuild `flow-finance-ai`; register migration 016 in `_sqlx_migrations`; BI-ALL browser smoke post-deploy
+
+---
+
+### BUG-0021 — Frontend UX polish (category filter delay, wealth role column)
+
+Status: DONE
+Priority: P3
+
+**closure_note:** verify-work PASS-WITH-PREREQUISITES Q0029, release PASS `bug0021-q0029`, 2026-06-11
+
+**environment:** Post-US-0020 rebuild localhost:18080; UI audit 2026-06-09.
+
+**steps_to_reproduce:**
+
+1. **Defect EA:** Forecast → Monthly or Wealth → Overview — observe **Loading category filter…** for 3–5s before combobox renders.
+2. **Defect EB:** Wealth → Overview → Account breakdown — **Role** column shows **—** for all accounts.
+
+**expected:**
+
+- CategoryFilter interactive within ~1s (eager import or prefetch).
+- Role column populated from Firefly account metadata when available, or column hidden/documented when unsupported.
+
+**actual:**
+
+- Suspense fallback visible 3–5s (`lazy()` import in ForecastPage / WealthPage).
+- Role column empty for Cash wallet, Giro, savings account.
+
+**evidence_refs:** `handoffs/intake_evidence/intake-20260609-frontend-ux.json`; ui-audit **UI-011**, **UI-012**
+
+#### Sub-defect table (intake)
+
+| ID | Symptom | UI audit |
+|----|---------|----------|
+| **EA** | CategoryFilter lazy-load delay | UI-011 |
+| **EB** | Wealth Role column empty | UI-012 |
+
+#### Intake evidence (BUG-0021)
+
+- `intake_run_id`: `intake-20260609-frontend-ux`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260609-frontend-ux.json`
+
+**Research status:** [R-0091](docs/engineering/research.md#r-0091--bug-0021-categoryfilter-lazy-load-delay--wealth-role-column-empty) — EA chunk-bound (not API); EB JSON path mismatch confirmed live (attributes vs root).
+
+**Architecture:** [DEC-0110](decisions/DEC-0110.md) (CategoryFilter static import BK surfaces) + [DEC-0111](decisions/DEC-0111.md) (wealth account_role attributes path + display labels); `docs/engineering/architecture.md` § BUG-0021.
+
+**Sprint:** `/quick` **Q0029** (DONE — EA1, EA2, EA3, EB1, EB2, T1, G1, V1; DEC-0110, DEC-0111)
+
+#### Release notes (2026-06-11 — `bug0021-q0029`, orchestrator `auto-20260611-bug0021`)
+
+- **Q0029** DONE — DEC-0110 static CategoryFilter on Forecast/Wealth/Planning; DEC-0111 COALESCE `account_role` SQL + `formatAccountRole` label map; bug0021 4/4 + automated gates PASS; V1 verify-work PASS-WITH-PREREQUISITES
+- **Acceptance:** **BK**, **BL** checked at release (browser/API/snapshot deploy operator-deferred pending **BACKEND_FRONTEND_DEPLOY**)
+- **Evidence:** `handoffs/releases/Q0029-release-notes.md`, `sprints/quick/Q0029/release-findings.md`, `sprints/quick/Q0029/uat.json`
+- **Operator follow-up:** rebuild `flow-finance-ai`; confirm wealth API Role column; optional snapshot upsert for BL-SNAPSHOT/BL-GRAFANA
+
+---
+
 ## User stories (canonical)
 
 ### US-0001 — Self-hosted platform foundation & Firefly read-only integration

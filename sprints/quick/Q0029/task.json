@@ -1,0 +1,206 @@
+{
+  "id": "Q0029",
+  "title": "BUG-0021 Frontend UX polish (category filter delay, wealth role column)",
+  "status": "PLANNED",
+  "bug_id": "BUG-0021",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0021",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["BK", "BL"],
+  "acceptance_mapping": {
+    "BK": {
+      "tasks": ["EA1", "EA2", "T1", "G1", "V1"],
+      "primary_verify": "Forecast Monthly + Wealth Overview: no multi-second Loading category filter... Suspense fallback; combobox interactive <=1s of tab visit"
+    },
+    "BL": {
+      "tasks": ["EB1", "EB2", "T1", "G1", "V1"],
+      "primary_verify": "GET /api/v1/wealth account_role non-null for asset accounts; Wealth Role column human labels; snapshot accounts[] carries account_role post-upsert; OIDC smoke"
+    }
+  },
+  "task_count": 8,
+  "mandatory_task_count": 7,
+  "optional_task_ids": ["EA3"],
+  "estimate_total_hours": 10,
+  "tasks": [
+    {
+      "id": "EA1",
+      "title": "ForecastPage static CategoryFilter import",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0021 (BK) — DEC-0110",
+      "files": ["frontend/src/pages/ForecastPage.tsx"],
+      "decisions": ["DEC-0110"],
+      "tests": [
+        "static import replaces React.lazy CategoryFilter on Monthly tab",
+        "Suspense wrapper removed around CategoryFilter only",
+        "CategoryTrendChart lazy boundary unchanged",
+        "fix TS6133 hasForecast if blocking build"
+      ]
+    },
+    {
+      "id": "EA2",
+      "title": "WealthPage static CategoryFilter import",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0021 (BK) — DEC-0110",
+      "files": ["frontend/src/pages/WealthPage.tsx"],
+      "decisions": ["DEC-0110"],
+      "tests": [
+        "static import replaces lazy CategoryFilter on Overview category card",
+        "Suspense wrapper removed",
+        "CategoryTrendChart lazy boundary unchanged"
+      ]
+    },
+    {
+      "id": "EB1",
+      "title": "wealth/repository.rs COALESCE account_role SQL path",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0021 (BL) — DEC-0111",
+      "files": ["backend/src/wealth/repository.rs"],
+      "decisions": ["DEC-0111"],
+      "tests": [
+        "COALESCE(payload->attributes->>account_role, payload->>account_role) in load_asset_accounts",
+        "test SQL constant L133 aligned",
+        "active/include_net_worth root reads unchanged"
+      ]
+    },
+    {
+      "id": "EB2",
+      "title": "WealthPage formatAccountRole label map",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": ["EB1"],
+      "acceptance_hook": "BUG-0021 (BL) — DEC-0111",
+      "files": [
+        "frontend/src/pages/WealthPage.tsx",
+        "frontend/src/lib/accountRole.ts"
+      ],
+      "decisions": ["DEC-0111"],
+      "tests": [
+        "formatAccountRole maps defaultAsset/cashWalletAsset/savingAsset/sharedAsset/ccAsset",
+        "unknown enum shows raw string",
+        "null shows em dash",
+        "API returns raw enum unchanged"
+      ]
+    },
+    {
+      "id": "EA3",
+      "title": "PlanningPage CategoryFilter parity (optional P2)",
+      "status": "open",
+      "priority": "P2",
+      "estimate_hours": 0.5,
+      "depends_on": [],
+      "acceptance_hook": "consistency only — out of BK",
+      "files": ["frontend/src/pages/PlanningPage.tsx"],
+      "decisions": ["DEC-0110"],
+      "tests": [
+        "static import replaces lazy CategoryFilter",
+        "Suspense wrapper removed"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "Integration tests bug0021_wealth_account_role.rs",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["EA1", "EA2", "EB1", "EB2"],
+      "acceptance_hook": "BUG-0021 (BK)(BL) — integration + regression",
+      "files": ["backend/tests/bug0021_wealth_account_role.rs"],
+      "decisions": ["DEC-0110", "DEC-0111"],
+      "tests": [
+        "BL: nested attributes.account_role seed returns non-null API account_role",
+        "BL: COALESCE root fallback path",
+        "regression: wealth list shape unchanged"
+      ]
+    },
+    {
+      "id": "G1",
+      "title": "Automated gate (cargo test + frontend build + blast-radius)",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": ["T1"],
+      "acceptance_hook": "BUG-0021 (BK)(BL) — DEC-0110/0111 automated verification",
+      "files": ["sprints/quick/Q0029/progress.md"],
+      "decisions": ["DEC-0110", "DEC-0111"],
+      "tests": [
+        "cargo test --test bug0021_wealth_account_role PASS",
+        "related wealth tests no regression",
+        "npm run build PASS",
+        "git diff --stat matches frozen file list only"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work operator smoke BK/BL + regression",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["G1"],
+      "operator_gate": "BACKEND_FRONTEND_DEPLOY + SNAPSHOT_UPSERT_OR_SYNC (optional)",
+      "acceptance_hook": "BUG-0021 (BK)(BL) — operator smoke matrix",
+      "files": [
+        "sprints/quick/Q0029/uat.md",
+        "sprints/quick/Q0029/uat.json"
+      ],
+      "tests": [
+        "BK-FORECAST: Forecast Monthly combobox <=1s no Suspense fallback",
+        "BK-WEALTH: Wealth Overview combobox <=1s",
+        "BL-API: GET /api/v1/wealth account_role non-null",
+        "BL-UI: Role column human labels",
+        "BL-SNAPSHOT: net_worth_snapshots accounts[] account_role post-upsert",
+        "BL-GRAFANA: portfolio role column populated (optional)",
+        "OIDC: /forecast /wealth /api/v1/wealth smoke on omniflow"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "EA1 ForecastPage static import",
+    "EA2 WealthPage static import",
+    "EB1 repository SQL path",
+    "EB2 WealthPage formatAccountRole",
+    "EA3 PlanningPage parity (optional)",
+    "T1 integration tests",
+    "G1 automated gate",
+    "BACKEND_FRONTEND_DEPLOY",
+    "SNAPSHOT_UPSERT_OR_SYNC (optional)",
+    "V1 verify-work smoke"
+  ],
+  "execute_order": ["EA1", "EA2", "EB1", "EB2", "EA3", "T1", "G1", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "rebuild backend + frontend; fix ForecastPage TS6133 if blocking",
+      "rationale": "BK/BL runtime gates require code on target environment"
+    },
+    {
+      "id": "SNAPSHOT_UPSERT_OR_SYNC",
+      "before_tasks": ["V1"],
+      "action": "optional Full sync or wait for daily snapshot upsert",
+      "rationale": "BL snapshot/Grafana role column gate needs post-deploy upsert"
+    }
+  ],
+  "frozen_boundaries": [
+    "DEC-0110: ForecastPage + WealthPage static CategoryFilter only; CategoryFilter.tsx unchanged",
+    "DEC-0111: repository SQL COALESCE path + frontend formatAccountRole; no sync rewrite",
+    "Forbidden: CategoryTrendChart lazy boundary change",
+    "Forbidden: firefly/mod.rs payload denormalization",
+    "Forbidden: grafana portfolio.json SQL edit",
+    "Forbidden: migration / schema change",
+    "Forbidden: root active/include_net_worth path fix",
+    "Forbidden: Firefly write-back",
+    "CategoryFilter component logic unchanged per DEC-0087"
+  ],
+  "decisions": ["DEC-0110", "DEC-0111"],
+  "research": ["R-0091"],
+  "operator_next": "After EA1-EB2 + T1 + G1: BACKEND_FRONTEND_DEPLOY; optional sync for snapshot gate; then V1 on localhost:18080 and optional financegnome.omniflow.cc OIDC"
+}

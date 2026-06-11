@@ -21,12 +21,12 @@
       "targets": [
         {
           "format": "time_series",
-          "rawSql": "SELECT ts AS time, balance AS value FROM forecast_balance_daily WHERE account_id = '$account_id' AND computation_id = (SELECT id FROM forecast_computations WHERE status = 'success' ORDER BY computed_at DESC LIMIT 1) AND $__timeFilter(ts) ORDER BY ts",
+          "rawSql": "SELECT ts AS time, balance AS value FROM forecast_balance_daily WHERE account_id = '$account_id' AND computation_id = (SELECT id FROM forecast_computations WHERE status = 'success' AND model_kind = 'baseline' ORDER BY computed_at DESC LIMIT 1) AND $__timeFilter(ts) ORDER BY ts",
           "refId": "A"
         },
         {
           "format": "time_series",
-          "rawSql": "SELECT ts AS time, $scarcity_threshold::numeric AS value FROM forecast_balance_daily WHERE account_id = '$account_id' AND computation_id = (SELECT id FROM forecast_computations WHERE status = 'success' ORDER BY computed_at DESC LIMIT 1) AND $__timeFilter(ts) ORDER BY ts LIMIT 1",
+          "rawSql": "SELECT ts AS time, $scarcity_threshold::numeric AS value FROM forecast_balance_daily WHERE account_id = '$account_id' AND computation_id = (SELECT id FROM forecast_computations WHERE status = 'success' AND model_kind = 'baseline' ORDER BY computed_at DESC LIMIT 1) AND $__timeFilter(ts) ORDER BY ts LIMIT 1",
           "refId": "B"
         }
       ],
@@ -42,7 +42,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT ts::date AS date, balance FROM forecast_balance_daily WHERE account_id = '$account_id' AND computation_id = (SELECT id FROM forecast_computations WHERE status = 'success' ORDER BY computed_at DESC LIMIT 1) ORDER BY ts DESC LIMIT 30",
+          "rawSql": "SELECT ts::date AS date, balance FROM forecast_balance_daily WHERE account_id = '$account_id' AND computation_id = (SELECT id FROM forecast_computations WHERE status = 'success' AND model_kind = 'baseline' ORDER BY computed_at DESC LIMIT 1) ORDER BY ts DESC LIMIT 30",
           "refId": "A"
         }
       ],
@@ -58,7 +58,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT ts::date AS month, income, fixed_costs, variable_costs, free_cashflow FROM forecast_cashflow_monthly WHERE account_id = '$account_id' AND computation_id = (SELECT id FROM forecast_computations WHERE status = 'success' ORDER BY computed_at DESC LIMIT 1) ORDER BY ts LIMIT 12",
+          "rawSql": "SELECT ts::date AS month, income, fixed_costs, variable_costs, free_cashflow FROM forecast_cashflow_monthly WHERE account_id = '$account_id' AND computation_id = (SELECT id FROM forecast_computations WHERE status = 'success' AND model_kind = 'baseline' ORDER BY computed_at DESC LIMIT 1) ORDER BY ts LIMIT 12",
           "refId": "A"
         }
       ],
@@ -96,7 +96,8 @@
         "datasource": { "type": "postgres", "uid": "FlowFinancePostgreSQL" },
         "query": "SELECT a.firefly_id AS __value, a.name AS __text FROM accounts a WHERE a.type = 'asset' ORDER BY ABS(COALESCE(a.balance, 0)) DESC, a.name ASC",
         "refresh": 1,
-        "sort": 1
+        "sort": 0,
+        "current": { "text": "", "value": "" }
       },
       {
         "name": "scarcity_threshold",
@@ -121,6 +122,6 @@
   "timezone": "browser",
   "title": "Cashflow",
   "uid": "cashflow",
-  "version": 1,
+  "version": 2,
   "folder": "Analytics"
 }

@@ -1,0 +1,192 @@
+{
+  "id": "Q0028",
+  "title": "BUG-0020 Subscriptions list quality (duplicates, uncategorized)",
+  "status": "PLANNED",
+  "bug_id": "BUG-0020",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0020",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["BI", "BJ"],
+  "acceptance_mapping": {
+    "BI": {
+      "tasks": ["DA1", "DA2", "DA3", "T1", "G1", "V1"],
+      "primary_verify": "GET /api/v1/subscriptions?status=confirmed <=1 row per payee_key; /subscriptions All tab no triplicate Strom or duplicate YouTube; post-sync no new confirmed YouTube dup"
+    },
+    "BJ": {
+      "tasks": ["DB1", "T1", "G1", "V1"],
+      "primary_verify": "Confirmed patterns display_category_id non-null per R-0090 oracle (netflix/kindle=18, youtube=66, hgp=56, florian gabriel=3)"
+    }
+  },
+  "task_count": 7,
+  "mandatory_task_count": 7,
+  "optional_task_ids": [],
+  "estimate_total_hours": 13,
+  "tasks": [
+    {
+      "id": "DA1",
+      "title": "Migration 016 YouTube confirmed merge + Strom pending collapse",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 3,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0020 (BI) — DEC-0109 reconcile",
+      "files": ["backend/migrations/016_bug0020_subscription_list_quality.sql"],
+      "decisions": ["DEC-0109", "DEC-0085", "DEC-0086"],
+      "tests": [
+        "YouTube: survivor earliest confirmed_at; loser inactive; spt/alerts/tags relinked",
+        "Strom: survivor highest last_seen_at; loser rejected; existing rejected unchanged",
+        "interval_matches gate on all merge clusters",
+        "idempotent re-run safe"
+      ]
+    },
+    {
+      "id": "DB1",
+      "title": "Migration 016 confirmed display_category_id DEC-0100 RANK backfill",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "depends_on": ["DA1"],
+      "acceptance_hook": "BUG-0020 (BJ) — DEC-0109 + DEC-0100",
+      "files": ["backend/migrations/016_bug0020_subscription_list_quality.sql"],
+      "decisions": ["DEC-0109", "DEC-0100"],
+      "tests": [
+        "confirmed patterns with categorized links get non-null display_category_id",
+        "RANK semantics match compute_display_category_id",
+        "pending/rejected remain NULL"
+      ]
+    },
+    {
+      "id": "DA2",
+      "title": "SubscriptionsPage All-tab exclude rejected and inactive",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0020 (BI) — DEC-0109 All-tab contract",
+      "files": ["frontend/src/pages/SubscriptionsPage.tsx"],
+      "decisions": ["DEC-0109"],
+      "tests": [
+        "All tab filters patterns.filter p.status !== rejected && !== inactive",
+        "Pending and Standing tabs unchanged",
+        "unfiltered API list fidelity preserved"
+      ]
+    },
+    {
+      "id": "DA3",
+      "title": "detection.rs forward pending guard for confirmed payee-interval",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0020 (BI) — DEC-0109 forward guard",
+      "files": ["backend/src/subscriptions/detection.rs"],
+      "decisions": ["DEC-0109", "DEC-0085", "DEC-0086"],
+      "tests": [
+        "skip pending when confirmed payee-interval matches via interval_matches after merge Ok(false)",
+        "existing rejected skip path preserved",
+        "warn log on skip"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "Integration tests bug0020_subscription_list_quality.rs",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 3,
+      "depends_on": ["DA1", "DB1", "DA2", "DA3"],
+      "acceptance_hook": "BUG-0020 (BI)(BJ) — integration + regression",
+      "files": ["backend/tests/bug0020_subscription_list_quality.rs"],
+      "decisions": ["DEC-0109", "DEC-0100"],
+      "tests": [
+        "BI: no confirmed payee_key duplicates post-reconcile fixture",
+        "BJ: oracle display_category_id on netflix/kindle/youtube/hgp/florian gabriel",
+        "discover endpoint shape unchanged",
+        "tag assign/filter smoke",
+        "DA3 forward guard no duplicate pending"
+      ]
+    },
+    {
+      "id": "G1",
+      "title": "Automated gate (cargo test + blast-radius check)",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": ["T1"],
+      "acceptance_hook": "BUG-0020 (BI)(BJ) — DEC-0109 automated verification",
+      "files": ["sprints/quick/Q0028/progress.md"],
+      "decisions": ["DEC-0109"],
+      "tests": [
+        "cargo test --test bug0020_subscription_list_quality PASS",
+        "related subscription tests no regression",
+        "git diff --stat matches frozen file list only"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work operator smoke BI/BJ + regression",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["G1"],
+      "operator_gate": "BACKEND_FRONTEND_DEPLOY + MIGRATION_016_APPLY + FULL_FIREFLY_SYNC",
+      "acceptance_hook": "BUG-0020 (BI)(BJ) — operator smoke matrix",
+      "files": [
+        "sprints/quick/Q0028/uat.md",
+        "sprints/quick/Q0028/uat.json"
+      ],
+      "tests": [
+        "BI-API: confirmed list <=1 per payee_key; no duplicate YouTube display_name",
+        "BI-ALL: /subscriptions All tab no Strom triplicate or YouTube duplicate",
+        "BJ: netflix/kindle=18, youtube=66, hgp=56, florian gabriel=3",
+        "REG-DISCOVER: discover unchanged",
+        "REG-TAGS: tag CRUD/filter unchanged",
+        "REG-DETECT: post-sync no new confirmed YouTube dup",
+        "OIDC: list endpoints smoke on omniflow"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "DA1 migration 016 reconcile",
+    "DB1 migration 016 backfill",
+    "DA2 frontend All-tab filter",
+    "DA3 detection forward guard",
+    "T1 integration tests",
+    "G1 automated gate",
+    "BACKEND_FRONTEND_DEPLOY + MIGRATION_016_APPLY",
+    "FULL_FIREFLY_SYNC",
+    "V1 verify-work smoke"
+  ],
+  "execute_order": ["DA1", "DB1", "DA2", "DA3", "T1", "G1", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "rebuild backend + frontend; apply migration 016",
+      "rationale": "BI/BJ runtime gates require reconcile + backfill + code on target environment"
+    },
+    {
+      "id": "MIGRATION_016_APPLY",
+      "before_tasks": ["V1"],
+      "action": "run 016_bug0020_subscription_list_quality.sql on flow_finance_ai",
+      "rationale": "Destructive one-time reconcile + backfill must run before API/UI probes"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "action": "Full sync + subscription detection phase",
+      "rationale": "DA3 regression — no new confirmed YouTube duplicate after guard"
+    }
+  ],
+  "frozen_boundaries": [
+    "DEC-0109: migration 016 + detection.rs + SubscriptionsPage.tsx + test file only",
+    "Forbidden: API list dedup collapse; list_patterns SQL shape change",
+    "Forbidden: list-time display_category_id recompute; pending/rejected backfill",
+    "Forbidden: hardcoded merchant ids; Firefly write-back",
+    "Unfiltered GET /api/v1/subscriptions without status unchanged",
+    "DEC-0100 compute_display_category_id algorithm unchanged; refresh-on-confirm policy unchanged",
+    "discover/tags API unchanged",
+    "interval_matches (DEC-0086) required on all merge and guard paths"
+  ],
+  "decisions": ["DEC-0109", "DEC-0100", "DEC-0085", "DEC-0086"],
+  "research": ["R-0090"],
+  "operator_next": "After DA1-DB1 + DA2-DA3 + T1 + G1: deploy + migration 016; Full sync; then V1 on localhost:18080 and optional financegnome.omniflow.cc OIDC"
+}

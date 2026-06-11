@@ -1,0 +1,168 @@
+{
+  "id": "Q0027",
+  "title": "BUG-0019 Grafana metrics wrong (cashflow zeros, sync entity counts)",
+  "status": "PLANNED",
+  "bug_id": "BUG-0019",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0019",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["BG", "BH"],
+  "acceptance_mapping": {
+    "BG": {
+      "tasks": ["CA1", "CA2", "CA3", "G1", "V1"],
+      "primary_verify": "Cashflow balance forecast + recent daily balances non-zero for default account 114 matching GET /api/v1/forecast/monthly?account_id=114; default holds on kiosk embed and direct Grafana (no var-account_id)"
+    },
+    "BH": {
+      "tasks": ["CB1", "G1", "V1"],
+      "primary_verify": "Platform Health Records-synced-per-entity transactions = mirror COUNT(*) (922) after Full sync and after subsequent 0-new-tx incremental run"
+    }
+  },
+  "task_count": 6,
+  "mandatory_task_count": 6,
+  "optional_task_ids": [],
+  "estimate_total_hours": 4.5,
+  "tasks": [
+    {
+      "id": "CA1",
+      "title": "cashflow.json account_id sort:0 + current default + version bump",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0019 (BG) — DEC-0108 CA variable fix",
+      "files": ["grafana/provisioning/dashboards/analytics/cashflow.json"],
+      "decisions": ["DEC-0108"],
+      "tests": [
+        "jq account_id variable sort == 0",
+        "jq account_id variable current non-null (mirror forecast_variant current shape)",
+        "dashboard version bumped",
+        "jq parse PASS"
+      ]
+    },
+    {
+      "id": "CA2",
+      "title": "cashflow.json panels 1-3 latest-success subquery AND model_kind = 'baseline'",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": ["CA1"],
+      "acceptance_hook": "BUG-0019 (BG) — DEC-0108 CA subquery fix (align with API default per R-0089 §3)",
+      "files": ["grafana/provisioning/dashboards/analytics/cashflow.json"],
+      "decisions": ["DEC-0108"],
+      "tests": [
+        "panels 1-3 rawSql each contain AND model_kind = 'baseline' in latest-success subquery",
+        "no other panel SQL semantics changed",
+        "jq parse PASS"
+      ]
+    },
+    {
+      "id": "CA3",
+      "title": "forecast-horizons.json account_id sort:0 + current default + version bump",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0019 (BG) — DEC-0108 CA variable fix (latent twin; panels keep $forecast_variant)",
+      "files": ["grafana/provisioning/dashboards/analytics/forecast-horizons.json"],
+      "decisions": ["DEC-0108"],
+      "tests": [
+        "jq account_id variable sort == 0 and current non-null",
+        "no panel rawSql changes",
+        "dashboard version bumped",
+        "jq parse PASS"
+      ]
+    },
+    {
+      "id": "CB1",
+      "title": "platform-health.json panel 2 mirror COUNT(*) UNION ALL + version bump",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0019 (BH) — DEC-0108 CB panel fix (mirror truth, cursor semantics untouched)",
+      "files": ["grafana/provisioning/dashboards/platform-health.json"],
+      "decisions": ["DEC-0108"],
+      "tests": [
+        "panel 2 rawSql = UNION ALL COUNT(*) over transactions, accounts, categories, budgets, tags, piggy_banks LEFT JOIN sync_cursors ORDER BY entity_type",
+        "no bare records_synced as count source (relabel-only exception 'records last run')",
+        "dashboard version bumped",
+        "jq parse PASS"
+      ]
+    },
+    {
+      "id": "G1",
+      "title": "Static JSON guard (DEC-0108 verification gates)",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": ["CA1", "CA2", "CA3", "CB1"],
+      "acceptance_hook": "BUG-0019 (BG)(BH) — DEC-0108 static guard",
+      "files": ["sprints/quick/Q0027/progress.md"],
+      "decisions": ["DEC-0108"],
+      "tests": [
+        "both dashboards account_id sort:0 + current present",
+        "cashflow panels 1-3 contain model_kind = 'baseline'",
+        "platform-health panel 2 references six mirror tables, not bare records_synced",
+        "git diff --stat shows only the three JSON files (provisioning-only blast radius)"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work Grafana re-provision smoke",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "depends_on": ["G1"],
+      "operator_gate": "GRAFANA_PROVISIONING_RELOAD + FULL_FIREFLY_SYNC_PLUS_INCREMENTAL_RERUN",
+      "acceptance_hook": "BUG-0019 (BG)(BH) — operator smoke matrix",
+      "files": [
+        "sprints/quick/Q0027/uat.md",
+        "sprints/quick/Q0027/uat.json"
+      ],
+      "tests": [
+        "BG: cashflow default account 114, panels 1-2 non-zero negative series — kiosk embed AND direct Grafana",
+        "BG oracle: GET /api/v1/forecast/monthly?account_id=114 (25 points, non-zero from Jul 2026); optional R-0089 DB probe",
+        "BG twin: forecast-horizons default account 114",
+        "BH: panel 2 transactions = SELECT COUNT(*) FROM transactions (922) after Full sync",
+        "BH regression: still 922 after subsequent 0-new-tx incremental run",
+        "OIDC: re-run BG/BH on omniflow profile"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "CA1+CA2 cashflow.json",
+    "CA3 forecast-horizons.json",
+    "CB1 platform-health.json",
+    "G1 static guard",
+    "GRAFANA_PROVISIONING_RELOAD (docker compose restart grafana)",
+    "Full sync + 0-new-tx incremental rerun",
+    "V1 verify-work smoke"
+  ],
+  "execute_order": ["CA1", "CA2", "CA3", "CB1", "G1", "V1"],
+  "operator_gates": [
+    {
+      "id": "GRAFANA_PROVISIONING_RELOAD",
+      "before_tasks": ["V1"],
+      "action": "docker compose restart grafana (or full redeploy)",
+      "rationale": "Provisioned JSON dashboards load at startup/scan interval; version bump cache-busts"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC_PLUS_INCREMENTAL_RERUN",
+      "before_tasks": ["V1"],
+      "action": "Full Firefly sync, then a subsequent incremental run with 0 new transactions",
+      "rationale": "BH gate requires mirror count to hold after the exact 0-new-tx regression scenario"
+    }
+  ],
+  "frozen_boundaries": [
+    "DEC-0108: only the three provisioning JSON files — no backend/frontend/migration edits",
+    "Forbidden: backend/src/db/mod.rs upsert_cursor, backend/src/firefly/mod.rs sync semantics, AnalyticsEmbedPage.tsx, migrations",
+    "Forbidden: hardcoding account id 114 anywhere",
+    "forecast-horizons panel SQL unchanged — $forecast_variant filter already correct (R-0051)",
+    "records_synced column retained only if relabeled 'records last run'",
+    "Entity list fixed: six upsert_cursor call sites — transactions, accounts, categories, budgets, tags, piggy_banks",
+    "CA-B embed var-account_id forwarding rejected/deferred — no frontend coupling",
+    "ml_enhanced stuck-running cleanup out of scope — separate backlog bug (PO flag)"
+  ],
+  "decisions": ["DEC-0108", "DEC-0107"],
+  "research": ["R-0089", "R-0051"],
+  "operator_next": "After CA1-CB1 + G1: docker compose restart grafana; Full sync + 0-new-tx incremental rerun; then V1 on localhost:18080 and financegnome.omniflow.cc"
+}

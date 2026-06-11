@@ -1,23 +1,22 @@
-# Curator Refresh — post S0019 / US-0020 (FINAL)
+# Curator Refresh — post Q0029 / BUG-0021
 
-**Date:** 2026-06-10T23:45:00Z  
-**Orchestrator:** `auto-20260608-us0020-001`  
+**Date:** 2026-06-11T13:15:00Z  
+**Orchestrator:** `auto-20260611-bug0021`  
 **Phase:** refresh-context  
 **Role:** curator  
-**Trigger:** release PASS — US-0020 DONE, S0019 released (`0.20.0-us0020`); intake bundle backlog drain complete
+**Trigger:** release PASS — BUG-0021 DONE, Q0029 released (`bug0021-q0029`); intake bundle bug queue drain complete
 
 ---
 
 ## Summary
 
-Triad reconciled after US-0020 / S0019 release. Rollover archived 27 state checkpoints + 2 po_to_tl sections; hot surfaces within policy caps; **open_stories_remaining=0** — intake bundle (`intake-20260607-category-planning-subscriptions`) fully delivered.
+Triad reconciled after BUG-0021 / Q0029 release. Rollover archived 21 state checkpoints + 1 architecture section; hot surfaces within policy caps; **bug_queue_remaining=0** — **idle** (await new intake).
 
 | Item | Status |
 |------|--------|
-| US-0020 / S0019 | **DONE** — acceptance AC-1..AC-6 checked |
-| US-0018 / US-0019 | **DONE** — prior bundle stories released |
-| Open bugs | (empty — defect drain complete) |
-| Open stories | (empty — backlog drain complete) |
+| BUG-0021 / Q0029 | **DONE** — acceptance BK–BL checked |
+| BUG queue | **EMPTY** — intake bundle drain complete |
+| Open stories | (empty — intake bundle drain complete) |
 | Decision gate | none open |
 
 ---
@@ -26,12 +25,13 @@ Triad reconciled after US-0020 / S0019 release. Rollover archived 27 state check
 
 | Surface | Check | Result |
 |---------|-------|--------|
-| `docs/engineering/state.md` | US-0020 released; session idle; traceability index current | pass |
-| `handoffs/po_to_tl.md` | US-0020 sprint-plan hot pointer within cap | pass |
-| `docs/engineering/architecture.md` | § US-0020 + DEC-0098..0103 aligned | pass |
-| `docs/engineering/decisions.md` | DEC-0098..0103 indexed; context pack → US-0020 latest story | pass |
-| `docs/product/backlog.md` | US-0020 Status: DONE; no OPEN stories | pass |
-| `docs/product/acceptance.md` | US-0020 AC-1..AC-6 checked | pass |
+| `docs/engineering/state.md` | BUG-0021 released; no active bug; traceability index current | pass |
+| `handoffs/po_to_tl.md` | within cap (127/800 lines) | pass |
+| `docs/engineering/architecture.md` | § BUG-0021 in architecture pack; DEC-0110/0111 aligned | pass |
+| `docs/engineering/decisions.md` | DEC-0110/0111 indexed; context pack → BUG-0021 latest bug fix | pass |
+| `docs/product/backlog.md` | BUG-0021 Status: DONE; no OPEN bugs in canonical section | pass |
+| `docs/product/acceptance.md` | BUG-0021 rows BK–BL checked | pass |
+| `docs/product/vision.md` | intake bundle scope complete | pass |
 
 **Triad gate:** **PASS**
 
@@ -41,17 +41,17 @@ Triad reconciled after US-0020 / S0019 release. Rollover archived 27 state check
 
 | Surface | Action | Notes |
 |---------|--------|-------|
-| `docs/engineering/state.md` | archived 27+3 units | 2 → `state-pack-20260608-i.md`; 25 → `state-pack-20260608-j.md`; 3 → `state-pack-20260608-k.md`; hot 993/1000 lines, 37/50 checkpoints |
-| `handoffs/po_to_tl.md` | archived 2 sections | → `po-to-tl-pack-20260608-l.md`, `po-to-tl-pack-20260608-m.md`; hot 500/500 lines |
-| `docs/engineering/architecture.md` | no rollover this cycle | hot 2803/3000 lines |
-| `docs/engineering/decisions.md` | context pack updated | latest story → US-0020 / DEC-0098–0103; idle |
-| `handoffs/resume_brief.md` | refreshed | idle — await new intake |
-| `sprints/S0019/summary.md` | updated | `0.20.0-us0020` released |
+| `docs/engineering/state.md` | archived 21 + 3 units | → `state-pack-20260611-b.md`, `state-pack-20260611-c.md`; hot 982/1000 lines |
+| `docs/engineering/architecture.md` | archived 1 section | → `architecture-pack-20260611-a.md`; hot 2996/3000 lines |
+| `handoffs/po_to_tl.md` | no rollover this cycle | hot 127/800 lines |
+| `docs/engineering/decisions.md` | context pack updated | latest bug fix → BUG-0021 / DEC-0110/0111; idle |
+| `handoffs/resume_brief.md` | refreshed | idle — no next bug/story |
+| `sprints/S0001/summary.md` | context pack prepended | Q0029 / BUG-0021 released |
 
-**Gate:** `python3 scripts/enforce-triad-hot-surface.py --rollover` (units=27,2 then +3 post-checkpoint) then `--check` — **PASS**  
+**Gate:** `python3 scripts/enforce-triad-hot-surface.py --rollover` (units=21,1 + 3 post-checkpoint trim) then `--check` — **PASS**  
 **Codebase map refresh:** skipped (`CODEBASE_MAP_REFRESH_ON_ROLLOVER` unset)
 
-**Verification tuple:** boundary=contiguous prefix; retained=993 state body lines; pack_ref=`state-pack-20260608-i.md`, `state-pack-20260608-j.md`, `state-pack-20260608-k.md`, `po-to-tl-pack-20260608-l.md`, `po-to-tl-pack-20260608-m.md`
+**Verification tuple:** boundary=contiguous prefix; moved=24 state + 1 arch; retained=982/1000 state lines; pack_ref=`state-pack-20260611-b.md`, `state-pack-20260611-c.md`, `architecture-pack-20260611-a.md`
 
 ---
 
@@ -59,42 +59,43 @@ Triad reconciled after US-0020 / S0019 release. Rollover archived 27 state check
 
 | Entry | Status | Notes |
 |-------|--------|-------|
+| R-0091 | fulfilled | Q0029 released via DEC-0110/0111; retain |
+| R-0090 | fulfilled | Q0028 released via DEC-0109; retain |
+| R-0089 | fulfilled | Q0027 released via DEC-0108; retain |
+| R-0088 | fulfilled | Q0026 released via DEC-0107; retain |
 | R-0085 | fulfilled | S0019 released via DEC-0098..0103; retain |
-| R-0080 | fulfilled | All portions (US-0018/US-0019/US-0020) via R-0083/R-0084/R-0085; retain |
-| R-0084 | fulfilled | S0018 released via DEC-0091..0097; retain |
-| R-0083 | fulfilled | S0017 released via DEC-0087..0090; retain |
-| R-0081 | fulfilled | Q0023/DEC-0084/0085/0086; retain |
-| R-0082 | fulfilled | DEC-0084; retain |
-| R-0079 | fulfilled | Q0022/BUG-0014; retain |
+| R-0080 | fulfilled | Intake bundle complete; retain |
 | Unlinked entries | none flagged | No prune candidates this cycle |
 
 No entries marked outdated. No duplicate merges required.
 
 ---
 
-## Closed segment evidence (US-0020)
+## Closed segment evidence (BUG-0021)
 
-- Release: `handoffs/releases/S0019-release-notes.md`, `sprints/S0019/release-findings.md`
-- Verify-work: `sprints/S0019/uat.json` (5 pass, 1 pass_with_prerequisites, 0 fail)
-- Execute/QA: `sprints/S0019/qa-findings.md`, `handoffs/dev_to_qa.md`
-- Decisions: DEC-0098 (discover explorer), DEC-0099 (manual confirm), DEC-0100 (majority category), DEC-0101 (tag schema), DEC-0102 (tag assign/filter), DEC-0103 (Grafana `$tag` P2)
-- Research: R-0085 (discover, confirm, majority category, operator tags); R-0080 intake bundle complete
-- Operator gates: BACKEND_FRONTEND_DEPLOY, FULL_FIREFLY_SYNC (AC-6 pass-with-prerequisites)
+- Release: `handoffs/releases/Q0029-release-notes.md`, `sprints/quick/Q0029/release-findings.md`
+- Verify-work: `sprints/quick/Q0029/uat.json` (1 pass, 6 pass_with_prerequisites, 0 fail)
+- Execute/QA: `sprints/quick/Q0029/qa-findings.md`, `handoffs/dev_to_qa.md`, `handoffs/qa_to_verify_work.md`
+- Decisions: DEC-0110 (static CategoryFilter BK surfaces), DEC-0111 (COALESCE account_role + label map)
+- Research: R-0091 (chunk-bound EA + attributes path EB)
+- Operator gates: BACKEND_FRONTEND_DEPLOY deferred AUTHENTIK_SECRET_KEY; optional SNAPSHOT_UPSERT_OR_SYNC for BL oracle
 
 ---
 
-## Final drain status
+## Bug queue status
 
 | Metric | Value |
 |--------|-------|
+| `closed_bug_id` | BUG-0021 |
+| `bug_queue_remaining` | **0** |
+| `bug_queue_ids` | (empty) |
 | `open_stories_remaining` | **0** |
-| `open_bug_queue` | (empty) |
-| `intake_bundle` | `intake-20260607-category-planning-subscriptions` — US-0018, US-0019, US-0020 all DONE |
-| `stop_reason` | completed (segment + backlog drain complete) |
+| `intake_bundle` | `intake-20260609-ui-audit` — **drain complete** |
+| `stop_reason` | completed (segment closed; bug queue drained) |
 
-**Recommended next:** **idle** — await new intake
+**Recommended next:** **idle** — await new intake (`/intake` or operator story)
 
-**Operator follow-up:** Deploy US-0018+US-0019+US-0020 delta; **BACKEND_FRONTEND_DEPLOY** + **FULL_FIREFLY_SYNC**; discover/tag OIDC smoke per `sprints/S0019/uat.json`; category-filter smoke per `sprints/S0017/uat.json`; goal-plan smoke per `sprints/S0018/uat.json`.
+**Operator follow-up (optional):** **BACKEND_FRONTEND_DEPLOY** to ship Q0029 EA/EB changes; **SNAPSHOT_UPSERT_OR_SYNC** for BL snapshot/Grafana oracle; prior BUG-0020 deploy/migration smoke still deferred.
 
 ---
 
@@ -104,5 +105,5 @@ No entries marked outdated. No duplicate merges required.
 - No prior chat history consumed
 - No host `.env`, `.env_prod`, or operator secret files read
 
-**Fresh context marker:** `refresh-context-20260610-us0020-curator-fresh`  
-**Runtime proof:** `runtime-proof-refresh-context-20260610-us0020-001`
+**Fresh context marker:** `refresh-context-20260611-bug0021-curator-fresh`  
+**Runtime proof:** `runtime-proof-refresh-context-20260611-bug0021-001`

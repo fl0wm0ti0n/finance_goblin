@@ -1,6 +1,7 @@
 import { lazy, Suspense, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { CategoryFilter } from "../components/category/CategoryFilter";
 import {
   apiFetch,
   ForecastAccount,
@@ -16,9 +17,6 @@ const DailyChart = lazy(() =>
 );
 const MonthlyChart = lazy(() =>
   import("../components/forecast/MonthlyChart").then((m) => ({ default: m.MonthlyChart })),
-);
-const CategoryFilter = lazy(() =>
-  import("../components/category/CategoryFilter").then((m) => ({ default: m.CategoryFilter })),
 );
 const CategoryTrendChart = lazy(() =>
   import("../components/category/CategoryTrendChart").then((m) => ({
@@ -143,8 +141,9 @@ export function ForecastPage() {
       mlAvailable,
   });
 
-  const hasForecast = !!metaQuery.data?.computation_id;
-  const emptyState = !hasForecast;
+  const showLoading = metaQuery.isPending;
+  const showEmpty =
+    metaQuery.isFetched && !metaQuery.isError && !metaQuery.data?.computation_id;
 
   const monthlySummary = useMemo(() => {
     const series = monthlyQuery.data?.series ?? [];
@@ -214,7 +213,12 @@ export function ForecastPage() {
         </div>
       )}
 
-      {emptyState ? (
+      {showLoading ? (
+        <div className="card">
+          <h2>Loading forecast…</h2>
+          <p style={{ color: "#64748b", margin: 0 }}>Fetching forecast metadata.</p>
+        </div>
+      ) : showEmpty ? (
         <div className="card">
           <h2>No forecast data yet</h2>
           <p>
@@ -266,13 +270,11 @@ export function ForecastPage() {
           {tab === "monthly" && (
             <>
               <div className="card" style={{ marginBottom: "1rem" }}>
-                <Suspense fallback={<p>Loading category filter…</p>}>
-                  <CategoryFilter
-                    value={categoryId}
-                    onChange={setCategoryId}
-                    label="Category (actual spending trend)"
-                  />
-                </Suspense>
+                <CategoryFilter
+                  value={categoryId}
+                  onChange={setCategoryId}
+                  label="Category (actual spending trend)"
+                />
                 <p style={{ fontSize: "0.85rem", color: "#64748b", margin: "0.5rem 0 0" }}>
                   Filters the actual spending trend chart below only — Income / Fixed / Variable
                   forecast cards and household chart are unchanged.

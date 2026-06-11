@@ -1,0 +1,97 @@
+{
+  "id": "Q0024",
+  "title": "BUG-0016 SPA deep links return HTTP 404",
+  "status": "EXECUTE_COMPLETE",
+  "bug_id": "BUG-0016",
+  "architecture_ref": "architecture-20260609-bug0016",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["AX"],
+  "acceptance_mapping": {
+    "AX": {
+      "tasks": ["AX1", "AX2", "V1"],
+      "primary_verify": "Client routes return HTTP 200 SPA shell on :18080 and omniflow; hard-refresh and bookmarks work; OIDC /callback completes"
+    }
+  },
+  "task_count": 3,
+  "mandatory_task_count": 3,
+  "optional_task_ids": [],
+  "estimate_total_hours": 5.5,
+  "tasks": [
+    {
+      "id": "AX1",
+      "title": "SPA index.html fallback in build_router",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0016 (AX) — DEC-0104 ServeDir::fallback(ServeFile)",
+      "files": ["backend/src/lib.rs"],
+      "decisions": ["DEC-0104", "DEC-0057"],
+      "tests": [
+        "cargo build PASS",
+        "Route order preserved: health → grafana → api → SPA"
+      ]
+    },
+    {
+      "id": "AX2",
+      "title": "Integration tests — deep links + protected prefixes",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["AX1"],
+      "acceptance_hook": "BUG-0016 (AX) — deep links 200 HTML; API non-HTML",
+      "files": ["backend/tests/"],
+      "decisions": ["DEC-0104"],
+      "tests": [
+        "GET /forecast → 200 text/html with shell marker",
+        "GET /api/v1/nonexistent → JSON 404 not index.html",
+        "cargo test SPA fallback paths PASS"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work curl + browser smoke",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "depends_on": ["AX1", "AX2"],
+      "operator_gate": "BACKEND_FRONTEND_DEPLOY",
+      "acceptance_hook": "BUG-0016 (AX) — :18080 curl matrix + omniflow browser + OIDC /callback",
+      "files": [
+        "sprints/quick/Q0024/uat.md",
+        "sprints/quick/Q0024/uat.json"
+      ],
+      "tests": [
+        "Curl primary AX paths 200 HTML on :18080",
+        "Curl protected prefixes non-HTML",
+        "Browser hard-refresh + bookmark on omniflow",
+        "OIDC /callback SPA shell regression"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "AX1 → AX2 single backend release",
+    "BACKEND_FRONTEND_DEPLOY",
+    "V1 verify-work smoke"
+  ],
+  "execute_order": ["AX1", "AX2", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "Rebuild flow-finance-ai image with AX1 SPA fallback",
+      "rationale": "Runtime curl/browser probes require deployed backend change"
+    }
+  ],
+  "frozen_boundaries": [
+    "Axum-only fix — no Traefik label change (R-0086 §5)",
+    "Use ServeDir::fallback not not_found_service — AX requires HTTP 200",
+    "No backend /callback redirect — React OidcCallback handles OIDC",
+    "Preserve DEC-0057 route order: health → grafana proxy → API → SPA",
+    "No frontend App.tsx route changes",
+    "Grafana panel data (BUG-0009 Y) out of scope"
+  ],
+  "decisions": ["DEC-0104", "DEC-0057"],
+  "research": ["R-0086"],
+  "operator_next": "After AX1+AX2 deploy: curl AX matrix on :18080; hard-refresh omniflow routes; verify OIDC /callback"
+}

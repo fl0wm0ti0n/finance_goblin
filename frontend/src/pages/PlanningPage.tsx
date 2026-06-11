@@ -14,6 +14,7 @@ import {
   PlanVsActualRow,
   SavingsSuggestion,
 } from "../lib/api";
+import { CategoryFilter } from "../components/category/CategoryFilter";
 import {
   formatPlanningError,
   PlanningFeedbackCard,
@@ -27,9 +28,6 @@ const PlanVsActualChart = lazy(() =>
   import("../components/planning/PlanVsActualChart").then((m) => ({
     default: m.PlanVsActualChart,
   })),
-);
-const CategoryFilter = lazy(() =>
-  import("../components/category/CategoryFilter").then((m) => ({ default: m.CategoryFilter })),
 );
 const CategoryTrendChart = lazy(() =>
   import("../components/category/CategoryTrendChart").then((m) => ({
@@ -851,13 +849,11 @@ export function PlanningPage() {
                 </Suspense>
               )}
               <div className="card" style={{ marginBottom: "1rem" }}>
-                <Suspense fallback={<p>Loading category filter…</p>}>
-                  <CategoryFilter
-                    value={compareCategoryId}
-                    onChange={setCompareCategoryId}
-                    label="Category (actual spending preview)"
-                  />
-                </Suspense>
+                <CategoryFilter
+                  value={compareCategoryId}
+                  onChange={setCompareCategoryId}
+                  label="Category (actual spending preview)"
+                />
                 <p style={{ fontSize: "0.85rem", color: "#64748b", margin: "0.5rem 0 0" }}>
                   Actual spending trend only — plan compare metrics and version table below are
                   household-level and unaffected by this filter.

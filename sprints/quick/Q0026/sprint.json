@@ -1,0 +1,70 @@
+{
+  "id": "Q0026",
+  "type": "quick",
+  "bug_ids": ["BUG-0018"],
+  "status": "PLANNED",
+  "created": "2026-06-10",
+  "goal": "Close BUG-0018 alert evaluation SQL failure: DEC-0107 qualify fbd.balance and fbd.ts in evaluate_scarcity (BE1), wealth_alerts_integration regression gate (T1), operator verify-work (V1) for BE log-clean sync and BF wealth inbox + header bell after deploy + Full sync.",
+  "scope": [
+    "BE1: evaluate_scarcity SQL — SUM(fbd.balance::float8), fbd.ts::date, GROUP BY fbd.ts::date per DEC-0107",
+    "T1: wealth_alerts_integration wealth_snapshot_and_scarcity_alert_on_post_sync PASS when DATABASE_URL set",
+    "V1: verify-work — sync logs clean, GET /api/v1/alerts active rows, header bell, subscription dedup regression"
+  ],
+  "risks": [
+    "Wrong column qualified (a.balance) — code review + T1 integration test",
+    "CI skips integration without DATABASE_URL — V1 operator gate + runbook note",
+    "New alerts after fix (budget/plan evaluators run) — expected behavior; document in release notes",
+    "BUG-0008 subscription dedup regression — separate code path; V1 regression gate only",
+    "Sync fail-on-alert-error — reject; preserve R-0024 warn-only"
+  ],
+  "task_count": 3,
+  "mandatory_task_count": 3,
+  "conditional_task_ids": [],
+  "optional_task_ids": [],
+  "estimate_total_hours": 3.5,
+  "decisions": ["DEC-0107", "DEC-0026", "DEC-0028"],
+  "research": ["R-0088"],
+  "acceptance_rows": ["BE", "BF"],
+  "execute_order": ["BE1", "T1", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Rebuild flow-finance-ai with BE1 evaluate_scarcity SQL fix before runtime probes"
+    },
+    {
+      "id": "FULL_FIREFLY_SYNC",
+      "before_tasks": ["V1"],
+      "description": "Full Firefly sync (not exchanges-only); alerts phase must complete without SQL error"
+    }
+  ],
+  "acceptance_mapping": {
+    "BE": {
+      "tasks": ["BE1", "T1", "V1"],
+      "verify": "Post-sync alert evaluation completes without 42702; logs free of alert evaluation failed"
+    },
+    "BF": {
+      "tasks": ["BE1", "V1"],
+      "verify": "GET /api/v1/alerts returns active rows when rules match; header bell non-empty; subscription dedup regression per BUG-0008"
+    }
+  },
+  "waived_ops_only": {
+    "sync_fail_on_alert_error": "Preserve R-0024 warn-only — do not fail sync on alert eval error",
+    "frontend_change": "No AlertBell/AlertsPage change — BF resolves when BE fixed",
+    "migration": "Runtime SQL string fix only — no schema change",
+    "ci_timescaledb_container": "Defer unless sprint capacity — V1 operator gate sufficient"
+  },
+  "deploy_order": [
+    "BE1 evaluate.rs SQL fix",
+    "T1 integration test PASS",
+    "Single backend release",
+    "Operator: BACKEND_FRONTEND_DEPLOY",
+    "FULL_FIREFLY_SYNC",
+    "V1 verify-work smoke"
+  ],
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260610-q0026-bug0018",
+  "architecture_ref": "architecture-20260610-bug0018",
+  "orchestrator_run_id": "intake-20260609-ui-audit"
+}

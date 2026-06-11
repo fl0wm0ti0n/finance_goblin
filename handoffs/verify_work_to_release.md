@@ -1,64 +1,63 @@
 # Verify-work → Release handoff
 
-**Story:** US-0020  
-**Sprint:** S0019  
-**Verify-work verdict:** **PASS** (2026-06-10)  
-**Orchestrator:** `auto-20260608-us0020-001`  
-**Decisions:** DEC-0098, DEC-0099, DEC-0100, DEC-0101, DEC-0102, DEC-0103  
+**Bug:** BUG-0021  
+**Quick task:** Q0029  
+**Verify-work verdict:** **PASS-WITH-PREREQUISITES** (2026-06-11T12:50:00Z)  
+**Orchestrator:** `auto-20260611-bug0021`  
+**Decisions:** DEC-0110, DEC-0111  
 **Next phase:** `/release`
 
 ## UAT summary
 
-- **Verdict:** PASS — 5/6 UAT steps pass (code), 1 pass-with-prerequisites (AC-6 runtime), 0 fail
-- **Automated re-run:** cargo lib 213/213; frontend vitest 9/9
-- **Runtime:** Omniflow live probes deferred per BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC (US-0018/US-0019 precedent)
+- **Verdict:** PASS-WITH-PREREQUISITES — 1/7 steps pass, 6 pass-with-prerequisites, 0 fail
+- **Automated:** bug0021 4/4; cargo lib 213/213; npm 9/9; build PASS; wealth_alerts 3/3
+- **Runtime:** mirror COALESCE 3/3 PASS; live API/UI/snapshot null pre-deploy; omniflow wealth API HTTP 200
 - **Blocking:** none
 
 ## Acceptance row verdicts
 
-| AC | Verdict | Notes |
-|----|---------|-------|
-| AC-1 | pass | Discover search by account/payee/interval; cap 50 — code PASS |
-| AC-2 | pass | Manual confirm from discover → confirmed; DEC-0085 merge — code PASS |
-| AC-3 | pass | Majority display category + RANK tie-break tooltip — code PASS |
-| AC-4 | pass | Tag CRUD (PATCH rename); multi-assign; slug filter — code PASS |
-| AC-5 | pass | Product DB storage; no Firefly write-back — code PASS |
-| AC-6 | pass_with_prerequisites | US-0003/US-0008 regression + OIDC smoke — live deferred |
+| Row | Verdict | Notes |
+|-----|---------|-------|
+| **BK** | pass_with_prerequisites | Static CategoryFilter + chunk audit PASS; browser ≤1 s deferred deploy |
+| **BL** | pass_with_prerequisites | COALESCE SQL + label map + mirror probe PASS; API/UI/snapshot deferred deploy |
 
 ## Deliverables verified
 
-| Slice | Tasks | Status |
-|-------|-------|--------|
-| Migration + types | T-0198 | PASS |
-| Discover service + API | T-0199 | PASS |
-| Discover tab UI | T-0200 | PASS |
-| Confirm from discover + merge | T-0201 | PASS |
-| Majority category compute | T-0202 | PASS |
-| Majority badge + tooltip | T-0203 | PASS |
-| Tag CRUD API | T-0204 | PASS |
-| Tag assign + filter | T-0205 | PASS |
-| Tag manager + filter chips | T-0206 | PASS |
-| User guide | T-0207 | PASS |
-| Regression tests | T-0208 | PASS |
-| UAT template | T-0209 | PASS |
-| Grafana `$tag` (P2) | T-0210 | PASS |
+| Task | Status | Evidence |
+|------|--------|----------|
+| EA1 — ForecastPage static CategoryFilter | PASS | Static import; Monthly tab no Suspense wrapper |
+| EA2 — WealthPage static CategoryFilter | PASS | Static import; Overview no Suspense wrapper |
+| EA3 — PlanningPage parity | PASS | Static import P2 parity |
+| EB1 — COALESCE account_role SQL | PASS | `repository.rs` + mirror probe 3/3 |
+| EB2 — formatAccountRole label map | PASS | `accountRole.ts` five canonical labels |
+| T1/G1 — integration + automated gate | PASS | bug0021 4/4; lib 213/213; npm 9/9 |
+| V1 — verify-work operator smoke | pass_with_prerequisites | Deploy deferred; DB oracle PASS |
+
+## Operator notes (release)
+
+1. Rebuild + restart `flow-finance-ai` (**BACKEND_FRONTEND_DEPLOY**) to ship Q0029 EA/EB changes
+2. After deploy: confirm `GET /api/v1/wealth` returns non-null `account_role` for Giro/savings/cash wallet
+3. Optional: trigger Full sync or wait for daily snapshot upsert (**SNAPSHOT_UPSERT_OR_SYNC**) before BL-SNAPSHOT/BL-GRAFANA oracle
+4. Release notes: CategoryFilter loads synchronously on Forecast/Wealth (DEC-0110); Role column shows Firefly account type (DEC-0111)
 
 ## Artifacts
 
-- `sprints/S0019/uat.json`
-- `sprints/S0019/uat.md`
-- `sprints/S0019/verify-work-findings.md`
-- `sprints/S0019/qa-findings.md`
-- `handoffs/dev_to_qa.md`
-- `docs/product/acceptance.md` (US-0020 AC-1..AC-6)
-- `decisions/DEC-0098.md` through `DEC-0103.md`
+- `sprints/quick/Q0029/uat.json`
+- `sprints/quick/Q0029/uat.md`
+- `sprints/quick/Q0029/qa-findings.md`
+- `handoffs/verify_work_report.md`
+- `handoffs/qa_to_verify_work.md`
+- `decisions/DEC-0110.md`, `decisions/DEC-0111.md`
+- `docs/product/acceptance.md` (BUG-0021 rows BK, BL)
 
 ## Release checklist
 
-1. Check `docs/product/acceptance.md` US-0020 rows AC-1..AC-6 (code-pass at release; AC-6 runtime advisory per pass-with-prerequisites)
-2. Set `docs/product/backlog.md` US-0020 → **DONE**
-3. Finalize release notes (S0019 / US-0020 — subscription manual discovery, majority category & operator tags)
-4. Append operator post-release smoke advisory from `uat.json` `operator_prerequisites`
-5. Optional post-release: operator executes 8-step omniflow OIDC checklist after BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC
+1. Check `docs/product/acceptance.md` BUG-0021 rows **BK**, **BL**
+2. Include deploy prerequisite in release notes
+3. Document CategoryFilter static import + account_role COALESCE behavior
 
-No code rework required.
+`fresh_context_marker`: verify-work-20260611-bug0021-qa-fresh  
+`runtime_proof_id`: runtime-proof-verify-work-20260611-bug0021-001  
+`phase_boundary`: verify-work → release
+
+**Next:** `/release` (role: release) in fresh subagent/chat.

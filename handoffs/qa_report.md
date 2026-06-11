@@ -1,79 +1,73 @@
-# QA Report — Q0017 / BUG-0007 (S-privacy re-run)
+# QA Report — Q0029 / BUG-0021
 
-**From:** QA  
+**From:** QA (`/qa`)  
 **To:** Verify-work (`/verify-work`)  
-**Date:** 2026-06-07  
-**Bug:** BUG-0007  
-**Sprint:** Q0017  
-**Orchestrator:** `auto-20260607-bug0007-001`  
+**Date:** 2026-06-11  
+**Bug:** BUG-0021  
+**Sprint:** Q0029 (`/quick`)  
+**Orchestrator:** `auto-20260611-bug0021`  
 **Verdict:** **PASS**
 
 ## Summary
 
-Re-ran QA after S privacy fix (`display_name` / `merchant_names[]` exempt from counterparty hashing in `get_subscriptions`). DEC-0069 implementation **PASS** on static review, `cargo test --lib` (150/150 — includes 2 new privacy tests), and `bug0007_ai_discovery` (8/8). V1 omniflow runtime smoke **DEFERRED** until operator **BACKEND_DEPLOY**.
+Independent QA verified DEC-0110 (static CategoryFilter on BK surfaces) and DEC-0111 (wealth `account_role` COALESCE SQL + `formatAccountRole` label map). Static review, automated gates, and read-only mirror probes align with the accepted contract. Live `:18080` API still returns null roles on the pre-deploy backend — expected at qa stage; BK/BL runtime oracles deferred to verify-work after operator deploy.
 
-## Test results
+## Independent test re-run (QA)
 
-| Suite | Command | Result |
-|-------|---------|--------|
-| Regression lib | `cargo test --lib` | **PASS** (150/150) |
-| S privacy unit | `get_subscriptions_preserves_*`, `get_subscriptions_still_redacts_*` | **PASS** |
-| T1 BUG-0007 contract | `cargo test --test bug0007_ai_discovery` | **PASS** (8/8) |
-| V1 runtime | Omniflow AI Chat smoke per `uat.md` | **DEFERRED** — BACKEND_DEPLOY |
+| Suite | Result |
+|-------|--------|
+| `cargo test --lib` | **213/213 PASS** (1.51s) |
+| `cargo test --test bug0021_wealth_account_role` | **4/4 PASS** (exit 0; integration seed skipped — migration 015 checksum drift) |
+| `cargo test load_asset_accounts_includes_negative_balances --lib` | **1/1 PASS** |
+| `npm test` | **9/9 PASS** |
+| `npm run build` | **PASS** |
 
-### Test output — cargo test --lib (PASS)
+## Static review
 
-```
-running 150 tests
-...
-test ai::privacy::tests::get_subscriptions_preserves_display_name_and_merchant_names ... ok
-test ai::privacy::tests::get_subscriptions_still_redacts_other_long_strings ... ok
-...
-test result: ok. 150 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.23s
-```
+| Area | Result |
+|------|--------|
+| EA1 ForecastPage | **PASS** — static `CategoryFilter` import; Suspense removed on Monthly tab; `hasForecast` removed; `CategoryTrendChart` lazy+Suspense unchanged |
+| EA2 WealthPage | **PASS** — static import; Suspense removed on Overview card; Role column uses `formatAccountRole` |
+| EA3 PlanningPage | **PASS** — static import parity (P2) |
+| EB1 SQL | **PASS** — `COALESCE(attributes, root)` in `load_asset_accounts` + test SQL constant |
+| EB2 label map | **PASS** — matches DEC-0111 table (`defaultAsset`→Checking, etc.); unknown enum → raw; null → em dash |
+| Bundle (DEC-0110) | **PASS** — no separate CategoryFilter lazy chunk; `CategoryTrendChart` chunk remains |
+| Blast radius | **PASS** — 6 files: 4 modified + 2 new (`accountRole.ts`, `bug0021_wealth_account_role.rs`) |
 
-### Test output — bug0007_ai_discovery (PASS)
+## Read-only runtime probes (pre-deploy baseline)
 
-```
-running 8 tests
-test get_transactions_schema_has_category_search ... ok
-test get_subscriptions_schema_has_kind_enum ... ok
-test category_search_cap_ten_with_truncation_flag ... ok
-test category_search_ilike_resolves_strom_and_amazon ... ok
-test mirror_date_bounds_from_transactions ... ok
-test category_search_short_keyword_rejected ... ok
-test aggregates_include_discovery_fields ... ok
-test six_tool_registry_unchanged ... ok
+| Probe | Result |
+|-------|--------|
+| Mirror COALESCE SQL (3 asset accounts) | **PASS** — `effective_role` populated from `attributes.account_role` |
+| `GET :18080/api/v1/wealth` | **EXPECTED pre-deploy** — `account_role: null` on Giro/savings/cash wallet |
+| `_sqlx_migrations` max version | **15** (016 not applied — unrelated BUG-0020; integration migrate blocked by 015 checksum) |
 
-test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-```
+No data modified (QA seed row deleted); no `.env`/secret files read.
 
-## Acceptance snapshot
+## Tasks verified at qa
 
-| Row | Code QA | Runtime (V1) |
-|-----|---------|--------------|
-| **(S)** | **PASS** — privacy exemption preserves merchant labels; other strings still hashed | **PENDING** deploy |
-| **(T)** | **PASS** — A1+A2+E1+E2 static; ILIKE/cap/bounds/short-keyword tests | **PENDING** deploy |
-| **(U)** | **PASS** — A′+F+E fusion path static | **PENDING** deploy |
-| Regression | **PASS** — `cargo test --lib` 150/150 | — |
+| ID | Status |
+|----|--------|
+| EA1 | **PASS** |
+| EA2 | **PASS** |
+| EB1 | **PASS** |
+| EB2 | **PASS** |
+| EA3 | **PASS** (P2 parity) |
+| T1 | **PASS** (with migrate-env caveat) |
+| G1 | **PASS** |
+| V1 | **DEFERRED** — verify-work |
 
-## S privacy fix verified
+## Acceptance row status (qa-stage)
 
-1. `get_subscriptions_preserves_display_name_and_merchant_names` — labels preserved through `PrivacyLayer`.
-2. `get_subscriptions_still_redacts_other_long_strings` — non-label strings still hashed.
-3. Transaction payee/description redaction unchanged (counterparty hash elsewhere).
+| Row | Status |
+|-----|--------|
+| **BK** | **PASS** at qa (code + build chunk audit); live browser ≤1 s deferred V1 |
+| **BL** | **PASS** at qa (SQL + label map + mirror probe); live API/UI/snapshot deferred V1 |
 
-## Artifacts
+## Blocking findings
 
-- Full findings: `sprints/quick/Q0017/qa-findings.md`
-- Dev handoff: `handoffs/dev_to_qa.md`
-- UAT checklist: `sprints/quick/Q0017/uat.md`
-- State checkpoint: `docs/engineering/state.md` (qa S-privacy re-run)
+**0** — hand off to `/verify-work`.
 
-## Next phase
-
-Operator **BACKEND_DEPLOY** → **`/verify-work`** for V1 omniflow AI Chat smoke (S-1/S-2 re-run).
-
----
-
-**Stop here.** Continue in a **new** subagent/chat with **`/verify-work`**.
+`fresh_context_marker`: qa-20260611-bug0021-qa-fresh  
+`runtime_proof_id`: runtime-proof-qa-20260611-bug0021-001  
+`phase_boundary`: qa → verify-work

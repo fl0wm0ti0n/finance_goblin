@@ -1,0 +1,76 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260609-subscriptions-list",
+  "intake_work_item_kind": "bug",
+  "source_audit": "handoffs/intake_evidence/ui-audit-20260609-local.json",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Subscriptions All tab: one row per logical merchant; Category column shows US-0020 majority category when detectable from mirror txs.",
+      "intake_run_id": "intake-20260609-subscriptions-list",
+      "turn_index": 0,
+      "ref": "ie:intake-20260609-subscriptions-list:0:ebb049f30b19679a"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "subscription_patterns list/dedup; display_category_id backfill; SubscriptionsPage categoryLabel; migration 014.",
+      "intake_run_id": "intake-20260609-subscriptions-list",
+      "turn_index": 1,
+      "ref": "ie:intake-20260609-subscriptions-list:1:39119d1ebc8d0ae3",
+      "delegation_scope": "backend/src/subscriptions/, frontend SubscriptionsPage.tsx",
+      "delegation_rationale": "UI audit duplicate Strom/YouTube rows and null display_category_id on API samples.",
+      "delegation_confidence": "high"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Extends BUG-0008/0015 list quality; US-0020 released — backfill must not break confirm/detect pipeline or Firefly read-only contract.",
+      "intake_run_id": "intake-20260609-subscriptions-list",
+      "turn_index": 2,
+      "ref": "ie:intake-20260609-subscriptions-list:2:d1bd7da45ad90ae6"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "GET /api/v1/subscriptions: no duplicate payee_key rows; display_category_id populated when majority detectable; Discover/tags regression pass.",
+      "intake_run_id": "intake-20260609-subscriptions-list",
+      "turn_index": 3,
+      "ref": "ie:intake-20260609-subscriptions-list:3:dbfbeee8c20815cc"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator reviews /subscriptions All tab without duplicate merchants and with meaningful category labels.",
+      "intake_run_id": "intake-20260609-subscriptions-list",
+      "turn_index": 4,
+      "ref": "ie:intake-20260609-subscriptions-list:4:07e5d97022c9c47a"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug-cluster",
+    "work_items": [
+      "BUG-0020"
+    ],
+    "rationale": "Both are subscriptions list data quality on same page/API — duplicates undermine trust; uncategorized undermines US-0020 value.",
+    "split_axis": "cluster with sub-defects DA–DB",
+    "sub_defects": {
+      "DA": "Duplicate rows (Strom 3×, YouTube 2×) same payee_key in All list",
+      "DB": "display_category_id null — all rows show Uncategorized"
+    },
+    "ui_findings_merged": [
+      "UI-007",
+      "UI-008"
+    ]
+  }
+}

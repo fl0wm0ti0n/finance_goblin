@@ -1,5 +1,7 @@
 //! BUG-0009 / Q0016 — Grafana provisioning SQL + JSON contract tests (DEC-0068).
-//! SQL fixtures skip when DATABASE_URL is not set.
+//! Amended Q0027 / BUG-0019: DEC-0108 supersedes the DEC-0068 "omit saved
+//! `current`" clause — `account_id` now requires `current` with empty
+//! text/value shape. SQL fixtures skip when DATABASE_URL is not set.
 
 use serde_json::Value;
 use sqlx::PgPool;
@@ -141,9 +143,26 @@ fn account_id_variable_uses_abs_balance_sort() {
             .iter()
             .find(|v| v["name"].as_str() == Some("account_id"))
             .expect("account_id variable");
+        // DEC-0108 (BUG-0019) supersedes the DEC-0068 "omit current" clause:
+        // current must be present with the empty text/value shape so the
+        // provisioned default deterministically resolves to the first
+        // (highest-|balance|) query option without baking a concrete account.
+        let current = account_var
+            .get("current")
+            .unwrap_or_else(|| panic!("{path}: DEC-0108 requires current on account_id"));
+        assert_eq!(
+            current["text"].as_str(),
+            Some(""),
+            "{path}: current.text must be empty (no saved concrete value)"
+        );
+        assert_eq!(
+            current["value"].as_str(),
+            Some(""),
+            "{path}: current.value must be empty (no saved concrete value)"
+        );
         assert!(
-            account_var.get("current").is_none(),
-            "{path}: omit saved current on account_id"
+            !account_var.to_string().contains("114"),
+            "{path}: no hardcoded account id on account_id variable"
         );
     }
 }

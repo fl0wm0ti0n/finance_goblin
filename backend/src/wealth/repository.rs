@@ -28,7 +28,10 @@ impl WealthRepository {
         sqlx::query_as(
             r#"
             SELECT firefly_id, name, currency, balance::float8 AS balance,
-                   payload->>'account_role' AS account_role
+                   COALESCE(
+                     payload->'attributes'->>'account_role',
+                     payload->>'account_role'
+                   ) AS account_role
             FROM accounts
             WHERE type = 'asset'
               AND COALESCE((payload->>'active')::boolean, true) = true
@@ -130,7 +133,10 @@ mod tests {
     fn load_asset_accounts_includes_negative_balances() {
         const SQL: &str = r#"
             SELECT firefly_id, name, currency, balance::float8 AS balance,
-                   payload->>'account_role' AS account_role
+                   COALESCE(
+                     payload->'attributes'->>'account_role',
+                     payload->>'account_role'
+                   ) AS account_role
             FROM accounts
             WHERE type = 'asset'
               AND COALESCE((payload->>'active')::boolean, true) = true
@@ -140,6 +146,14 @@ mod tests {
         assert!(
             !SQL.contains(">= 0"),
             "negative-balance asset accounts must remain visible per DEC-0065"
+        );
+        assert!(
+            SQL.contains("payload->'attributes'->>'account_role'"),
+            "account_role must read nested attributes path per DEC-0111"
+        );
+        assert!(
+            SQL.contains("COALESCE("),
+            "account_role must COALESCE attributes and root fallback per DEC-0111"
         );
     }
 }

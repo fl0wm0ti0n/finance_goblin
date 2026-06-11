@@ -8,6 +8,199 @@ Flow Finance AI is a self-hosted analytics layer on Firefly III. **US-0001** del
 
 ---
 
+# BUG-0019 — Grafana metrics wrong (cashflow zeros, sync entity counts)
+
+**Status:** architecture complete (2026-06-10)  
+**Discovery:** `discovery-20260610-bug0019` in `handoffs/po_to_tl.md`  
+**Research:** [R-0089](research.md#r-0089--bug-0019-grafana-cashflow-zeros-account_id-default--sync-entity-counts-per-run-cursor)  
+**Decisions:** **DEC-0108** (provisioning-only fix); extends **DEC-0107** (separate read path — unchanged)  
+**Acceptance:** `docs/product/acceptance.md` rows **BG** (CA), **BH** (CB)
+
+### Root cause (frozen, R-0089)
+
+- **CA:** `$account_id` variable `"sort": 1` re-sorts options alphabetically after the SQL `ABS(balance) DESC` order → default becomes unfunded Cash wallet (116, all-zero rows) instead of funded 114 (731 non-zero rows); no `current` set, kiosk embed passes no `var-account_id`. Query/selection problem — data for 114 is non-zero. Same latent defect in `forecast-horizons.json`.
+- **CB:** `platform-health.json` panel 2 reads `sync_cursors.records_synced` verbatim; `upsert_cursor` overwrites it with the **per-run** window count → 0-new-tx incremental run writes `transactions: 0` vs 922 mirror rows. Panel semantics wrong, cursor semantics correct.
+- **Not root cause:** embed transport (BUG-0001B fixed), retention race (rows inserted before `mark_success`; retention deletes only old successes), data-side zeros for 114.
+
+### Architecture contract (DEC-0108) — provisioning-only
+
+| Change | File | Detail |
+|--------|------|--------|
+| CA-1 | `grafana/provisioning/dashboards/analytics/cashflow.json` | `$account_id` variable `"sort": 0` + add `current` (first option); bump `version` |
+| CA-2 | same file, panels 1–3 | latest-success subquery gains `AND model_kind = 'baseline'` (align with API default) |
+| CA-3 | `grafana/provisioning/dashboards/analytics/forecast-horizons.json` | `$account_id` `"sort": 0` + `current`; bump `version` (panels already filter `$forecast_variant`) |
+| CB-1 | `grafana/provisioning/dashboards/platform-health.json` panel 2 | replace `rawSql` with per-entity mirror `COUNT(*)` UNION ALL (transactions, accounts, categories, budgets, tags, piggy_banks) LEFT JOIN `sync_cursors` for `last_successful_sync_at`; bump `version`; full SQL sketch in DEC-0108 |
+
+**Forbidden:** backend/frontend/migration edits (`upsert_cursor`, `sync_transactions`, `AnalyticsEmbedPage.tsx`); hardcoding account id 114.
+
+**Rejected alternatives:** embed-forwarded `var-account_id` (coupling, deferrable); household SUM panels (changes BG meaning); cumulative `records_synced` (overlap re-fetch overcounts); backend `total_records` column (duplicates live SQL). Full table: DEC-0108.
+
+### Deploy / operator steps
+
+1. Apply the three JSON edits; bump each dashboard `version`.
+2. **Re-provision Grafana:** `docker compose restart grafana` (provisioning reload required — JSON dashboards are loaded at startup/scan interval).
+3. Verify via kiosk embed (`AnalyticsEmbedPage`) **and** direct Grafana URL (covers no-`var-account_id` path).
+4. Rollback: `git revert` of the JSON files + Grafana restart (no schema/data state).
+
+### Verification gates
+
+| Gate | Proof |
+|------|-------|
+| **BG** | Cashflow panels 1–2 non-zero (negative) for default account = 114; matches `GET /api/v1/forecast/monthly?account_id=114` (25 points, non-zero from Jul 2026) |
+| **BH** | Platform Health `transactions` = `SELECT COUNT(*) FROM transactions` (922) after Full sync **and** after a subsequent 0-new-tx incremental run |
+| Static | JSON checks: `account_id` `sort: 0` in both dashboards; platform-health panel 2 SQL references mirror tables |
+| OIDC | Re-run BG/BH on omniflow profile (provisioning-only blast radius) |
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Cached dashboard after provisioning edit | Restart Grafana + `version` bump |
+| Fresh install (all balances 0) → arbitrary default account | Acceptable; runbook note |
+| `model_kind='baseline'` freezes cashflow panels off ML | Accepted; future `$forecast_variant` wiring per R-0051 |
+| Mirror COUNT(*) ≠ "synced" if Firefly-side deletions linger | BH specifies mirror truth; reconciliation out of scope |
+
+**Out of scope (flag to PO):** 43 `ml_enhanced` computations stuck `status='running'` accumulate unbounded (retention prunes successes only) — recommend new backlog bug.
+
+`isolation_scope`: artifact + repo source reads only; no host `.env` / secrets read.
+
+---
+
+# BUG-0018 — Alert evaluation SQL failure (balance ambiguous)
+
+**Status:** architecture complete (2026-06-10)  
+**Full section:** `docs/engineering/architecture-archive/architecture-pack-20260609-a.md` § BUG-0018  
+**Decisions:** **DEC-0107** · **Sprint:** `/quick` **Q0026** (PLANNED — BE1 + T1 + V1) · **Acceptance:** BE, BF
+
+---
+
+# BUG-0016 — SPA deep links return HTTP 404
+
+**Status:** architecture complete (2026-06-09)  
+**Discovery:** `discovery-20260609-bug0016` in `handoffs/archive/po-to-tl-pack-20260609-a.md`  
+**Research:** [R-0086](research.md#r-0086--bug-0016-spa-deep-link-fallback-axum-vs-traefik)  
+**Decisions:** **DEC-0104** (Axum SPA `index.html` fallback); extends **DEC-0057** (Grafana proxy ordering — unchanged); **no Traefik label change**  
+**Sprint:** `/quick` **Q0024** (PLANNED — AX1 + AX2 + V1)  
+**Acceptance:** `docs/product/acceptance.md` row **AX** (execute: **AX1**, **AX2**, **V1**)  
+**Spec-pack:** `docs/engineering/spec-pack/BUG-0016-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
+**Related:** UI-001 (UI audit curl evidence); BUG-0009 (analytics 404 advisory superseded for shell routing only)
+
+### Root cause (frozen)
+
+`build_router` merges `health`, `analytics::grafana_routes`, and `api::routes` before a `tower_http::ServeDir` fallback — ordering is correct per R-0056 / **DEC-0057**. The defect is the fallback itself: plain `ServeDir` returns **404** when no file exists at the request path (e.g. `/forecast`). `/` works because `index.html` exists at the directory root; client-side sidebar navigation works because the shell is already loaded.
+
+**Not root cause:** React Router misconfiguration, page components, Traefik host rules, or OIDC redirect handling.
+
+`isolation_scope`: artifact + repo source reads; no host `.env` / `.env_prod` secrets read.
+
+### Architecture contract (DEC-0104)
+
+```text
+BUG-0016
+├── AX1 — SPA fallback in build_router (P0)
+│   └── ServeDir::fallback(ServeFile::new(index.html)) → HTTP 200
+├── AX2 — Integration tests (P0)
+│   └── Deep links 200; /api/v1/* and /analytics/grafana/* ≠ HTML
+└── V1 — verify-work curl + browser smoke (P0)
+    └── AX matrix on :18080; omniflow hard-refresh; OIDC /callback
+```
+
+**Deploy:** Single backend change; rebuild `flow-finance-ai` image. No Traefik label edits (R-0086 §5).
+
+### Route ordering (must-not-break)
+
+| Order | Prefix | Handler | SPA fallback? |
+|-------|--------|---------|---------------|
+| 1 | `/health` | `health::routes` | No |
+| 2 | `/analytics/grafana/*` | `analytics::grafana_routes` (**DEC-0057**) | No — proxy JSON/assets/WebSocket |
+| 3 | `/api/v1/*` | `api::routes` (JWT when OIDC on) | No — JSON 404/401 preserved |
+| 4 | * | `ServeDir` + `index.html` fallback | Yes — client routes + `/callback` |
+
+**`/callback`:** No Axum redirect or catch-all rewrite to `/`. Serving `index.html` at `/callback` is correct — `App.tsx` registers `/callback` outside `ProtectedRoute` for OIDC token exchange.
+
+### Implementation contract
+
+```rust
+use tower_http::services::{ServeDir, ServeFile};
+
+let index = static_dir.join("index.html");
+let spa = ServeDir::new(static_dir).fallback(ServeFile::new(index));
+router = router.fallback_service(spa);
+```
+
+| API | Status on deep link | Use? |
+|-----|---------------------|------|
+| `ServeDir::fallback(ServeFile::new(index.html))` | **200** | **Yes** — matches AX |
+| `ServeDir::not_found_service(ServeFile::new(index.html))` | **404** (body = index.html) | **No** |
+| Plain `ServeDir` (current) | **404** empty | Current bug |
+
+Apply identically to the `frontend/dist` dev branch.
+
+### Regression matrix (acceptance AX)
+
+**Primary AX paths (curl — localhost `:18080`, `AUTH_DEV_BYPASS`):**
+
+| Path | Expected after fix |
+|------|-------------------|
+| `GET /forecast` | 200, `text/html`, body contains `<div id="root">` or Vite shell marker |
+| `GET /subscriptions` | 200 HTML shell |
+| `GET /planning` | 200 HTML shell |
+| `GET /sync` | 200 HTML shell |
+| `GET /analytics/cashflow` | 200 HTML shell |
+
+**Expanded same-contract paths:** `/wealth`, `/alerts`, `/chat`, `/settings`, `/analytics/{platform-health,budgets,portfolio,subscriptions,forecast-horizons}`.
+
+**Protected prefixes (must stay non-HTML):**
+
+| Path | Expected |
+|------|----------|
+| `GET /api/v1/health` or representative API route | JSON, not HTML |
+| `GET /analytics/grafana/api/health` | Proxy response, not SPA index |
+| `GET /assets/{hashed}.js` | 200 static file with correct `Content-Type` |
+| `GET /api/v1/nonexistent` | JSON 404, not `index.html` |
+
+**Browser smoke (operator):** Hard-refresh Forecast, Planning, Analytics embed; bookmark reopen; omniflow with Traefik `auth` + optional OIDC; `/callback?code=…&state=…` completes.
+
+### Alternatives rejected
+
+| Alternative | Why rejected |
+|-------------|--------------|
+| Traefik catch-all / nginx sidecar | Duplicate responsibility; no acceptance gain (R-0086 §2) |
+| `not_found_service` | 404 status fails AX curl gate |
+| Redirect unknown paths to `/` | Breaks bookmarked URLs |
+| Backend `/callback` handler | Conflicts with React OIDC flow |
+| `axum_extra::SpaRouter` | Unnecessary nesting; Vite already emits `/assets/*` at root |
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| API paths receive `index.html` | Preserve merge order; AX2 integration test |
+| Grafana proxy swallowed by SPA | `grafana_routes` before fallback; test `/analytics/grafana/…` |
+| `index.html` missing in image | Dockerfile copies `dist` → `/app/static` |
+| Traefik `/analytics/*` no-auth exposes SPA slug | Pre-existing US-0011 tradeoff; document, do not widen |
+| OIDC `/callback` broken by redirect | Do not add `Redirect` fallback |
+
+### Decisions
+
+| ID | Topic | Summary |
+|----|-------|---------|
+| **DEC-0104** | SPA fallback | Axum-only; `ServeDir::fallback(ServeFile)` → HTTP 200; Traefik pass-through |
+
+Full record: `decisions/DEC-0104.md`
+
+### Acceptance mapping
+
+| Row | Tasks | Verify |
+|-----|-------|--------|
+| **AX** | AX1, AX2, V1 | Curl matrix + browser smoke + OIDC `/callback` |
+
+### Next phase
+
+`/plan-verify` — audit Q0024 acceptance AX coverage; then `/execute`.
+
+---
+
 ## US-0016 — Root README for operators and contributors (living documentation)
 
 **Status:** Architecture complete (2026-06-08)  

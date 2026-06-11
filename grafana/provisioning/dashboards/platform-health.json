@@ -33,7 +33,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT entity_type, records_synced, last_successful_sync_at FROM sync_cursors ORDER BY entity_type",
+          "rawSql": "SELECT e.entity_type, e.records_total, c.last_successful_sync_at FROM (SELECT 'transactions' AS entity_type, COUNT(*) AS records_total FROM transactions UNION ALL SELECT 'accounts', COUNT(*) FROM accounts UNION ALL SELECT 'categories', COUNT(*) FROM categories UNION ALL SELECT 'budgets', COUNT(*) FROM budgets UNION ALL SELECT 'tags', COUNT(*) FROM tags UNION ALL SELECT 'piggy_banks', COUNT(*) FROM piggy_banks) e LEFT JOIN sync_cursors c ON c.entity_type = e.entity_type ORDER BY e.entity_type",
           "refId": "A"
         }
       ],
@@ -67,5 +67,5 @@
   "timezone": "browser",
   "title": "Platform Health",
   "uid": "platform-health",
-  "version": 1
+  "version": 2
 }

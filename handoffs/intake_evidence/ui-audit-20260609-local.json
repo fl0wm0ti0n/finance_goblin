@@ -1,0 +1,211 @@
+{
+  "audit_run_id": "ui-audit-20260609-local",
+  "auditor": "cursor-agent",
+  "environment": {
+    "base_url": "http://localhost:18080",
+    "compose": "docker-compose.yml + docker-compose.external.yml + docker-compose.override.yml",
+    "auth": "AUTH_DEV_BYPASS=true (no Traefik basic-auth)",
+    "build": "post US-0020 rebuild 2026-06-09",
+    "sync_run_id": "9ee95e6b-c6bd-4f4e-9b8c-4c068bf718cf"
+  },
+  "pages_tested": [
+    "/",
+    "/sync",
+    "/forecast (Daily, Monthly, Long-term)",
+    "/subscriptions (All, Discover)",
+    "/planning (Scenarios, Compare)",
+    "/wealth (Overview)",
+    "/settings",
+    "/analytics/platform-health",
+    "/analytics/cashflow",
+    "Alerts panel",
+    "AI assistant panel"
+  ],
+  "findings": [
+    {
+      "id": "UI-001",
+      "severity": "P1",
+      "title": "SPA deep links return HTTP 404",
+      "steps": [
+        "Open http://localhost:18080/forecast (or /subscriptions, /planning, /sync, /analytics/cashflow) directly in the browser or refresh on a client route"
+      ],
+      "expected": "SPA index.html served; React Router renders the page",
+      "actual": "HTTP 404 with empty body; browser shows blank page until user navigates to /",
+      "evidence": "curl returns 404 for /forecast, /subscriptions, /planning; in-app sidebar navigation works"
+    },
+    {
+      "id": "UI-002",
+      "severity": "P1",
+      "title": "Forecast recompute fails on sync (FK + audit constraints)",
+      "steps": [
+        "POST /api/v1/sync/trigger",
+        "Inspect finance_goblin-flow-finance-ai-1 logs"
+      ],
+      "expected": "Forecast recomputes cleanly; ai_tool_audit rows inserted; meta.stale=false after success",
+      "actual": "WARN forecast bucket audit insert failed (ai_tool_audit_tool_name_check for forecast_bucket_assignment; ai_tool_audit_result_status_check for low_confidence); WARN forecast recompute failed FK forecast_computations_paired_baseline_id_fkey; sync status still success",
+      "evidence": "docker logs 2026-06-09T19:52:41Z; GET /api/v1/forecast/meta shows low_confidence=true, ml_status=skipped"
+    },
+    {
+      "id": "UI-003",
+      "severity": "P1",
+      "title": "Alert evaluation SQL error — no alerts surfaced",
+      "steps": [
+        "Trigger sync",
+        "Click Alerts bell in header"
+      ],
+      "expected": "Subscription/overdraft alerts evaluated and shown when rules match",
+      "actual": "Log: alert evaluation failed — column reference \"balance\" is ambiguous (42702); UI shows \"No active alerts\"",
+      "evidence": "docker logs run_id 9ee95e6b; UI Alerts panel 2026-06-09"
+    },
+    {
+      "id": "UI-004",
+      "severity": "P1",
+      "title": "Grafana cashflow balance panels show zero despite forecast data",
+      "steps": [
+        "Navigate in-app to Analytics → Cashflow",
+        "Compare with GET /api/v1/forecast/monthly?account_id=114"
+      ],
+      "expected": "Balance forecast chart and daily balance table reflect household forecast (non-zero where accounts funded)",
+      "actual": "Balance forecast line flat at 0; recent daily balances all 0; monthly decomposition shows income 3266 from Jul 2026 but current month all zeros",
+      "evidence": "screenshot cashflow.png; API monthly has 25 series points"
+    },
+    {
+      "id": "UI-005",
+      "severity": "P2",
+      "title": "Grafana Platform Health reports 0 transactions synced",
+      "steps": [
+        "Open Analytics → Platform Health",
+        "Compare with SELECT COUNT(*) FROM transactions"
+      ],
+      "expected": "Records synced per entity matches mirror row counts",
+      "actual": "Panel shows transactions: 0 (last sync 2026-06-09); PostgreSQL mirror has 922 transactions",
+      "evidence": "screenshot platform-health.png; psql count=922"
+    },
+    {
+      "id": "UI-006",
+      "severity": "P2",
+      "title": "ML-enhanced forecast unavailable",
+      "steps": [
+        "Forecast → Long-term tab",
+        "Observe ML-enhanced and Compare buttons"
+      ],
+      "expected": "When FORECAST_ML_ENABLED and sufficient history, ML overlay selectable",
+      "actual": "ML-enhanced and Compare disabled; meta.ml_skipped_reason=insufficient_history",
+      "evidence": "GET /api/v1/forecast/meta ml_computation_id=null"
+    },
+    {
+      "id": "UI-007",
+      "severity": "P2",
+      "title": "Duplicate subscription rows in list",
+      "steps": [
+        "Subscriptions → All tab"
+      ],
+      "expected": "One row per confirmed fingerprint/pattern",
+      "actual": "Strom Teilbetrag appears 3× identical; Google YouTube Premium 2× identical",
+      "evidence": "screenshot subscriptions-page.png; GET /api/v1/subscriptions returns multiple rows same payee_key"
+    },
+    {
+      "id": "UI-008",
+      "severity": "P2",
+      "title": "All subscriptions show Uncategorized",
+      "steps": [
+        "Subscriptions → All tab",
+        "Inspect Category column"
+      ],
+      "expected": "display_category_id mapped from majority category (US-0020) where detectable",
+      "actual": "Every visible row shows Uncategorized; API display_category_id null on samples",
+      "evidence": "subscriptions API kindle/netflix samples display_category_id=null"
+    },
+    {
+      "id": "UI-009",
+      "severity": "P2",
+      "title": "Planning shows Plan stale + high risk negative balance",
+      "steps": [
+        "Planning → Compare tab with active plan \"test\""
+      ],
+      "expected": "Plan freshness reflects latest sync; risk/balance plausible for household",
+      "actual": "Badges Risk 85 (high) and Plan stale; projected month-end balance -4442.36; monthly delta sum 0",
+      "evidence": "screenshot planning-compare.png; GET .../compare"
+    },
+    {
+      "id": "UI-010",
+      "severity": "P2",
+      "title": "Forecast page transient empty state flash",
+      "steps": [
+        "From Home, click Forecast in sidebar immediately after page load"
+      ],
+      "expected": "Loading skeleton or cached meta while accounts fetch",
+      "actual": "Brief \"No forecast data yet\" + disabled account select even though /api/v1/forecast/meta has computation_id",
+      "evidence": "browser snapshot before accounts query resolved; API meta populated"
+    },
+    {
+      "id": "UI-011",
+      "severity": "P3",
+      "title": "Category filter lazy-load delay",
+      "steps": [
+        "Forecast → Monthly or Wealth → Overview"
+      ],
+      "expected": "CategoryFilter appears within ~1s",
+      "actual": "Suspense fallback \"Loading category filter…\" visible 3–5s before combobox renders",
+      "evidence": "Forecast Monthly tab snapshots; lazy() import in ForecastPage.tsx"
+    },
+    {
+      "id": "UI-012",
+      "severity": "P3",
+      "title": "Wealth account Role column always empty",
+      "steps": [
+        "Wealth → Overview → Account breakdown table"
+      ],
+      "expected": "Role populated from Firefly account type/metadata when available",
+      "actual": "Role column shows — for all accounts",
+      "evidence": "screenshot wealth-page.png"
+    },
+    {
+      "id": "UI-013",
+      "severity": "info",
+      "title": "AI chat disabled (expected local config)",
+      "steps": [
+        "Click AI assistant button"
+      ],
+      "expected": "Disabled until provider configured in default.toml",
+      "actual": "Message: AI chat disabled until provider configured; input readonly",
+      "evidence": "AI panel snapshot — not a product defect for local dev"
+    },
+    {
+      "id": "UI-014",
+      "severity": "info",
+      "title": "Grafana embed works locally",
+      "steps": [
+        "Navigate via sidebar to Platform Health and Cashflow"
+      ],
+      "expected": "iframe loads /analytics/grafana/... without /public/ 404",
+      "actual": "Dashboards render; iframe src http://localhost:18080/analytics/grafana/d/...",
+      "evidence": "screenshots platform-health.png, cashflow.png — BUG-0001B fixed for local"
+    }
+  ],
+  "working": [
+    "Home, Sync Status, Settings load",
+    "Categories API 75+ entries; CategoryFilter loads on Forecast Monthly",
+    "Subscriptions list, Discover form, Manage tags UI present",
+    "Planning scenarios/templates and Compare chart render",
+    "Wealth totals and overdrawn badge on Giro (-3395.75 EUR)",
+    "In-app client-side routing for all sidebar links"
+  ],
+  "backlog_mapping": {
+    "BUG-0016": ["UI-001"],
+    "BUG-0017": ["UI-002", "UI-006", "UI-009", "UI-010"],
+    "BUG-0018": ["UI-003"],
+    "BUG-0019": ["UI-004", "UI-005"],
+    "BUG-0020": ["UI-007", "UI-008"],
+    "BUG-0021": ["UI-011", "UI-012"],
+    "excluded_info": ["UI-013", "UI-014"]
+  },
+  "intake_bundles": [
+    "handoffs/intake_evidence/intake-20260609-spa-deep-link.json",
+    "handoffs/intake_evidence/intake-20260609-forecast-recompute.json",
+    "handoffs/intake_evidence/intake-20260609-alert-evaluation.json",
+    "handoffs/intake_evidence/intake-20260609-grafana-metrics.json",
+    "handoffs/intake_evidence/intake-20260609-subscriptions-list.json",
+    "handoffs/intake_evidence/intake-20260609-frontend-ux.json"
+  ]
+}

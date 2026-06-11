@@ -25,6 +25,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use tokio::signal;
+use tower_http::services::{ServeDir, ServeFile};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::ai::AiService;
@@ -189,6 +190,13 @@ pub async fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// DEC-0104: attach SPA `index.html` fallback returning HTTP 200 for missing paths.
+pub fn attach_spa_fallback(router: Router, static_dir: &std::path::Path) -> Router {
+    let index = static_dir.join("index.html");
+    let spa = ServeDir::new(static_dir).fallback(ServeFile::new(index));
+    router.fallback_service(spa)
+}
+
 pub fn build_router(state: Arc<AppState>) -> Router {
     let api_router = api::routes(state.clone());
     let health_router = health::routes(state.clone());
@@ -206,9 +214,9 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .layer(tower_http::cors::CorsLayer::permissive());
 
     if static_dir.exists() {
-        router = router.fallback_service(tower_http::services::ServeDir::new(static_dir));
+        router = attach_spa_fallback(router, static_dir);
     } else if dev_static.exists() {
-        router = router.fallback_service(tower_http::services::ServeDir::new(dev_static));
+        router = attach_spa_fallback(router, dev_static);
     }
 
     router

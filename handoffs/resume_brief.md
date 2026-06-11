@@ -2,36 +2,44 @@
 
 ## Current status
 
-- **Active bug:** none
+- **Active bug:** none (intake bundle bug queue drain complete)
+- **Bug status:** BUG-0021 DONE (`bug0021-q0029`, Q0029, 2026-06-11)
+- **Active sprint:** none (Q0029 released)
 - **Active story:** none (intake bundle backlog drain complete)
-- **Active quick task:** none
-- **Latest release:** US-0020 (`0.20.0-us0020`, S0019, 2026-06-10); prior US-0019 (`0.19.0-us0019`, S0018, 2026-06-09)
-- **Orchestrator run:** `auto-20260608-us0020-001` (US-0020 segment — closed)
-- **Last completed phase:** refresh-context (2026-06-10) — US-0020; intake bundle drain complete
+- **Latest release:** BUG-0021 (`bug0021-q0029`, Q0029, 2026-06-11)
+- **Orchestrator run:** auto-20260611-bug0021
+- **Last completed phase:** refresh-context COMPLETE (2026-06-11)
+- **Bug queue (OPEN):** (empty — intake bundle drain complete)
+- **Open stories:** (empty — intake bundle drain complete)
 
 ## Next actions
 
-1. **Idle** — await new intake (`/intake` or operator-driven story)
-2. Operator (post-release): deploy US-0018+US-0019+US-0020 delta; **BACKEND_FRONTEND_DEPLOY** + **FULL_FIREFLY_SYNC**
-3. Operator: discover/tag OIDC smoke per `sprints/S0019/uat.json` (AC-6 pass-with-prerequisites)
-4. Operator: category-filter smoke per `sprints/S0017/uat.json`; goal-plan smoke per `sprints/S0018/uat.json`
+1. **Idle** — await new intake (`/intake`) or operator story selection
+2. Operator (post-release): **BACKEND_FRONTEND_DEPLOY** to ship Q0029 EA/EB changes
+3. Operator (optional): **SNAPSHOT_UPSERT_OR_SYNC** for BL snapshot/Grafana oracle
 
 ## Intended resume phase
 
-**idle** — no scheduled auto phase; `open_stories_remaining=0`
+**none** — idle (no scheduled phase)
 
 ## Resolution metadata
 
-- `resolution_source`: resume_brief / backlog drain complete
-- `resolved_start_phase`: idle
-- `segment_work_item_kind`: none
-- `active_story_id`: none
-- `orchestrator_run_id`: auto-20260608-us0020-001
-- `backlog_drain_active`: false (complete)
+- `resolution_source`: resume_brief
+- `resolved_start_phase`: (none)
+- `release_evidence`: handoffs/release_report.md; handoffs/releases/Q0029-release-notes.md; sprints/quick/Q0029/release-findings.md
+- `release_verdict`: PASS
+- `release_version`: bug0021-q0029
+- `segment_work_item_kind`: bug
+- `completed_bug_id`: BUG-0021
+- `completed_sprint_id`: Q0029
+- `bug_queue_position`: 0
+- `bug_queue_remaining`: 0
+- `bug_queue_ids`: (empty)
 - `open_stories_remaining`: 0
-- `intake_evidence_ref`: handoffs/intake_evidence/intake-20260607-category-planning-subscriptions.json
-- `research_ref`: docs/engineering/research.md#r-0085 (fulfilled), #r-0080 (fulfilled)
-- `architecture_ref`: docs/engineering/architecture.md#US-0020 (DEC-0098..0103 shipped)
-- `orchestration_boundary_utc`: 2026-06-10T23:50:00Z
-- `defect_drain_complete`: true
-- `backlog_drain_complete`: true
+- `acceptance_rows`: BK, BL (checked)
+- `architecture_decisions`: DEC-0110, DEC-0111
+- `sprint_artifacts`: sprints/quick/Q0029/
+- `runtime_proof_id`: runtime-proof-refresh-context-20260611-bug0021-001
+- `backlog_drain_active`: false (bug queue empty; stories empty)
+- `next_scheduled_phase`: none
+- `stop_reason`: completed (segment closed; bug queue drained)

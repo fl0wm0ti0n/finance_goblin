@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { CategoryFilter } from "../components/category/CategoryFilter";
 import {
   apiFetch,
   ExtendedWealthBreakdown,
@@ -8,12 +9,10 @@ import {
   PortfolioForecast,
   WealthHistoryPoint,
 } from "../lib/api";
+import { formatAccountRole } from "../lib/accountRole";
 
 const WealthChart = lazy(() =>
   import("../components/wealth/WealthChart").then((m) => ({ default: m.WealthChart })),
-);
-const CategoryFilter = lazy(() =>
-  import("../components/category/CategoryFilter").then((m) => ({ default: m.CategoryFilter })),
 );
 const CategoryTrendChart = lazy(() =>
   import("../components/category/CategoryTrendChart").then((m) => ({
@@ -176,9 +175,7 @@ export function WealthPage() {
               Mirror actuals for a single category — net worth and crypto totals above remain
               household-level.
             </p>
-            <Suspense fallback={<p>Loading category filter…</p>}>
-              <CategoryFilter value={categoryId} onChange={setCategoryId} allowAll={false} />
-            </Suspense>
+            <CategoryFilter value={categoryId} onChange={setCategoryId} allowAll={false} />
             {categoryId && (
               <div style={{ marginTop: "1rem" }}>
                 <Suspense fallback={<p>Loading trend…</p>}>
@@ -217,7 +214,7 @@ export function WealthPage() {
                         </span>
                       )}
                     </td>
-                    <td>{row.account_role ?? "—"}</td>
+                    <td>{formatAccountRole(row.account_role)}</td>
                     <td>{row.currency}</td>
                     <td style={row.is_overdrawn ? { color: "#b45309" } : undefined}>
                       {row.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}

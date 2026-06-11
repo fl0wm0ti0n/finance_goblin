@@ -73,7 +73,7 @@ export function SubscriptionsPage() {
 
   const [discoverAccountId, setDiscoverAccountId] = useState("");
   const [discoverPayee, setDiscoverPayee] = useState("");
-  const [discoverInterval, setDiscoverInterval] = useState<number | "">("");
+  const [discoverInterval, setDiscoverInterval] = useState<number | "" | "custom">("");
   const [discoverCustomInterval, setDiscoverCustomInterval] = useState("");
   const [discoverSearched, setDiscoverSearched] = useState(false);
   const [discoverConfirm, setDiscoverConfirm] = useState<DiscoverCandidate | null>(null);
@@ -297,7 +297,11 @@ export function SubscriptionsPage() {
     [patterns, tab],
   );
   const displayPatterns =
-    tab === "pending" ? pendingPatterns : tab === "standing" ? patterns : patterns;
+    tab === "pending"
+      ? pendingPatterns
+      : tab === "standing"
+        ? patterns
+        : patterns.filter((p) => p.status !== "rejected" && p.status !== "inactive");
 
   const empty = tab !== "discover" && !listQuery.isLoading && patterns.length === 0;
   const showPendingBanner =

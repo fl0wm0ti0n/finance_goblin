@@ -1,0 +1,91 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260609-forecast-recompute",
+  "intake_work_item_kind": "bug",
+  "source_audit": "handoffs/intake_evidence/ui-audit-20260609-local.json",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Post-sync forecast recompute completes without DB errors; meta fresh; ML path honest; Planning not stale; Forecast no false empty state.",
+      "intake_run_id": "intake-20260609-forecast-recompute",
+      "turn_index": 0,
+      "ref": "ie:intake-20260609-forecast-recompute:0:c0f6de1fb1e4001d"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "forecast/service.rs recompute; ai_tool_audit migrations; forecast_computations FK; sync/mod.rs ML phase; ForecastPage.tsx; PlanningPage stale badge.",
+      "intake_run_id": "intake-20260609-forecast-recompute",
+      "turn_index": 1,
+      "ref": "ie:intake-20260609-forecast-recompute:1:97c8c2f78dc567cc",
+      "delegation_scope": "backend/src/forecast/, backend/src/sync/, frontend ForecastPage/PlanningPage",
+      "delegation_rationale": "Docker logs and API probes from ui-audit-20260609-local.",
+      "delegation_confidence": "high"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Residual BUG-0010/0014 cluster post-US-0020 deploy; migration must extend audit enums without masking true insufficient_history when data too short.",
+      "intake_run_id": "intake-20260609-forecast-recompute",
+      "turn_index": 2,
+      "ref": "ie:intake-20260609-forecast-recompute:2:862ab0ce31cc03b3"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "POST sync/trigger → clean logs; forecast/meta stale=false; ai_tool_audit rows inserted; ML buttons enabled when configured; planning compare fresh; no false empty forecast UI.",
+      "intake_run_id": "intake-20260609-forecast-recompute",
+      "turn_index": 3,
+      "ref": "ie:intake-20260609-forecast-recompute:3:2338ee63023341b5"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator Full sync on localhost:18080 and omniflow yields clean recompute, accurate low-confidence/ML copy, and planning compare aligned to baseline.",
+      "intake_run_id": "intake-20260609-forecast-recompute",
+      "turn_index": 4,
+      "ref": "ie:intake-20260609-forecast-recompute:4:92c32c1e3476b7c1"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug-cluster",
+    "work_items": [
+      "BUG-0017"
+    ],
+    "rationale": "Post-sync forecast pipeline failures share one operator gate (trigger sync, inspect recompute). Sub-defects: audit constraints, FK delete order, ML skip, downstream Plan stale and UI empty flash.",
+    "split_axis": "cluster with sub-defects BA–BD",
+    "sub_defects": {
+      "BA": "ai_tool_audit_tool_name_check rejects forecast_bucket_assignment",
+      "BB": "ai_tool_audit_result_status_check rejects low_confidence",
+      "BC": "forecast_computations_paired_baseline_id_fkey on recompute delete",
+      "BD": "ML skipped insufficient_history — verify gate vs defect after BA–BC fixed",
+      "BE": "Planning Plan stale + negative projected balance when recompute fails",
+      "BF": "Forecast page transient false empty state before accounts query"
+    },
+    "ui_findings_merged": [
+      "UI-002",
+      "UI-006",
+      "UI-009",
+      "UI-010"
+    ],
+    "live_probes": {
+      "sync_run_id": "9ee95e6b-c6bd-4f4e-9b8c-4c068bf718cf",
+      "forecast_meta": "low_confidence=true ml_status=skipped ml_skipped_reason=insufficient_history",
+      "log_snippets": [
+        "forecast bucket audit insert failed ai_tool_audit_tool_name_check",
+        "forecast bucket audit insert failed ai_tool_audit_result_status_check",
+        "forecast recompute failed forecast_computations_paired_baseline_id_fkey"
+      ]
+    }
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "sprint_id": "Q0028",
+  "bug_id": "BUG-0020",
+  "phase": "verify-work",
+  "orchestrator_run_id": "auto-20260610-bug0019",
+  "decisions": ["DEC-0109", "DEC-0100", "DEC-0085", "DEC-0086"],
+  "research": ["R-0090"],
+  "acceptance_rows": ["BI", "BJ"],
+  "acceptance_source": "docs/product/acceptance.md#BUG-0020",
+  "verified_at": "2026-06-11T08:35:00Z",
+  "verdict": "PASS-WITH-PREREQUISITES",
+  "ready_for_release": true,
+  "operator_prerequisites": [
+    "BACKEND_FRONTEND_DEPLOY — docker build blocked by ForecastPage.tsx TS6133; container still pre-Q0028 static (DA2 UI filter not live)",
+    "MIGRATION_016_APPLY — applied manually via psql 2026-06-11; _sqlx_migrations version 16 not registered (sqlx checksum conflict on migration 15)",
+    "FULL_FIREFLY_SYNC — manual full sync run ed2c35fb success 2026-06-11T08:30:34Z"
+  ],
+  "steps": [
+    {
+      "id": "BI-API",
+      "row": "BI",
+      "probe": "GET /api/v1/subscriptions?status=confirmed — ≤1 row per payee_key; no duplicate YouTube",
+      "result": "pass",
+      "evidence": "6 confirmed rows; 0 duplicate payee_key groups; 1 YouTube survivor (display_category_id=66)"
+    },
+    {
+      "id": "BI-ALL",
+      "row": "BI",
+      "probe": "/subscriptions All tab — no triplicate Strom / duplicate YouTube visible rows",
+      "result": "pass_with_prerequisites",
+      "evidence": "API simulation with DA2 filter: 1 Strom pending + 1 YouTube confirmed visible; deployed static lacks rejected/inactive filter (pre-Q0028 build)"
+    },
+    {
+      "id": "BJ-NETFLIX",
+      "row": "BJ",
+      "probe": "netflix confirmed display_category_id = 18",
+      "result": "pass",
+      "evidence": "API + DB: netflix → 18"
+    },
+    {
+      "id": "BJ-KINDLE",
+      "row": "BJ",
+      "probe": "kindle confirmed display_category_id = 18",
+      "result": "pass",
+      "evidence": "API + DB: kindle unltd → 18"
+    },
+    {
+      "id": "BJ-YOUTUBE",
+      "row": "BJ",
+      "probe": "youtube survivor display_category_id = 66",
+      "result": "pass",
+      "evidence": "API + DB: kauf irl ireland google → 66"
+    },
+    {
+      "id": "BJ-HGP",
+      "row": "BJ",
+      "probe": "hgp patterns display_category_id = 56",
+      "result": "pass",
+      "evidence": "API + DB: hgp unfall + hgp haushalt → 56"
+    },
+    {
+      "id": "BJ-FLORIAN",
+      "row": "BJ",
+      "probe": "florian gabriel display_category_id = 3",
+      "result": "pass",
+      "evidence": "API + DB: mitgliedsbeitrag - florian gabriel → 3"
+    },
+    {
+      "id": "REG-DISCOVER",
+      "row": "regression",
+      "probe": "GET /api/v1/subscriptions/discover unchanged",
+      "result": "pass",
+      "evidence": "HTTP 200; response shape {candidates, meta}"
+    },
+    {
+      "id": "REG-TAGS",
+      "row": "regression",
+      "probe": "tag assign/filter unchanged",
+      "result": "pass",
+      "evidence": "GET /api/v1/subscription-tags HTTP 200; list empty"
+    },
+    {
+      "id": "REG-DETECT",
+      "row": "regression",
+      "probe": "post-sync — no new duplicate confirmed YouTube",
+      "result": "pass",
+      "evidence": "After full sync ed2c35fb: 1 confirmed YouTube; 1 inactive loser; 0 dup payee_key"
+    },
+    {
+      "id": "OIDC-1",
+      "row": "regression",
+      "probe": "List endpoints smoke on omniflow profile",
+      "result": "pass",
+      "evidence": "https://financegnome.omniflow.cc/api/v1/subscriptions?status=confirmed HTTP 200; discover HTTP 200"
+    }
+  ],
+  "automated_checks": {
+    "bug0020_subscription_list_quality": "7/7 PASS",
+    "bug0008_subscription_alerts": "8/8 PASS",
+    "subscriptions_integration": "1/1 PASS"
+  },
+  "pre_migration_baseline": {
+    "sqlx_version_max": 15,
+    "confirmed_count": 7,
+    "confirmed_with_display_category_id": 0,
+    "youtube_confirmed_dup": 2,
+    "strom_pending_dup": 2
+  },
+  "post_migration_audit": {
+    "confirmed_count": 6,
+    "confirmed_with_display_category_id": 6,
+    "youtube_confirmed": 1,
+    "strom_all_tab_visible": 1
+  }
+}

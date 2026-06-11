@@ -557,7 +557,7 @@ impl ForecastRepository {
 
     pub async fn enforce_retention(&self) -> Result<(), sqlx::Error> {
         let keep = self.config.retention_count.max(1) as i64;
-        for kind in ["baseline", "ml_enhanced"] {
+        for kind in ["ml_enhanced", "baseline"] {
             let stale_ids: Vec<Uuid> = sqlx::query_scalar(
                 r#"
                 SELECT id FROM forecast_computations

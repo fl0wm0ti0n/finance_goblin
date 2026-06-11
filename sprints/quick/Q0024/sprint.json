@@ -1,0 +1,56 @@
+{
+  "id": "Q0024",
+  "type": "quick",
+  "bug_ids": ["BUG-0016"],
+  "status": "PLANNED",
+  "created": "2026-06-09",
+  "goal": "Close BUG-0016 SPA deep-link 404: DEC-0104 Axum ServeDir::fallback(ServeFile::new(index.html)) HTTP 200 in build_router (AX1), integration tests for deep links and protected prefixes (AX2), operator verify-work curl + browser smoke (V1) on :18080 and financegnome.omniflow.cc.",
+  "scope": [
+    "AX1: backend/src/lib.rs build_router SPA fallback with ServeDir + ServeFile (DEC-0104)",
+    "AX2: integration tests — primary AX paths 200 HTML; /api/v1/* and assets non-HTML",
+    "V1: verify-work AX curl matrix + omniflow hard-refresh + OIDC /callback smoke"
+  ],
+  "risks": [
+    "API paths receive index.html if merge order regresses — mitigated by frozen DEC-0057 order + AX2 tests",
+    "Grafana proxy swallowed by SPA fallback — grafana_routes before fallback; V1 smoke /analytics/grafana/",
+    "not_found_service returns 404 status — rejected per DEC-0104; use fallback not not_found_service",
+    "index.html missing in prod image — Dockerfile copies dist to /app/static; verify in AX2",
+    "Traefik /analytics/* no-auth exposes SPA slug — pre-existing US-0011 tradeoff; document only"
+  ],
+  "task_count": 3,
+  "mandatory_task_count": 3,
+  "conditional_task_ids": [],
+  "optional_task_ids": [],
+  "estimate_total_hours": 5.5,
+  "decisions": ["DEC-0104", "DEC-0057"],
+  "research": ["R-0086"],
+  "acceptance_rows": ["AX"],
+  "execute_order": ["AX1", "AX2", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Rebuild flow-finance-ai backend image with AX1 SPA fallback before omniflow runtime probes"
+    }
+  ],
+  "acceptance_mapping": {
+    "AX": {
+      "tasks": ["AX1", "AX2", "V1"],
+      "verify": "Direct navigation, hard-refresh, and bookmarks to /forecast, /subscriptions, /planning, /sync, /analytics/{slug} return HTTP 200 with SPA shell on :18080 and financegnome.omniflow.cc; OIDC /callback regression passes"
+    }
+  },
+  "waived_ops_only": {
+    "traefik_labels": "No Traefik label change per R-0086 §5 — pass-through only",
+    "frontend_routes": "React routes already correct — no App.tsx change"
+  },
+  "deploy_order": [
+    "AX1 → AX2 single backend release",
+    "Operator: BACKEND_FRONTEND_DEPLOY",
+    "V1 verify-work curl :18080 + omniflow browser smoke + OIDC /callback"
+  ],
+  "next_phase": "execute",
+  "sprint_plan_ref": "sprint-plan-20260609-q0024-bug0016",
+  "architecture_ref": "architecture-20260609-bug0016",
+  "orchestrator_run_id": "intake-20260609-ui-audit"
+}

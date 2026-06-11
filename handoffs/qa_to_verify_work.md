@@ -1,46 +1,62 @@
-# QA → Verify-work handoff
+# QA → Verify-work handoff — Q0029 / BUG-0021
 
-**Bug:** BUG-0015  
-**Quick task:** Q0023  
-**QA verdict:** **PASS** (2026-06-07)  
-**Orchestrator:** `auto-20260607-bug0015-001`  
-**Decisions:** DEC-0084, DEC-0085, DEC-0086  
+**Bug:** BUG-0021  
+**Quick task:** Q0029  
+**QA verdict:** **PASS** (2026-06-11)  
+**Orchestrator:** `auto-20260611-bug0021`  
+**Decisions:** DEC-0110, DEC-0111  
 **Next phase:** `/verify-work`
 
 ## QA summary
 
 - **Blocking findings:** 0
-- **Tasks verified PASS:** AU1, AU2, AU3, AU4
+- **Tasks verified PASS at qa:** EA1, EA2, EB1, EB2, EA3, T1, G1
 - **Tasks deferred (expected):** V1 (operator gates)
-- **Tests re-run:** card_billing 4/4, interval_matches 2/2, build_active_payee 1/1, frontend 6/6, cargo lib 187/187
+- **Tests re-run:** `cargo test --lib` **213/213**; `bug0021_wealth_account_role` **4/4** (seed skipped — migration 015 checksum); `npm test` **9/9**; `npm run build` **PASS**
+
+## Operator prerequisites (required before V1 live probes)
+
+1. **BACKEND_FRONTEND_DEPLOY** — rebuild backend + frontend with Q0029 changes (EA1–EB2 + EB1 SQL).
+2. **SNAPSHOT_UPSERT_OR_SYNC** (optional) — Full sync or daily wealth snapshot upsert before BL snapshot/Grafana gate.
+
+## BK/BL oracles — qa-stage vs verify-work
+
+| Oracle | qa-stage | verify-work |
+|--------|----------|-------------|
+| **BK-FORECAST** | Static import + no Suspense on Monthly; build chunk audit PASS | Forecast → Monthly: no multi-second **Loading category filter…**; combobox ≤1 s |
+| **BK-WEALTH** | Static import + no Suspense on Overview PASS | Wealth → Overview: same |
+| **BL-API** | COALESCE SQL + mirror probe PASS; live API null pre-deploy | `GET /api/v1/wealth` — Giro/savings/cash `account_role` non-null (`defaultAsset`, `savingAsset`, `cashWalletAsset`) |
+| **BL-UI** | `formatAccountRole` map PASS | Role column shows Checking / Savings / Cash wallet (not all em dash) |
+| **BL-SNAPSHOT** | N/A at qa | `net_worth_snapshots.payload.accounts[*].account_role` non-null post-upsert |
+| **BL-GRAFANA** | N/A at qa | Portfolio dashboard role column populated (optional) |
+| **OIDC** | N/A at qa | `/forecast`, `/wealth`, `/api/v1/wealth` smoke on omniflow |
+
+Live mirror at qa: COALESCE probe shows roles in DB; deployed `:18080` API returns null until rebuild.
 
 ## Acceptance row status (post-QA)
 
-| Row | Code QA | Runtime (verify-work) |
-|-----|---------|------------------------|
-| **AU** | PASS — AU1 DEC-0084 + AU2/AU3 inheritance | Pending H2-1 SQL + AU-1/AU-2 omniflow probes |
-| **AV** | PASS — AU3 skip+merge + AU4 stale map | Pending AV-1 duplicate pending probe post-Full sync |
-| **AW** | PASS — AU3 merge suppresses `new_detection` | Pending AW-1 unread-count reconciliation |
+| Row | Code/static QA | Runtime (verify-work) |
+|-----|----------------|------------------------|
+| **BK** | PASS — DEC-0110 static import on Forecast/Wealth/Planning; CategoryTrendChart lazy unchanged | Pending deploy + browser smoke |
+| **BL** | PASS — DEC-0111 COALESCE SQL + label map + mirror SQL probe | Pending deploy + API/UI/snapshot oracle |
 
-## Operator prerequisites (required before live probes)
+## Verify-work focus
 
-1. **BACKEND_FRONTEND_DEPLOY** — Q0023 AU1–AU4 backend bundle on financegnome.omniflow.cc
-2. **POSTGRES_PERSISTENCE_PROBE** — H2 SQL on `subscription_patterns` after rebuild, **before** Full sync
-3. **FULL_FIREFLY_SYNC** — Full sync (not exchanges-only) + subscription detection phase
-
-## Verify-work instructions
-
-1. Read `sprints/quick/Q0023/uat.md` and populate `uat.json` steps with live results
-2. Establish AU baseline: confirm Cursor + Apple on `/subscriptions` before rebuild (AU-BASE)
-3. Rebuild `flow-finance-ai` only — postgres volume untouched
-4. Run H2 SQL probe; document outcome per uat.md decision table
-5. After Full sync: AU-1 confirmed API, AU-2 UI, AV-1 no duplicate pending, AW-1 unread reconcile, OIDC-1 regression
+- Execute `sprints/quick/Q0029/uat.md` per acceptance rows **BK**, **BL**
+- Post-deploy: confirm `GET /api/v1/wealth` roles non-null; Wealth Role column human labels
+- Optional: snapshot/Grafana portfolio role column after upsert
+- OIDC omniflow re-check on forecast/wealth routes
 
 ## Artifacts
 
-- `sprints/quick/Q0023/qa-findings.md`
-- `sprints/quick/Q0023/uat.json` (qa phase populated)
-- `handoffs/dev_to_qa.md`
-- `decisions/DEC-0084.md`, `DEC-0085.md`, `DEC-0086.md`
+- `sprints/quick/Q0029/qa-findings.md`
+- `handoffs/qa_report.md`
+- `decisions/DEC-0110.md`, `decisions/DEC-0111.md`
+- `handoffs/dev_to_qa.md` (Q0029 top section)
+- `sprints/quick/Q0029/progress.md`
 
-No code rework required for QA PASS. V1 runtime smoke remains operator-gated at verify-work.
+`fresh_context_marker`: qa-20260611-bug0021-qa-fresh  
+`runtime_proof_id`: runtime-proof-qa-20260611-bug0021-001  
+`phase_boundary`: qa → verify-work
+
+**Next:** `/verify-work` in fresh subagent/chat (role: qa). Do not begin verify-work in this subagent.

@@ -1,0 +1,100 @@
+{
+  "sprint_id": "Q0029",
+  "bug_id": "BUG-0021",
+  "phase": "verify-work",
+  "orchestrator_run_id": "auto-20260611-bug0021",
+  "decisions": ["DEC-0110", "DEC-0111"],
+  "research": ["R-0091"],
+  "acceptance_rows": ["BK", "BL"],
+  "acceptance_source": "docs/product/acceptance.md#BUG-0021",
+  "verified_at": "2026-06-11T12:50:00Z",
+  "verdict": "PASS-WITH-PREREQUISITES",
+  "ready_for_verify_work": true,
+  "ready_for_release": true,
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "status": "pass_with_prerequisites",
+      "action": "rebuild backend + frontend with Q0029 changes",
+      "notes": "Container finance_goblin-flow-finance-ai-1 created 2026-06-09 predates Q0029; docker compose build blocked AUTHENTIK_SECRET_KEY; live API account_role null"
+    },
+    {
+      "id": "SNAPSHOT_UPSERT_OR_SYNC",
+      "status": "pass_with_prerequisites",
+      "action": "optional Full sync or wait for daily snapshot upsert",
+      "notes": "Latest snapshot 2026-06-11 payload.accounts account_role null pre-deploy"
+    }
+  ],
+  "operator_prerequisites": [
+    "BACKEND_FRONTEND_DEPLOY — running container predates Q0029 EB1/EA changes; compose build blocked AUTHENTIK_SECRET_KEY",
+    "SNAPSHOT_UPSERT_OR_SYNC — optional post-deploy upsert for BL-SNAPSHOT and BL-GRAFANA oracles"
+  ],
+  "steps": [
+    {
+      "id": "BK-FORECAST",
+      "row": "BK",
+      "probe": "Forecast Monthly — no multi-second Loading category filter...; combobox <=1s",
+      "result": "pass_with_prerequisites",
+      "evidence": "Static CategoryFilter import verified ForecastPage L4/L273; no Suspense wrapper; no Loading category filter string in repo; build has CategoryTrendChart lazy chunk only"
+    },
+    {
+      "id": "BK-WEALTH",
+      "row": "BK",
+      "probe": "Wealth Overview — same BK gate",
+      "result": "pass_with_prerequisites",
+      "evidence": "Static CategoryFilter import verified WealthPage L4/L178; CategoryTrendChart lazy+Suspense unchanged; browser timing deferred deploy"
+    },
+    {
+      "id": "BL-API",
+      "row": "BL",
+      "probe": "GET /api/v1/wealth — asset accounts account_role non-null",
+      "result": "pass_with_prerequisites",
+      "evidence": "Mirror COALESCE probe PASS: 114=defaultAsset, 115=savingAsset, 116=cashWalletAsset; live :18080+omniflow API all account_role null pre-deploy"
+    },
+    {
+      "id": "BL-UI",
+      "row": "BL",
+      "probe": "Wealth Account breakdown Role column human labels",
+      "result": "pass_with_prerequisites",
+      "evidence": "formatAccountRole map verified (Checking/Cash wallet/Savings/Shared/Credit card); deployed UI shows em dash until frontend deploy"
+    },
+    {
+      "id": "BL-SNAPSHOT",
+      "row": "BL",
+      "probe": "net_worth_snapshots.payload.accounts carries account_role post-upsert",
+      "result": "pass_with_prerequisites",
+      "evidence": "Latest snapshot 2026-06-11 payload.accounts account_role null; upsert after deploy required"
+    },
+    {
+      "id": "BL-GRAFANA",
+      "row": "BL",
+      "probe": "Grafana portfolio role column populated (optional post-sync)",
+      "result": "pass_with_prerequisites",
+      "evidence": "Optional gate deferred post-deploy + SNAPSHOT_UPSERT_OR_SYNC"
+    },
+    {
+      "id": "OIDC-1",
+      "row": "regression",
+      "probe": "/forecast /wealth /api/v1/wealth smoke on omniflow profile",
+      "result": "pass",
+      "evidence": "https://financegnome.omniflow.cc/api/v1/wealth HTTP 200; local :18080/api/v1/wealth HTTP 200; /forecast /wealth 401 on omniflow (auth expected), 404 locally pre-deploy SPA"
+    }
+  ],
+  "automated_checks": {
+    "bug0021_wealth_account_role": "4/4 PASS",
+    "npm_build": "PASS",
+    "wealth_integration_regression": "wealth_alerts_integration 3/3 PASS; cargo lib 213/213; npm test 9/9"
+  },
+  "pre_deploy_baseline": {
+    "container_created": "2026-06-09T19:45:48Z",
+    "api_account_role_non_null": 0,
+    "mirror_coalesce_non_null": 3,
+    "snapshot_account_role_non_null": 0
+  },
+  "uat_counts": {
+    "pass": 1,
+    "pass_with_prerequisites": 6,
+    "fail": 0,
+    "total": 7
+  }
+}

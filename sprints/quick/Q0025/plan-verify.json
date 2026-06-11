@@ -1,0 +1,193 @@
+{
+  "sprint": "Q0025",
+  "bug_id": "BUG-0017",
+  "orchestrator_run_id": "intake-20260609-ui-audit",
+  "verified_at": "2026-06-10T02:00:00Z",
+  "result": "PASS",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0017",
+  "tasks_source": "sprints/quick/Q0025/tasks.md",
+  "architecture_ref": "docs/engineering/architecture-archive/architecture-pack-20260609.md#bug-0017--post-sync-forecast-recompute-cluster",
+  "decision_alignment": {
+    "decisions": ["DEC-0105", "DEC-0106"],
+    "extensions": ["DEC-0034", "DEC-0050", "DEC-0078", "DEC-0011", "DEC-0052"],
+    "research_basis": ["R-0087"],
+    "contract_elements_covered": [
+      "DEC-0105 AY1: DROP+ADD both ai_tool_audit CHECK constraints — tool_name + result_status",
+      "DEC-0105: forecast_bucket_assignment + low_confidence/provider_unavailable/parse_error",
+      "DEC-0105: NOT VALID + VALIDATE pattern; no Rust insert-path mapping",
+      "DEC-0106 BA1: paired_baseline_id ON DELETE CASCADE migration",
+      "DEC-0106 BA2: enforce_retention ml_enhanced before baseline",
+      "DEC-0106 T1: paired baseline+ML retention integration test",
+      "BD1: showEmpty = isFetched && !isError && !computation_id",
+      "V1: sync logs clean; meta fresh; month-bucket SQL (BB); planning re-smoke (BC); forecast nav (BD)",
+      "Operator gates BACKEND_FRONTEND_DEPLOY + FULL_FIREFLY_SYNC before V1"
+    ],
+    "frozen_boundaries_respected": [
+      "DEC-0105: DROP+ADD both CHECK — no Rust status mapping",
+      "DEC-0106: CASCADE + ml_enhanced-before-baseline — no SET NULL or reorder-only fix",
+      "BD: isFetched guard only — no placeholderData or SSR initialData",
+      "BB: month-bucket verify in V1 — do not lower min_monthly_points",
+      "BC: verify-work re-smoke only — no plan-engine change",
+      "Sync fail-on-recompute deferred — preserve R-0050 warn-and-serve",
+      "Migration 015 before backend image deploy"
+    ],
+    "sprint_artifact_verification": "PASS — sprint.json, task.json, tasks.md, sprint.md, uat.md, uat.json materialized; acceptance_mapping 1:1 with architecture AY1/BA1/BA2/BD1/T1/V1 table"
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "AY1 → BA1 → BA2 ∥ BD1 → T1 → single backend+frontend release → BACKEND_FRONTEND_DEPLOY → FULL_FIREFLY_SYNC → V1 verify-work",
+    "notes": "BD1 parallel with BA2 after BA1 per tasks.md; T1 depends on BA1+BA2; V1 gated on deploy + full sync."
+  },
+  "operator_gates_review": {
+    "documented": true,
+    "gates": [
+      {
+        "id": "BACKEND_FRONTEND_DEPLOY",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md", "uat.json"]
+      },
+      {
+        "id": "FULL_FIREFLY_SYNC",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md", "uat.json"]
+      }
+    ],
+    "waived_ops_only": {
+      "sync_fail_on_recompute": "Deferred product decision gate — preserve R-0050 warn-and-serve",
+      "bc_plan_engine": "No plan-engine change — BC resolves with BA fix; V1 re-smoke only",
+      "bb_threshold_change": "Do not lower min_monthly_points — honest insufficient_history when <12 months"
+    }
+  },
+  "conditional_tasks_review": {},
+  "test_coverage": {
+    "unit_fixtures": "AY1/BA1 sqlx migrate; BA2 cargo test --lib forecast retention paths",
+    "integration": "T1 paired baseline+ml_enhanced prune without FK violation",
+    "frontend": "BD1 npm test — isFetched empty guard",
+    "operator_tests": "V1 uat.md: sync trigger logs; GET /api/v1/forecast/meta; ai_tool_audit SELECT; month-bucket SQL; Planning Compare; Forecast nav",
+    "doc_review": "uat.md acceptance traceability + operator gate checklist; uat.json placeholder mapped to AY–BD",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AY",
+      "criterion": "Post-sync forecast recompute inserts ai_tool_audit rows for forecast_bucket_assignment without ai_tool_audit_tool_name_check violation",
+      "tasks": ["AY1", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY", "FULL_FIREFLY_SYNC"],
+      "covered": true,
+      "notes": "AY1 DEC-0105 tool_name CHECK extension; V1 sync logs + ai_tool_audit SELECT probe after deploy"
+    },
+    {
+      "acceptance_id": "AZ",
+      "criterion": "Low-confidence bucket assignments persist without ai_tool_audit_result_status_check violation (low_confidence allowed or mapped)",
+      "tasks": ["AY1", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY", "FULL_FIREFLY_SYNC"],
+      "covered": true,
+      "notes": "AY1 DEC-0105 result_status CHECK extension; V1 sync logs free of result_status CHECK WARN"
+    },
+    {
+      "acceptance_id": "BA",
+      "criterion": "Recompute delete/insert does not fail on forecast_computations_paired_baseline_id_fkey; GET /api/v1/forecast/meta reflects fresh computation after successful sync",
+      "tasks": ["BA1", "BA2", "T1", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY", "FULL_FIREFLY_SYNC"],
+      "covered": true,
+      "notes": "BA1 CASCADE migration; BA2 retention order; T1 integration test; V1 meta fresh computation_id stale=false"
+    },
+    {
+      "acceptance_id": "BB",
+      "criterion": "When FORECAST_ML_ENABLED and history gate pass, ML-enhanced forecast selectable; otherwise accurate ml_skipped_reason (not silent failure from recompute errors)",
+      "tasks": ["V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY", "FULL_FIREFLY_SYNC"],
+      "covered": true,
+      "notes": "Ops-only month-bucket SQL probe per R-0087; honest insufficient_history when <12 months; no min_monthly_points change"
+    },
+    {
+      "acceptance_id": "BC",
+      "criterion": "Planning Compare loses Plan stale badge after successful recompute/sync",
+      "tasks": ["V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY", "FULL_FIREFLY_SYNC"],
+      "covered": true,
+      "notes": "Downstream of BA fix; V1 planning re-smoke only; no plan-engine change per architecture"
+    },
+    {
+      "acceptance_id": "BD",
+      "criterion": "Forecast page does not show No forecast data yet when GET /api/v1/forecast/meta already has computation_id",
+      "tasks": ["BD1", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "BD1 isFetched && !isError empty guard; V1 forecast nav smoke from Home"
+    }
+  ],
+  "coverage_matrix": {
+    "acceptance_rows": [
+      { "acceptance_id": "AY", "tasks": ["AY1", "V1"], "decisions": ["DEC-0105"], "covered": true },
+      { "acceptance_id": "AZ", "tasks": ["AY1", "V1"], "decisions": ["DEC-0105"], "covered": true },
+      { "acceptance_id": "BA", "tasks": ["BA1", "BA2", "T1", "V1"], "decisions": ["DEC-0106"], "covered": true },
+      { "acceptance_id": "BB", "tasks": ["V1"], "decisions": [], "covered": true },
+      { "acceptance_id": "BC", "tasks": ["V1"], "decisions": [], "covered": true },
+      { "acceptance_id": "BD", "tasks": ["BD1", "V1"], "decisions": [], "covered": true }
+    ],
+    "tasks": [
+      { "task_id": "AY1", "acceptance_rows": ["AY", "AZ"], "decision": "DEC-0105", "surface": "backend/migrations/015_bug0017_ai_audit_forecast.sql" },
+      { "task_id": "BA1", "acceptance_rows": ["BA"], "decision": "DEC-0106", "surface": "backend/migrations/015_bug0017_forecast_fk_cascade.sql" },
+      { "task_id": "BA2", "acceptance_rows": ["BA"], "decision": "DEC-0106", "surface": "backend/src/forecast/repository.rs" },
+      { "task_id": "BD1", "acceptance_rows": ["BD"], "decision": null, "surface": "frontend/src/pages/ForecastPage.tsx" },
+      { "task_id": "T1", "acceptance_rows": ["BA"], "decision": "DEC-0106", "surface": "backend/tests/ or forecast/repository.rs" },
+      { "task_id": "V1", "acceptance_rows": ["AY", "AZ", "BA", "BB", "BC", "BD"], "decision": null, "surface": "verify-work operator smoke" }
+    ]
+  },
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "BB and BC have no dedicated code tasks — intentional ops-only V1 probes per architecture; BA fix is prerequisite for BC."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "AY1 and BA1 may ship as separate 015_* migration files or combined — tasks.md allows either; execute must preserve sqlx ordering."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "uat.md/uat.json are PLACEHOLDER at plan-verify — runtime probes populate at verify-work; structure and AY–BD traceability verified."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "Pre-ship constraint name probe on operator DB (\\d ai_tool_audit / \\d forecast_computations) — names may differ from migration literals."
+    },
+    {
+      "id": "ADV-5",
+      "severity": "low",
+      "note": "Acceptance BUG-0017 OIDC-enabled deploy regression footer — V1 should include omniflow smoke; full OIDC session regression operator-only per prior bug precedent."
+    },
+    {
+      "id": "ADV-6",
+      "severity": "low",
+      "note": "Sync fail-on-recompute semantics unchanged per R-0050 — separate product gate deferred; not a plan-verify blocker."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 6,
+    "covered_count": 6,
+    "gap_count": 0,
+    "task_count": 6,
+    "mandatory_task_count": 6,
+    "conditional_task_count": 0,
+    "optional_task_count": 0,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0105_aligned": true,
+    "dec_0106_aligned": true,
+    "operator_gates_documented": true,
+    "conditional_gates_documented": true,
+    "v1_e2e_smoke": true,
+    "scope_creep_beyond_architecture": false,
+    "dependency_graph_valid": true,
+    "execute_ready": true
+  },
+  "notes": "QA plan-verify 2026-06-10: Q0025 sprint artifacts present; AY–BD mapped to AY1/BA1/BA2/BD1/T1/V1 per DEC-0105/DEC-0106; 6/6 acceptance rows covered; 6/6 tasks traced; 0 gaps; 0 orphans. Approved for /execute."
+}

@@ -1,0 +1,83 @@
+{
+  "id": "Q0029",
+  "type": "quick",
+  "bug_ids": ["BUG-0021"],
+  "status": "PLANNED",
+  "created": "2026-06-11",
+  "goal": "Close BUG-0021 via DEC-0110 + DEC-0111: static CategoryFilter import on Forecast Monthly and Wealth Overview (EA1/EA2); SQL COALESCE(attributes,root) account_role extract (EB1) + formatAccountRole label map (EB2); integration tests; operator verify-work for BK/BL gates.",
+  "scope": [
+    "EA1: ForecastPage.tsx static CategoryFilter import; remove Suspense on Monthly tab",
+    "EA2: WealthPage.tsx static CategoryFilter import; remove Suspense on Overview category card",
+    "EB1: wealth/repository.rs COALESCE(attributes,root) account_role in load_asset_accounts + test SQL constant",
+    "EB2: WealthPage formatAccountRole human label map (optional frontend/src/lib/accountRole.ts)",
+    "EA3: PlanningPage.tsx static CategoryFilter parity (optional P2, out of BK)",
+    "T1: backend/tests/bug0021_wealth_account_role.rs nested payload role extract + regression",
+    "G1: cargo test + frontend build automated gate + blast-radius check",
+    "V1: verify-work BK/BL operator smoke + OIDC regression"
+  ],
+  "risks": [
+    "Static import grows page chunks — ~1.5 KB negligible per R-0091",
+    "Snapshot lag until daily upsert — UAT documents; optional manual sync",
+    "Incomplete label map — fallback to raw enum per DEC-0111",
+    "ForecastPage TS6133 from BUG-0020 — operator prerequisite for docker build",
+    "WealthPage EA2+EB2 same file — coordinate single commit",
+    "Root active/include_net_worth path hygiene — out of scope; future bug if filters misbehave"
+  ],
+  "task_count": 8,
+  "mandatory_task_count": 7,
+  "conditional_task_ids": [],
+  "optional_task_ids": ["EA3"],
+  "estimate_total_hours": 10,
+  "decisions": ["DEC-0110", "DEC-0111"],
+  "research": ["R-0091"],
+  "acceptance_rows": ["BK", "BL"],
+  "execute_order": ["EA1", "EA2", "EB1", "EB2", "EA3", "T1", "G1", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Rebuild backend + frontend images with Q0029 changes; fix ForecastPage TS6133 unused import if still blocking docker build (BUG-0020 follow-up)"
+    },
+    {
+      "id": "SNAPSHOT_UPSERT_OR_SYNC",
+      "before_tasks": ["V1"],
+      "description": "Optional: trigger Full sync or wait for daily wealth snapshot upsert before BL snapshot/Grafana role column gate"
+    }
+  ],
+  "acceptance_mapping": {
+    "BK": {
+      "tasks": ["EA1", "EA2", "T1", "G1", "V1"],
+      "verify": "Forecast Monthly + Wealth Overview: no multi-second Loading category filter... Suspense fallback; combobox interactive <=1s of tab visit"
+    },
+    "BL": {
+      "tasks": ["EB1", "EB2", "T1", "G1", "V1"],
+      "verify": "GET /api/v1/wealth account_role non-null for asset accounts; Wealth Role column human labels; snapshot accounts[] carries account_role post-upsert; OIDC /forecast /wealth /api/v1/wealth smoke"
+    }
+  },
+  "waived_ops_only": {
+    "category_filter_component_change": "DEC-0110 forbidden — CategoryFilter.tsx logic unchanged",
+    "category_trend_chart_lazy": "CategoryTrendChart lazy boundary unchanged",
+    "firefly_sync_rewrite": "DEC-0111 forbidden — no sync payload denormalization",
+    "grafana_sql_edit": "portfolio.json SQL shape unchanged — heals via snapshot",
+    "migration": "No schema migration required",
+    "root_active_path_fix": "active/include_net_worth root reads out of scope"
+  },
+  "deploy_order": [
+    "EA1 ForecastPage static import",
+    "EA2 WealthPage static import",
+    "EB1 repository SQL path",
+    "EB2 WealthPage formatAccountRole",
+    "EA3 PlanningPage parity (optional)",
+    "T1 integration tests",
+    "G1 automated gate",
+    "BACKEND_FRONTEND_DEPLOY",
+    "SNAPSHOT_UPSERT_OR_SYNC (optional)",
+    "V1 verify-work smoke"
+  ],
+  "rollback": "git revert frontend import/label changes + repository SQL; no migration; snapshots retain last role values until next upsert",
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260611-q0029-bug0021",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0021",
+  "orchestrator_run_id": "auto-20260611-bug0021"
+}

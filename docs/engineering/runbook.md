@@ -3265,6 +3265,335 @@ cd frontend && npm test -- --run
 
 **Boundaries:** US-0003 auto-detection pipeline unchanged; DEC-0084..0086 confirm normalization preserved; optional Grafana `$tag` on subscriptions dashboard (DEC-0103 P2); user guide `docs/user-guides/US-0020.md`.
 
+#### 29. BUG-0016 hotfix — SPA deep links HTTP 404 (Q0024 / released 2026-06-09)
+
+**Release:** BUG-0016 **DONE** — operator notes `handoffs/releases/Q0024-release-notes.md`. SPA deep-link fallback on localhost and US-0010 external profile per **DEC-0104**, **DEC-0057**: **(AX1)** `ServeDir::fallback(ServeFile::new(index.html))` in `build_router` returns HTTP **200** HTML shell for client routes; **(AX2)** integration tests prove protected prefixes (`/health`, `/api/v1/*`, `/analytics/grafana/*`, `/assets/*`) are not replaced by SPA HTML.
+
+**Deploy (backend serves built SPA + fallback):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before runtime probes):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+Local override (`:18080`):
+
+```bash
+docker compose up -d --build flow-finance-ai
+```
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 213/213 |
+| SPA integration | `cd backend && cargo test --test spa_fallback_integration` | 5/5 |
+| Frontend unit | `cd frontend && npm test -- --run` | 9/9 |
+| AX-CURL-1 | `curl -sS -o /dev/null -w '%{http_code}' http://localhost:18080/forecast` | HTTP 200 |
+| AX-CURL-2 | curl matrix `/subscriptions`, `/planning`, `/sync`, `/analytics/cashflow`, `/callback` | HTTP 200 + HTML |
+| AX-CURL-3 | `/health` JSON; `/api/v1/nonexistent` JSON 404; `/assets/*` static when present | Non-HTML protected paths |
+| AX-BROWSER-1 | Hard-refresh client routes on `financegnome.omniflow.cc` | Correct React page (not blank 404) |
+| AX-BROWSER-2 | Bookmark reopen client routes | Correct React page |
+| OIDC-1 | Complete OIDC login; `/callback` SPA shell | Session established |
+| Regression | DEC-0057 Grafana proxy | `/analytics/grafana/*` not SPA HTML |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+cd backend && cargo test --test spa_fallback_integration
+cd frontend && npm test -- --run
+```
+
+**Boundaries:** No Traefik label changes; no backend `/callback` redirect; OIDC flow unchanged; supersedes BUG-0009 analytics 404 advisory.
+
+#### 30. BUG-0017 hotfix — post-sync forecast recompute cluster (Q0025 / released 2026-06-10)
+
+**Release:** BUG-0017 **DONE** — operator notes `handoffs/releases/Q0025-release-notes.md`. Post-sync forecast recompute cluster per **DEC-0105**, **DEC-0106**: **(AY1)** audit CHECK migration for `forecast_bucket_assignment` + extended `result_status`; **(BA1)** `ON DELETE CASCADE` on `paired_baseline_id`; **(BA2)** ml_enhanced-first retention order in `repository.rs`; **(BD1)** ForecastPage `isFetched` loading/empty guard.
+
+**Deploy (backend migrations + forecast retention + frontend guard):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before runtime probes):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+Local override (`:18080`):
+
+```bash
+docker compose up -d --build flow-finance-ai
+```
+
+**Operator gate — FULL_FIREFLY_SYNC (required before audit/meta/planning probes):**
+
+```bash
+curl -X POST http://localhost:18080/api/v1/sync/trigger
+# Wait for sync status success; confirm forecast recompute completes
+```
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 213/213 |
+| Forecast integration | `cd backend && cargo test --test forecast_integration` | 3/3 |
+| Frontend unit | `cd frontend && npm test -- --run` | 9/9 |
+| V1-SYNC | `POST /api/v1/sync/trigger`; inspect logs | No audit CHECK WARN; no FK WARN |
+| V1-META | `GET /api/v1/forecast/meta` | Fresh `computation_id`, `stale=false` |
+| V1-AUDIT | `SELECT * FROM ai_tool_audit WHERE tool_name='forecast_bucket_assignment' LIMIT 5` | Rows present after recompute |
+| V1-BB | Month-bucket SQL per R-0087; ML meta | Honest `ml_skipped_reason` when gate fails |
+| V1-BC | Planning Compare after recompute | **Plan stale** badge clears |
+| V1-BD | Forecast nav from Home | Loading skeleton; no false empty when meta has data |
+| OIDC-1 | OIDC regression smoke | Standard OIDC checks pass |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+cd backend && cargo test --test forecast_integration
+cd frontend && npm test -- --run
+```
+
+**Boundaries:** Sync success semantics unchanged; true `insufficient_history` ML gate preserved; SPA fallback (BUG-0016) unchanged; BB month-bucket SQL deferred to operator per R-0087.
+
+#### 31. BUG-0018 hotfix — alert evaluation SQL qualification (Q0026 / released 2026-06-10)
+
+**Release:** BUG-0018 **DONE** — operator notes `handoffs/releases/Q0026-release-notes.md`. Post-sync wealth alert evaluation per **DEC-0107**: **(BE1)** qualify `fbd.balance` and `fbd.ts` in `evaluate_scarcity` daily aggregate query; **(T1)** `wealth_alerts_integration` scarcity regression gate.
+
+**Deploy (backend alert SQL fix only — no migration):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before runtime probes):**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+Local override (`:18080`):
+
+```bash
+docker compose up -d --build flow-finance-ai
+```
+
+**Operator gate — FULL_FIREFLY_SYNC (required before alerts API / header bell probes):**
+
+```bash
+curl -X POST http://localhost:18080/api/v1/sync/trigger
+# Wait for sync status success; confirm alert evaluation phase completes without 42702
+```
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 213/213 |
+| Alerts integration | `cd backend && cargo test --test wealth_alerts_integration` | 3/3 |
+| Frontend unit | `cd frontend && npm test -- --run` | 9/9 |
+| V1-SYNC | `POST /api/v1/sync/trigger`; inspect logs | No `alert evaluation failed` / 42702 |
+| V1-ALERTS | `GET /api/v1/alerts?status=active` | Rows when scarcity rule matches |
+| V1-BELL | Header Alerts bell | Non-empty active preview when rules match |
+| V1-SUB-REG | `GET /api/v1/subscriptions/alerts` | Dedup regression per BUG-0008 |
+| OIDC-1 | OIDC regression smoke | Standard OIDC checks pass |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+cd backend && cargo test --test wealth_alerts_integration
+cd frontend && npm test -- --run
+```
+
+**Boundaries:** R-0024 warn-only sync semantics unchanged; subscription alert path separate; sibling evaluators unchanged; SPA fallback (BUG-0016) unchanged.
+
+#### 32. BUG-0019 hotfix — Grafana provisioning account default + mirror-count panel (Q0027 / released 2026-06-10)
+
+**Release:** BUG-0019 **DONE** — operator notes `handoffs/releases/Q0027-release-notes.md`. Grafana provisioning-only fix per **DEC-0108**: **(CA1/CA2)** `cashflow.json` `$account_id` `sort: 0` + empty `current` + `model_kind = 'baseline'` in panels 1–3; **(CA3)** `forecast-horizons.json` `sort: 0` + `current`; **(CB1)** `platform-health.json` panel 2 mirror `COUNT(*)` UNION ALL SQL.
+
+**Deploy (Grafana provisioning reload only — no backend image change):**
+
+```bash
+docker compose restart grafana
+```
+
+**Operator gate — GRAFANA_PROVISIONING_RELOAD (required before runtime probes):**
+
+```bash
+docker compose restart grafana
+# Confirm StartedAt fresh; Grafana API serves sort:0 + current + mirror SQL
+```
+
+**Operator gate — FULL_FIREFLY_SYNC_PLUS_INCREMENTAL_RERUN (required for BH incremental regression):**
+
+```bash
+curl -X POST http://localhost:18080/api/v1/sync/trigger
+# Full sync baseline; then incremental with 0 new transactions — panel 2 must match mirror COUNT
+```
+
+**Operator smoke (post-restart):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Static guard | python3 JSON assertions | 21/21 |
+| Provisioning test | `cd backend && cargo test --test grafana_provisioning_bug0009` | 6/6 |
+| BG-DIRECT | Grafana Cashflow (no `var-account_id`) | Default funded account; 731/731 non-zero series |
+| BG-API | `GET /api/v1/forecast/monthly?account_id=114` | 25 points; non-zero from Jul 2026 |
+| BG-FH | Forecast Horizons default account | sort:0 + current |
+| BH-FULL | Platform Health panel 2 after Full sync | transactions = mirror COUNT (922 fixture) |
+| BH-INCR | After 0-new-tx incremental sync | Panel count unchanged |
+| OIDC-1 | Omniflow BG/BH regression | Operator OIDC browser (optional post-release) |
+
+**Rollback:**
+
+```bash
+git revert <Q0027-dashboard-json-commits>
+docker compose restart grafana
+```
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --test grafana_provisioning_bug0009
+```
+
+**Boundaries:** `upsert_cursor` / sync semantics unchanged; `AnalyticsEmbedPage.tsx` unchanged; alert evaluation (BUG-0018) unchanged; duplicate-UID provisioning warning pre-existing — recommend follow-up bug.
+
+#### 33. BUG-0020 hotfix — subscription list reconcile + display_category backfill (Q0028 / released 2026-06-11)
+
+**Release:** BUG-0020 **DONE** — operator notes `handoffs/releases/Q0028-release-notes.md`. Subscription list data-quality fix per **DEC-0109**: **(DA1)** migration 016 YouTube confirmed merge + Strom pending collapse; **(DB1)** confirmed `display_category_id` backfill (DEC-0100 RANK); **(DA2)** SubscriptionsPage All-tab `pending`+`confirmed` only; **(DA3)** detection forward pending guard.
+
+**Prerequisite — fix docker build blocker (required before image build):**
+
+```bash
+# Remove unused `hasForecast` in frontend/src/pages/ForecastPage.tsx (TS6133)
+cd frontend && npm run build   # must exit 0 before docker build
+```
+
+**Deploy (backend migration + detection guard + frontend filter):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+Local override (`:18080`):
+
+```bash
+docker compose up -d --build flow-finance-ai
+```
+
+**Operator gate — MIGRATION_016_APPLY (required before BI/BJ runtime probes):**
+
+```bash
+cd backend && sqlx migrate run
+# Migration 016 may already be applied manually via psql; resolve migration 15 checksum conflict if sqlx fails
+```
+
+Confirm: 6 confirmed rows; 6/6 `display_category_id` non-null; ≤1 YouTube confirmed; Strom pending collapsed.
+
+**Operator gate — FULL_FIREFLY_SYNC (required for detection regression):**
+
+```bash
+curl -X POST http://localhost:18080/api/v1/sync/trigger
+# Confirm no new duplicate confirmed YouTube after sync
+```
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| TS6133 fix | `cd frontend && npm run build` | exit 0 |
+| Integration | `cd backend && cargo test --test bug0020_subscription_list_quality` | 7/7 |
+| Regression | `cargo test --test bug0008_subscription_alerts` + `subscriptions_integration` | 8/8 + 1/1 |
+| BI-API | `GET /api/v1/subscriptions?status=confirmed` | ≤1 per payee_key; 1 YouTube |
+| BJ oracle | netflix/kindle→18, youtube→66, hgp→56, florian→3 | R-0090 samples match |
+| BI-ALL | `/subscriptions` All tab | No triplicate Strom / duplicate YouTube |
+| REG-DETECT | Post full sync | No new YouTube dup |
+| OIDC-1 | Omniflow list endpoints | HTTP 200 (optional) |
+
+**Rollback:**
+
+```bash
+git revert <Q0028-migration-and-code-commits>
+# Restore pre-migration DB from backup if reconcile ran in production
+docker compose up -d --build flow-finance-ai
+```
+
+**Boundaries:** Unfiltered `GET /api/v1/subscriptions` unchanged; discover/tags API unchanged; All-tab scope change — rejected/inactive hidden per DEC-0109.
+
+#### 34. BUG-0021 hotfix — CategoryFilter static import + wealth Role column (Q0029 / released 2026-06-11)
+
+**Release:** BUG-0021 **DONE** — operator notes `handoffs/releases/Q0029-release-notes.md`. Frontend UX polish per **DEC-0110** + **DEC-0111**: **(EA1/EA2)** static `CategoryFilter` on Forecast Monthly and Wealth Overview; **(EA3)** PlanningPage P2 parity; **(EB1)** `COALESCE(attributes, root)` `account_role` in `load_asset_accounts`; **(EB2)** `formatAccountRole` label map.
+
+**Deploy (backend SQL + frontend static imports):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+Local override (`:18080`):
+
+```bash
+docker compose up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before BK browser + BL API/UI oracles):**
+
+Running container predates Q0029. Confirm `cd frontend && npm run build` and `cargo test --test bug0021_wealth_account_role` pass before docker build. Set `AUTHENTIK_SECRET_KEY` on external profile if compose build requires it.
+
+**Operator gate — SNAPSHOT_UPSERT_OR_SYNC (optional for BL-SNAPSHOT / BL-GRAFANA):**
+
+```bash
+curl -X POST http://localhost:18080/api/v1/sync/trigger
+# Or wait for daily net_worth_snapshots upsert after deploy
+```
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Build | `cd frontend && npm run build` | exit 0; no `CategoryFilter` lazy chunk |
+| Integration | `cd backend && cargo test --test bug0021_wealth_account_role` | 4/4 |
+| BK-FORECAST | Forecast → Monthly — CategoryFilter | ≤1s interactive; no **Loading category filter…** |
+| BK-WEALTH | Wealth → Overview — CategoryFilter | Same snappy load |
+| BL-API | `GET /api/v1/wealth` | Non-null `account_role` on asset accounts |
+| BL-UI | Wealth Account breakdown Role column | Checking / Cash wallet / Savings labels |
+| BL-SNAPSHOT | `net_worth_snapshots.payload.accounts` | `account_role` populated post-upsert (optional) |
+| OIDC-1 | Omniflow `/api/v1/wealth` | HTTP 200 (optional) |
+
+**Rollback:**
+
+```bash
+git revert <Q0029-code-commits>
+docker compose up -d --build flow-finance-ai
+```
+
+**Boundaries:** `CategoryTrendChart` lazy+Suspense unchanged; subscription list (BUG-0020) unchanged; Grafana provisioning (BUG-0019) unchanged.
+
 ### Tests
 
 ```bash
