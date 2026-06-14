@@ -1,0 +1,166 @@
+{
+  "sprint": "Q0034",
+  "bug_id": "BUG-0025",
+  "orchestrator_run_id": "auto-20260613-bug0025",
+  "verified_at": "2026-06-14T02:15:00Z",
+  "result": "APPROVED",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0025",
+  "tasks_source": "sprints/quick/Q0034/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0025",
+  "research_ref": "docs/engineering/research.md#r-0097",
+  "decision_alignment": {
+    "decisions": ["DEC-0002"],
+    "extensions": ["DEC-0002 manual-trigger 365d lookback exception"],
+    "research_basis": ["R-0097"],
+    "contract_elements_covered": [
+      "GATE-OVERLAP-1: manual Full 365d lookback + scheduled watermark − overlap_days unchanged — B1",
+      "GATE-SYNC-UX-1: last_firefly_run split + hero badge + exchange secondary — B2, F1",
+      "GATE-REMED-1: runbook cursor-reset SQL + anchor link — D1, F1 callout",
+      "GATE-TEST-1: integration backdated-window repro with mirror assert — T1",
+      "GATE-DEC-1: extends DEC-0002 — no new DEC",
+      "B1: sync_transactions trigger + MANUAL_LOOKBACK_DAYS=365",
+      "B2: SyncStatusResponse.last_firefly_run + latest_firefly_run()",
+      "F1: SyncStatusPage hero Last Firefly sync, badge, exchange line, DEC-0002 callout",
+      "D1: runbook § backdated Firefly imports remediation",
+      "T1: scheduled skip + manual ingest + optional cursor-delete cold-start",
+      "G1: cargo test + npm test + build + git diff blast radius",
+      "V1: uat.md/uat.json BW/BX/BY + OIDC after BACKEND_REBUILD + FRONTEND_DEPLOY"
+    ],
+    "frozen_boundaries_respected": [
+      "No global overlap_days TOML change — scheduled path unchanged",
+      "No expense-series SQL or CategoryTrendChart frontend changes — H3 ruled out",
+      "No Firefly Search API",
+      "No admin cursor-reset API — runbook SQL only",
+      "Upsert + watermark contract unchanged — no duplicate rows on cursor reset",
+      "Exchange-only runs must not update Last Firefly sync hero",
+      "BUG-0006 category_id ingest path not reopened",
+      "F3 HomePage last_firefly_run optional P1 — out of mandatory sprint",
+      "No new DEC — GATE-DEC-1 closed"
+    ],
+    "sprint_artifact_verification": "PASS — sprint.json, task.json, tasks.md, sprint.md, progress.md, uat.md, uat.json present; acceptance_mapping 1:1 with architecture task tree; summary.md absent (sprint.md equivalent — advisory only)"
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "B1 ∥ B2 → F1 → D1 ∥ T1 → G1 → BACKEND_REBUILD + FRONTEND_DEPLOY → V1 verify-work",
+    "notes": "F1 depends on B2 API field; D1 and T1 depend on B1 contract; G1 blocked on B1+B2+F1+D1+T1; V1 blocked on G1 + operator deploy gates"
+  },
+  "operator_gates_review": {
+    "documented": true,
+    "gates": [
+      {
+        "id": "BACKEND_REBUILD",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md", "uat.json"]
+      },
+      {
+        "id": "FRONTEND_DEPLOY",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md", "uat.json"]
+      }
+    ],
+    "waived_ops_only": {
+      "admin_cursor_api": "Deferred — runbook SQL only (GATE-REMED-1)",
+      "homepage_f3": "Optional P1 — out of mandatory sprint",
+      "new_dec": "GATE-DEC-1 closed — extends DEC-0002 only"
+    }
+  },
+  "baseline_tests": {
+    "cargo_test_lib": {
+      "command": "cargo test --lib",
+      "passed": 221,
+      "failed": 0,
+      "recorded_at": "2026-06-14T02:15:00Z"
+    },
+    "npm_test": {
+      "command": "npm test",
+      "passed": 31,
+      "failed": 0,
+      "test_files": 6,
+      "recorded_at": "2026-06-14T02:15:00Z"
+    },
+    "npm_build": {
+      "command": "npm run build",
+      "passed": true,
+      "recorded_at": "2026-06-14T02:15:00Z"
+    }
+  },
+  "test_coverage": {
+    "unit_fixtures": "Existing vitest 31/31 baseline; no BUG-0025-specific frontend tests yet — expected pre-execute",
+    "integration": "T1: backdated-window repro — seed watermark, scheduled skip, manual ingest, optional cursor delete",
+    "verify_only": "V1: expense-series category 146, /forecast Category spending trend, /sync hero/callout/history, OIDC smoke",
+    "operator_tests": "V1 uat.md: BW-API/UI, BX-UI/DOC, BY-API/UI/HIST, OIDC-1 on localhost:18080",
+    "automated_gate": "G1 cargo test + npm test + npm run build + git diff --stat frozen file list",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "BW",
+      "criterion": "After operator adds multiple Firefly transactions to category Wohnen - Stromkosten across multiple months and runs manual Full Firefly sync, /forecast Category spending trend and GET /api/v1/categories/expense-series shows outflow bars for each month with data — not only 2026-05 with prior months at €0",
+      "tasks": ["B1", "T1", "G1", "V1"],
+      "operator_gates": ["BACKEND_REBUILD", "FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "B1 manual 365d lookback fixes ingest root cause (H1 CONFIRMED); T1 deterministic repro; V1 category 146 + /forecast multi-month bars"
+    },
+    {
+      "acceptance_id": "BX",
+      "criterion": "Backdated or bulk-imported Firefly transactions ingest on next appropriate sync OR Sync Status / operator docs explain DEC-0002 overlap limitation and remediation (cursor reset / full re-sync) — not silent omission with misleading success",
+      "tasks": ["B1", "D1", "F1", "G1", "V1"],
+      "operator_gates": ["BACKEND_REBUILD", "FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "B1 manual Full ingest path ≤365d; D1 runbook cursor reset for >365d; F1 DEC-0002 callout with runbook link"
+    },
+    {
+      "acceptance_id": "BY",
+      "criterion": "Manual Sync now on Sync Status triggers Full Firefly ingest; sync history distinguishes Firefly full runs (manual, scheduled) from exchange-only (scheduled_exchanges, manual_exchanges). OIDC-enabled deploy regression checks pass",
+      "tasks": ["B2", "F1", "G1", "V1"],
+      "operator_gates": ["BACKEND_REBUILD", "FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "B2 last_firefly_run API; F1 hero/badge/exchange secondary; history table raw trigger unchanged; V1 BY-API/UI/HIST + OIDC-1"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "F3 HomePage last_firefly_run optional P1 — out of mandatory sprint; BY closure via SyncStatusPage only."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "summary.md absent — sprint.md serves equivalent role; not blocking execute."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "BW live verification requires operator Firefly data with multi-month Stromkosten — V1 uses category 146 oracle from R-0097 probe."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "uat.md/uat.json placeholders — populate at V1/verify-work (expected)."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 3,
+    "covered_count": 3,
+    "gap_count": 0,
+    "task_count": 7,
+    "mandatory_task_count": 7,
+    "conditional_task_count": 0,
+    "optional_task_count": 0,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0002_aligned": true,
+    "operator_gates_documented": true,
+    "v1_e2e_smoke": true,
+    "scope_creep_beyond_architecture": false,
+    "dependency_graph_valid": true,
+    "execute_ready": true,
+    "verdict": "APPROVED",
+    "next_scheduled_phase": "execute"
+  },
+  "notes": "QA plan-verify 2026-06-14: Q0034 tasks align with docs/product/acceptance.md BUG-0025 rows BW/BX/BY and architecture § BUG-0025 / R-0097; 7 mandatory tasks mapped; 3/3 acceptance rows covered; 5/5 frozen gates traced; 0 gaps; 0 orphans; operator gates BACKEND_REBUILD + FRONTEND_DEPLOY documented; baseline cargo lib 221/221, npm 31/31, build PASS. Approved for /execute."
+}

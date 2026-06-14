@@ -12,6 +12,7 @@ pub mod forecast;
 pub mod forecast_ml;
 pub mod fx;
 pub mod health;
+pub mod meta;
 pub mod plan;
 pub mod portfolio;
 pub mod recurrence;
@@ -206,8 +207,11 @@ pub fn build_router(state: Arc<AppState>) -> Router {
     let static_dir = std::path::Path::new("/app/static");
     let dev_static = std::path::Path::new("frontend/dist");
 
+    let meta_router = meta::routes();
+
     let mut router = Router::new()
         .merge(health_router)
+        .merge(meta_router)
         .merge(analytics_router)
         .merge(api_router)
         .layer(tower_http::trace::TraceLayer::new_for_http())

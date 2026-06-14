@@ -142,7 +142,7 @@ AUTO_REMOTE_ENVIRONMENT_LABEL=local
 # - ALLOW_AUTO_PUSH: 0|1 (default off; explicit opt-in required)
 # - AUTO_PUSH_BRANCH_ALLOWLIST: comma-separated branches/patterns eligible for
 #   auto-push. Protected/default branches are denied unless allowlisted.
-SYNC_POLICY_MODE=by_phase
+SYNC_POLICY_MODE=disabled
 SYNC_CUSTOM_PHASES=
 ALLOW_AUTO_PUSH=0
 AUTO_PUSH_BRANCH_ALLOWLIST=main
@@ -169,18 +169,33 @@ AUTO_PUSH_BRANCH_ALLOWLIST=main
 # - ARCH_HOT_MAX_STORY_SECTIONS: integer >= 20 (max # US-xxxx story sections retained)
 # - Manual-override precedence: explicit flag values in this file remain authoritative
 #   for that flag and override profile defaults.
+#
+# Delivery mode (US-0096 / DEC-0082)
+# - DELIVERY_MODE: standard|ultra_lean|mega_quick (default standard; unset = standard)
+# - LEAN_MEMORY_READ: 0|1 (default 1 when pack/active-context paths exist)
+# - LEAN_MEMORY_WRITE: 0|1 (default 1 when pack/active-context paths exist)
+# - LEAN_COLD_READ_MAX_SECTIONS: int >= 1 (default 4)
+# - LEAN_STATE_INDEX_ROWS: int >= 30 (default 80)
+# - AUTO_DELIVERY_ROUTING: scratchpad_only|backlog_then_scratchpad (default scratchpad_only)
+# Tranche A default hot caps (US-0096): 1000/650/3000 — explicit values override.
+DELIVERY_MODE=standard
+LEAN_MEMORY_READ=1
+LEAN_MEMORY_WRITE=1
+LEAN_COLD_READ_MAX_SECTIONS=4
+LEAN_STATE_INDEX_ROWS=80
+AUTO_DELIVERY_ROUTING=scratchpad_only
 EARLY_RESEARCH=1
 INTAKE_GUIDED_MODE=1
 INTAKE_SUBAGENT_FALLBACK=deny
 INTAKE_WORK_ITEM_KIND=story
 ID_NAMESPACE_BOOTSTRAP=0
-TOKEN_PROFILE=full
+TOKEN_PROFILE=balanced
 STATE_HOT_MAX_LINES=1000
-STATE_HOT_MAX_CHECKPOINTS=50
-PO_TO_TL_HOT_MAX_LINES=500
-PO_TO_TL_HOT_MAX_SECTIONS=40
+STATE_HOT_MAX_CHECKPOINTS=80
+PO_TO_TL_HOT_MAX_LINES=650
+PO_TO_TL_HOT_MAX_SECTIONS=60
 ARCH_HOT_MAX_LINES=3000
-ARCH_HOT_MAX_STORY_SECTIONS=100
+ARCH_HOT_MAX_STORY_SECTIONS=120
 
 # Publish targets (US-0054)
 # - RELEASE_PUBLISH_MODE: disabled|confirm|auto
@@ -239,6 +254,49 @@ DOC_DETAIL_LEVEL=balanced
 README_FEATURE_COVERAGE_ENFORCE=1
 
 #
+# ## Project README coverage (US-0097 / DEC-0083)
+# Project-owned root README bootstrap + per-story catalog growth.
+# - PROJECT_README_ENFORCE: 0|1 (default 1 post-bootstrap)
+#   When 0, /release step 3g skips (migration/grandfathering only). When 1, blocking.
+#   Flip 0→1 only after validate_project_readme_coverage.py --report shows coverage_missing: [].
+# - FRAMEWORK_KIT_REPO: 0|1 (default 0)
+#   When 1 (its-magic dev kit repo only), skip execute 23a/23b and project validator root check.
+#   Consumer repos never set FRAMEWORK_KIT_REPO=1.
+PROJECT_README_ENFORCE=1
+FRAMEWORK_KIT_REPO=0
+
+#
+# ## Browser UAT self-test (US-0093 / DEC-0079)
+# Two-tier browser probe: stdlib lib classifies + agent owns Cursor browser MCP (BUG-0006).
+# - UAT_BROWSER_PROBE_MODE: cursor|http_fallback|playwright_fallback (default cursor)
+#   - cursor: agent executes MCP sequence; lib emits plan + UAT_PROBE_UNRESOLVED until evidence
+#   - http_fallback: stdlib HTTP GET (CI recipe — set this in CI)
+#   - playwright_fallback: subprocess Playwright primary; HTTP fallback when missing
+# - UAT_BROWSER_FALLBACK_CHAIN: 0|1 (default 1; enable HTTP → Playwright after MCP unavailable)
+# - UAT_PROCESS_HEALTH_POLL_SECONDS: positive int (default 60; process_health readiness cap)
+# - UAT_PROCESS_HEALTH_POLL_INTERVAL_SECONDS: positive int (default 2; poll interval)
+# - DEV_SERVER_PORT: int (optional; URL/port inference override)
+# - DEV_SERVER_COMMAND: shell command (optional; process_health startup override)
+# Interaction: orthogonal to PERMISSION_MODE and Cursor browser approval modes (manual / allow-list /
+#   auto-run per vendor docs). Health URLs from docs/engineering/runtime-connectivity.md first.
+UAT_BROWSER_PROBE_MODE=cursor
+UAT_BROWSER_FALLBACK_CHAIN=1
+UAT_PROCESS_HEALTH_POLL_SECONDS=60
+UAT_PROCESS_HEALTH_POLL_INTERVAL_SECONDS=2
+DEV_SERVER_PORT=
+DEV_SERVER_COMMAND=
+
+#
+# ## Dev environment auto-launch (US-0098 / DEC-0084)
+# Execute-phase bounded rebuild/relaunch + Connect surfacing — distinct from US-0065 phase QA,
+# US-0086 test routing, and US-0067 release hints. Orthogonal to AUTO_REMOTE_AUTOMATION_PROFILE.
+# When off, execute step 24 skipped with zero overhead.
+# - DEV_AUTO_LAUNCH_PROFILE: off|deterministic_v1 (default off)
+# - DEV_ENVIRONMENT_CONFIG: repo-relative path (default .cursor/dev-environment.json)
+DEV_AUTO_LAUNCH_PROFILE=on
+DEV_ENVIRONMENT_CONFIG=.cursor/dev-environment.json
+
+#
 # ## Caveman mode (US-0089)
 # Response-side voice toggle. Default off. Composition is orthogonal to
 # TOKEN_PROFILE (DEC-0035 / US-0080) and AUTO_QUIET (US-0088) --
@@ -247,10 +305,18 @@ README_FEATURE_COVERAGE_ENFORCE=1
 # - CAVEMAN_MODE: 0|1 (default 0; absence = 0)
 # - CAVEMAN_LEVEL: lite|full|ultra (empty; with MODE=1 empty -> treat as full;
 #   unknown value -> CAVEMAN_LEVEL_UNKNOWN and fall back to pre-US-0089 voice)
-# - CAVEMAN_COMPRESS_INPUT: 0|1 -- reserved for US-0090; inert in US-0089;
-#   no behavior until compression story ships
-# - CAVEMAN_FILE_SCOPE: string -- reserved for US-0090; inert in US-0089;
-#   no behavior until compression story ships
+#
+# ## Caveman input compression (US-0090 / DEC-0073)
+# Input-side prose minification via scripts/caveman_compress_input.py. Default off.
+# Orthogonal to CAVEMAN_MODE (reply voice) and TOKEN_PROFILE (context breadth).
+# - CAVEMAN_COMPRESS_INPUT: 0|1 (default 0) -- activation gate; must be 1 for --write
+# - CAVEMAN_FILE_SCOPE: string (empty default) -- allow-list of files eligible for compression:
+#     * empty: no files in scope (fail-closed on --write with CAVEMAN_COMPRESS_SCOPE_EMPTY)
+#     * named profile: e.g. docs-prose-only (user-guides, runbook, state-archive, handoffs/archive)
+#     * raw globs: e.g. docs/user-guides/**/*.md,handoffs/archive/*.md (forward slashes only)
+#     * hybrid: profile:docs-prose-only;globs:handoffs/archive/*.md
+#   Mutation requires COMPRESS_INPUT=1 + non-empty scope + CLI --write; use --dry-run first.
+#   Originals land in docs/.caveman-originals/<path>; deny-list always wins over allow.
 CAVEMAN_MODE=1
 CAVEMAN_LEVEL=full
 CAVEMAN_COMPRESS_INPUT=0

@@ -13,6 +13,10 @@ description: "its-magic discovery: collect design/UX inspiration and scope updat
   subagent/chat.
 
 ## Inputs
+
+- **Narrow-read (US-0053 / US-0096 Tranche A)**: Start at docs/engineering/phase-context.md
+  and the story section anchor in vision/architecture/decisions when a heading exists; forbid
+  full-file reads when a section heading exists.
 - Design/UX references
 - Competitive/market notes
 

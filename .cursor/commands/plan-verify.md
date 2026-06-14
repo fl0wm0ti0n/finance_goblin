@@ -12,6 +12,10 @@ description: "its-magic plan verify: verify sprint tasks against acceptance."
 - After writing outputs, stop and hand off to `/execute` in a new subagent/chat.
 
 ## Inputs
+
+- **Narrow-read (US-0053 / US-0096 Tranche A)**: Start at docs/engineering/phase-context.md
+  and the story section anchor in vision/architecture/decisions when a heading exists; forbid
+  full-file reads when a section heading exists.
 - `sprints/S0001/tasks.md`
 - `docs/product/acceptance.md`
 - `docs/engineering/architecture.md`

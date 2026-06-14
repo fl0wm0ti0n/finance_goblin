@@ -1,0 +1,27 @@
+# Browser probe summary — Q0034 verify-work 2026-06-14T17:55:00Z
+# navigation_url: http://localhost:18080/sync
+# pre-deploy baseline: BACKEND_REBUILD + FRONTEND_DEPLOY pending
+
+## /sync (BY-UI, BX-UI)
+- hero_text: "Last sync: 6/14/2026, 4:53:34 PM" (pre-deploy — not "Last Firefly sync")
+- dec0002_callout: absent (F1 not deployed)
+- sync_now_button: present
+- sync_history_row0_trigger: scheduled_exchanges
+- sync_history_row1_trigger: scheduled
+- screenshot: sprints/quick/Q0034/evidence/browser/bw-by-sync-probe-01.png
+
+## /forecast Monthly (BW-UI)
+- navigation_url: http://localhost:18080/forecast
+- category_filter: present; Stromkosten selectable via API category_id=146
+- pre_deploy_symptom: expense-series API shows only 2026-05 outflow 465.53 (4 tx)
+
+## API oracle (BY-API, BW-API)
+- GET /api/v1/sync/status: last_run.trigger=scheduled_exchanges; last_firefly_run field ABSENT (B2 not deployed)
+- GET /api/v1/categories/expense-series?category_id=146: only 2026-05 non-zero (465.53 EUR, 4 txs)
+- GET /api/v1/sync/runs: manual / scheduled / scheduled_exchanges triggers present (BY-HIST PASS)
+
+## Automated re-run
+- cargo test --lib: 221/221 PASS
+- cargo test --test bug0025_sync_transaction_window: 3/3 PASS
+- npm test: 31/31 PASS
+- npm run build: PASS

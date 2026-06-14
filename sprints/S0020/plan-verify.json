@@ -1,0 +1,176 @@
+{
+  "sprint": "S0020",
+  "story_id": "US-0021",
+  "orchestrator_run_id": "auto-20260613-us0021",
+  "verified_at": "2026-06-13T08:00:32Z",
+  "result": "APPROVED",
+  "acceptance_source": "docs/product/acceptance.md#US-0021",
+  "tasks_source": "sprints/S0020/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#us-0021--subscription-transaction-explorer-with-rich-filters",
+  "research_ref": "docs/engineering/research.md#r-0092--us-0021-subscription-transaction-explorer-vs-recurrence-only-discover",
+  "decision_alignment": {
+    "decisions": ["DEC-0112", "DEC-0113", "DEC-0114"],
+    "extensions": ["DEC-0098", "DEC-0099", "DEC-0111"],
+    "research_basis": ["R-0092"],
+    "contract_elements_covered": [
+      "GATE-UX-1: dual mode Transactions default | Suggested patterns — UI1, PT1",
+      "GATE-API-1: GET /transactions/search — TX1, TX2, TX3",
+      "GATE-FILTER-1: SQL push-down + accounts JOIN — TX1",
+      "GATE-HINT-1: separate hint pass min 60 row metadata only — TX2",
+      "GATE-PAGE-1: 100/page offset total_count has_more — TX1, TX3, UI3",
+      "GATE-CONFIRM-1: preview-group + reuse discover/confirm — TX3, UI4",
+      "GATE-DEC-1: DEC-0112/0113/0114 — sprint aligned",
+      "GATE-HINT-2 P2 defer: 2-tx weak hints excluded",
+      "GATE-IDX-1 P2 defer: composite index excluded"
+    ],
+    "frozen_boundaries_respected": [
+      "No global detection threshold changes — T2 AC-5",
+      "DEC-0098 patterns tab contract frozen — PT1",
+      "No Firefly write-back",
+      "Amount band filter P2 defer per DEC-0112 §2",
+      "Keyset pagination MVP defer",
+      "DetectionPipeline::run_candidates unchanged",
+      "run_discover candidate pass unchanged"
+    ],
+    "sprint_artifact_verification": "PASS — sprint.json, sprint.md, tasks.md, progress.md, summary.md, uat.md, uat.json present; acceptance_mapping 1:1 with architecture task table"
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "TX1 → TX2 → TX3 ∥ UI1 shell; UI2–UI4 after TX3; PT1 after UI1; T1 after TX3; T2 after PT1+UI4; R1 after UI4; V1 after T1+T2+R1; BACKEND_FRONTEND_DEPLOY → verify-work",
+    "notes": "UI1 parallel with TX1; UI2/UI4 blocked on TX3; T2 blocked on PT1+UI4; V1 blocked on T1+T2+R1"
+  },
+  "operator_gates_review": {
+    "documented": true,
+    "gates": [
+      {
+        "id": "BACKEND_FRONTEND_DEPLOY",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "tasks.md", "sprint.md", "uat.md", "uat.json"]
+      }
+    ],
+    "waived_ops_only": {
+      "oidc_smoke": "AC-6 pass-with-prerequisites at verify-work per US-0020 precedent",
+      "amount_band_filter": "P2 defer GATE-HINT-2/GATE-IDX-1 — documented in sprint P2 excluded list",
+      "composite_index": "GATE-IDX-1 P2 defer — not blocking MVP"
+    }
+  },
+  "conditional_tasks_review": {},
+  "baseline_tests": {
+    "cargo_test_lib": {
+      "command": "cargo test --lib",
+      "passed": 218,
+      "failed": 0,
+      "recorded_at": "2026-06-13T08:00:32Z"
+    },
+    "npm_test": {
+      "command": "npm test",
+      "passed": 17,
+      "failed": 0,
+      "test_files": 5,
+      "recorded_at": "2026-06-13T08:00:32Z"
+    }
+  },
+  "test_coverage": {
+    "unit_fixtures": "T1: SQL filter push-down, pagination meta, hint attachment, preview-group median/interval",
+    "integration": "T1 search + hint integration in backend/src/subscriptions/",
+    "regression": "T2: DetectionPipeline unchanged, run_discover unchanged, US-0020 tags/majority, US-0008 dedup, no new_detection on manual confirm",
+    "operator_tests": "V1 uat.md/uat.json: AC-1..AC-6 probes on localhost:18080 + OIDC external profile",
+    "qa_fixture": "account 114, SEPA-Lastschrift — 11 txs @ 31d / 95% individual rows + hint badge",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "AC-1",
+      "criterion": "Transaction search: Discover lists individual mirror expense transactions with pagination/cap — not limited to pre-grouped detect_recurrence_groups candidates only",
+      "tasks": ["TX1", "TX2", "TX3", "UI1", "UI3", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "TX1–TX3 GET /transactions/search; UI1 Transactions default mode; UI3 paginated tx table; V1 AC1-TX-SEARCH probe"
+    },
+    {
+      "acceptance_id": "AC-2",
+      "criterion": "Rich filters: account, payee/description, category, Geldbereich (account_role), date range; optional amount band and recurring/pattern-hint mode documented in UI",
+      "tasks": ["TX1", "UI2", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "TX1 SQL push-down all filters; UI2 CategoryFilter + formatAccountRole + date + recurring_hint toggle; amount band P2 defer documented"
+    },
+    {
+      "acceptance_id": "AC-3",
+      "criterion": "Pattern hint: when filtered transactions form recurring expense pattern (including below auto-detection emit threshold), UI surfaces interval/amount hint or selectable transaction group for review",
+      "tasks": ["TX2", "UI3", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "TX2 DEC-0114 hint pass on filtered subset; UI3 hint badge column; account 114 fixture in qa_fixture; GATE-HINT-2 2-tx weak hints P2 defer documented"
+    },
+    {
+      "acceptance_id": "AC-4",
+      "criterion": "Manual activate: operator confirms selected transaction group as subscription or standing order without pending-only auto-detection path; respects DEC-0085 merge and rejection rules",
+      "tasks": ["TX3", "UI4", "V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "TX3 POST preview-group; UI4 multi-select → confirm modal → POST discover/confirm; DEC-0085/0099 merge preserved"
+    },
+    {
+      "acceptance_id": "AC-5",
+      "criterion": "Regression: US-0020 tags, majority category, and US-0003/US-0008 detection + alert dedup unchanged",
+      "tasks": ["PT1", "T2", "V1"],
+      "operator_gates": [],
+      "covered": true,
+      "notes": "PT1 DEC-0098 patterns tab frozen; T2 dedicated regression tests; no detection.rs edits in scope"
+    },
+    {
+      "acceptance_id": "AC-6",
+      "criterion": "OIDC: external profile smoke pass on Discover transaction search and confirm flow",
+      "tasks": ["V1"],
+      "operator_gates": ["BACKEND_FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "V1 uat.md OIDC checklist AC-1..AC-6; pass-with-prerequisites at verify-work per US-0020 precedent"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "R1 user guide has no direct acceptance row — USER_GUIDE_MODE=1 requirement per architecture; P1 mandatory for release."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "AC-2 optional amount band filter deferred P2 per DEC-0112 §2 and GATE-IDX-1 — sprint documents exclusion; not a plan gap."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "GATE-HINT-2 2-tx weak hints P2 defer — AC-3 primary path is ≥60 confidence groups on filtered subset (account 114 fixture); revisit only if strict AC-3 fails at verify-work."
+    },
+    {
+      "id": "ADV-4",
+      "severity": "low",
+      "note": "No task.json per-task file — sprint uses tasks.md table only; consistent with S0019 US-0020 pattern; not blocking."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 6,
+    "covered_count": 6,
+    "gap_count": 0,
+    "task_count": 12,
+    "mandatory_task_count": 12,
+    "optional_task_count": 0,
+    "p2_deferred_count": 3,
+    "tasks_without_acceptance_ref": ["R1"],
+    "architecture_aligned": true,
+    "dec_0112_0113_0114_aligned": true,
+    "operator_gates_documented": true,
+    "v1_e2e_smoke": true,
+    "scope_creep_beyond_architecture": false,
+    "dependency_graph_valid": true,
+    "execute_ready": true,
+    "verdict": "APPROVED",
+    "next_scheduled_phase": "execute"
+  },
+  "notes": "QA plan-verify 2026-06-13: S0020 tasks align with docs/product/acceptance.md US-0021 AC-1..AC-6 and architecture § US-0021 / R-0092; 12 tasks mapped; 6/6 acceptance rows covered; 0 gaps; 0 orphans; operator gate BACKEND_FRONTEND_DEPLOY documented; baseline cargo test --lib 218/218, npm test 17/17. Approved for /execute."
+}

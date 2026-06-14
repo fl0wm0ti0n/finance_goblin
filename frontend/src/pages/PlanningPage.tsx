@@ -1,4 +1,10 @@
 import { lazy, Suspense, useMemo, useState } from "react";
+import {
+  isDeleteDisabled,
+  resolveDisplayedPlanId,
+  shouldShowSolePlanDeleteHint,
+  SOLE_PLAN_DELETE_HINT,
+} from "./planSelector";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   apiFetch,
@@ -107,10 +113,10 @@ export function PlanningPage() {
     queryFn: () => apiFetch<PlanListItem[]>("/api/v1/plans"),
   });
 
-  const activePlanId = useMemo(() => {
-    const active = plansQuery.data?.find((p) => p.is_active);
-    return active?.id ?? selectedPlanId ?? plansQuery.data?.[0]?.id ?? null;
-  }, [plansQuery.data, selectedPlanId]);
+  const activePlanId = useMemo(
+    () => resolveDisplayedPlanId(plansQuery.data, selectedPlanId),
+    [plansQuery.data, selectedPlanId],
+  );
 
   const detailQuery = useQuery({
     queryKey: ["plan-detail", activePlanId],
@@ -486,7 +492,11 @@ export function PlanningPage() {
 
   const empty = !plansQuery.isLoading && (plansQuery.data?.length ?? 0) === 0;
   const planStale = plansQuery.data?.find((p) => p.id === activePlanId)?.plan_stale;
-  const activePlanIsSelected = plansQuery.data?.find((p) => p.id === activePlanId)?.is_active;
+  const activePlanIsSelected = isDeleteDisabled(plansQuery.data, activePlanId);
+  const showSolePlanDeleteHint = shouldShowSolePlanDeleteHint(
+    plansQuery.data,
+    activePlanIsSelected,
+  );
 
   const startEdit = (a: PlanAdjustment) => {
     setEditingId(a.id);
@@ -681,6 +691,17 @@ export function PlanningPage() {
                 >
                   Delete plan
                 </button>
+                {showSolePlanDeleteHint && (
+                  <p
+                    style={{
+                      fontSize: "0.85rem",
+                      color: "#64748b",
+                      margin: "0.5rem 0 0",
+                    }}
+                  >
+                    {SOLE_PLAN_DELETE_HINT}
+                  </p>
+                )}
               </>
             )}
           </div>

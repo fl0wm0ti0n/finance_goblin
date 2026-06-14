@@ -10,6 +10,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::subscriptions::discovery::{run_discover, DiscoverQuery};
+use crate::subscriptions::transaction_search::{
+    preview_transaction_group, run_transaction_search, PreviewGroupError, TransactionSearchQuery,
+    SEARCH_PAGE_LIMIT,
+};
 use crate::subscriptions::types::{
     AlertRow, ConfirmFromDiscoverError, OperatorTagSummary, PatternDetailRow, PatternRow,
     PriceEventRow,
@@ -21,6 +25,24 @@ pub struct ListQuery {
     pub status: Option<String>,
     pub kind: Option<String>,
     pub tag: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct TransactionSearchQueryParams {
+    pub account_id: Option<String>,
+    pub payee: Option<String>,
+    pub category_id: Option<String>,
+    pub account_role: Option<String>,
+    pub date_from: Option<String>,
+    pub date_to: Option<String>,
+    pub recurring_hint: Option<bool>,
+    pub page: Option<u32>,
+    pub limit: Option<u32>,
+}
+
+#[derive(Deserialize)]
+pub struct PreviewGroupBody {
+    pub transaction_ids: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -114,6 +136,14 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route(
             "/api/v1/subscriptions/discover/confirm",
             post(confirm_discover),
+        )
+        .route(
+            "/api/v1/subscriptions/transactions/search",
+            get(search_transactions),
+        )
+        .route(
+            "/api/v1/subscriptions/transactions/preview-group",
+            post(preview_group),
         )
         .route("/api/v1/subscriptions/alerts", get(list_alerts))
         .route("/api/v1/subscriptions/alerts/unread-count", get(unread_alert_count))
@@ -219,6 +249,63 @@ async fn discover_patterns(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(Json(response))
+}
+
+fn parse_search_date(value: &str) -> Option<chrono::NaiveDate> {
+    chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d").ok()
+}
+
+async fn search_transactions(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<TransactionSearchQueryParams>,
+) -> Result<Json<crate::subscriptions::types::TransactionSearchResponse>, StatusCode> {
+    let account_id = q.account_id.as_deref().filter(|s| !s.is_empty());
+    let Some(account_id) = account_id else {
+        return Err(StatusCode::BAD_REQUEST);
+    };
+
+    let limit = q.limit.unwrap_or(SEARCH_PAGE_LIMIT).min(SEARCH_PAGE_LIMIT).max(1);
+    let page = q.page.unwrap_or(1).max(1);
+    let date_from = q.date_from.as_deref().and_then(parse_search_date);
+    let date_to = q.date_to.as_deref().and_then(parse_search_date);
+
+    let response = run_transaction_search(
+        state.subscriptions.repository(),
+        TransactionSearchQuery {
+            account_id,
+            payee: q.payee.as_deref(),
+            category_id: q.category_id.as_deref(),
+            account_role: q.account_role.as_deref(),
+            date_from,
+            date_to,
+            recurring_hint: q.recurring_hint.unwrap_or(true),
+            page,
+            limit,
+        },
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(response))
+}
+
+async fn preview_group(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<PreviewGroupBody>,
+) -> Result<Json<crate::subscriptions::types::PreviewGroupResponse>, StatusCode> {
+    let result = preview_transaction_group(
+        state.subscriptions.repository(),
+        &body.transaction_ids,
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    match result {
+        Ok(response) => Ok(Json(response)),
+        Err(PreviewGroupError::TooFewTransactions) => Err(StatusCode::BAD_REQUEST),
+        Err(PreviewGroupError::InvalidTransactions) => Err(StatusCode::BAD_REQUEST),
+        Err(PreviewGroupError::PayeeMismatch) => Err(StatusCode::BAD_REQUEST),
+    }
 }
 
 async fn confirm_discover(

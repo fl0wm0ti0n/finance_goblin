@@ -116,6 +116,85 @@ impl SubscriptionRepository {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
+    /// DEC-0112 — parameterized expense transaction search with Geldbereich JOIN.
+    pub async fn search_transactions(
+        &self,
+        params: &TransactionSearchParams<'_>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<TransactionSearchDbRow>, sqlx::Error> {
+        let payee_pattern = params
+            .payee
+            .filter(|p| !p.trim().is_empty())
+            .map(|p| format!("%{p}%"));
+        sqlx::query_as::<_, TransactionSearchDbRow>(
+            r#"
+            SELECT t.firefly_id, t.account_id,
+                   COALESCE(a.payload->'attributes'->>'account_role', a.payload->>'account_role') AS account_role,
+                   t.date, t.amount::float8 AS amount, t.description, t.category_id, c.name AS category_name
+            FROM transactions t
+            JOIN accounts a ON t.account_id = a.firefly_id
+            LEFT JOIN categories c ON t.category_id = c.firefly_id
+            WHERE t.amount < 0
+              AND t.account_id = $1
+              AND t.date >= $2
+              AND ($3::text IS NULL OR t.category_id = $3)
+              AND ($4::text IS NULL OR t.description ILIKE $4)
+              AND ($5::text IS NULL OR COALESCE(a.payload->'attributes'->>'account_role', a.payload->>'account_role') = $5)
+              AND ($6::date IS NULL OR t.date >= $6)
+              AND ($7::date IS NULL OR t.date <= $7)
+            ORDER BY t.date DESC, t.firefly_id DESC
+            LIMIT $8 OFFSET $9
+            "#,
+        )
+        .bind(params.account_id)
+        .bind(params.window_cutoff)
+        .bind(params.category_id)
+        .bind(payee_pattern)
+        .bind(params.account_role)
+        .bind(params.date_from)
+        .bind(params.date_to)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    /// DEC-0112 — COUNT for pagination meta.
+    pub async fn count_transactions(
+        &self,
+        params: &TransactionSearchParams<'_>,
+    ) -> Result<i64, sqlx::Error> {
+        let payee_pattern = params
+            .payee
+            .filter(|p| !p.trim().is_empty())
+            .map(|p| format!("%{p}%"));
+        sqlx::query_scalar::<_, i64>(
+            r#"
+            SELECT COUNT(*)::bigint
+            FROM transactions t
+            JOIN accounts a ON t.account_id = a.firefly_id
+            WHERE t.amount < 0
+              AND t.account_id = $1
+              AND t.date >= $2
+              AND ($3::text IS NULL OR t.category_id = $3)
+              AND ($4::text IS NULL OR t.description ILIKE $4)
+              AND ($5::text IS NULL OR COALESCE(a.payload->'attributes'->>'account_role', a.payload->>'account_role') = $5)
+              AND ($6::date IS NULL OR t.date >= $6)
+              AND ($7::date IS NULL OR t.date <= $7)
+            "#,
+        )
+        .bind(params.account_id)
+        .bind(params.window_cutoff)
+        .bind(params.category_id)
+        .bind(payee_pattern)
+        .bind(params.account_role)
+        .bind(params.date_from)
+        .bind(params.date_to)
+        .fetch_one(&self.pool)
+        .await
+    }
+
     pub async fn compute_display_category_id(
         &self,
         pattern_id: Uuid,
@@ -1117,6 +1196,29 @@ impl SubscriptionRepository {
         .await?;
         Ok(())
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct TransactionSearchParams<'a> {
+    pub account_id: &'a str,
+    pub payee: Option<&'a str>,
+    pub category_id: Option<&'a str>,
+    pub account_role: Option<&'a str>,
+    pub date_from: Option<NaiveDate>,
+    pub date_to: Option<NaiveDate>,
+    pub window_cutoff: NaiveDate,
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct TransactionSearchDbRow {
+    pub firefly_id: String,
+    pub account_id: String,
+    pub account_role: Option<String>,
+    pub date: NaiveDate,
+    pub amount: f64,
+    pub description: Option<String>,
+    pub category_id: Option<String>,
+    pub category_name: Option<String>,
 }
 
 #[derive(Debug, sqlx::FromRow)]

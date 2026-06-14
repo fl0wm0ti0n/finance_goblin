@@ -1,0 +1,137 @@
+{
+  "sprint": "Q0033",
+  "bug_id": "BUG-0024",
+  "orchestrator_run_id": "auto-20260613-bug0024",
+  "verified_at": "2026-06-13T23:45:00Z",
+  "result": "APPROVED",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0024",
+  "tasks_source": "sprints/quick/Q0033/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0024",
+  "research_ref": "docs/engineering/research.md#r-0096",
+  "decision_alignment": {
+    "decisions": ["DEC-0082"],
+    "extensions": [],
+    "research_basis": ["R-0096"],
+    "contract_elements_covered": [
+      "GATE-COPY-1: shouldShowSolePlanDeleteHint + SOLE_PLAN_DELETE_HINT inline below Delete row — H1 F1",
+      "GATE-DEPLOY-1: FRONTEND_DEPLOY then /planning BR/BS omniflow smoke — V1",
+      "GATE-SCOPE-1: frontend-only; DEC-0082 DELETE 409 unchanged — frozen boundaries",
+      "GATE-TEST-1: vitest table-driven sole-plan predicate — T1 planSelector.test.ts",
+      "GATE-DEC-1: no new DEC — architecture contract only",
+      "H1: planSelector.ts colocated helper (BUG-0022/BUG-0026 precedent)",
+      "F1: PlanningPage conditional inline hint L667-687 vicinity",
+      "T1: sole plan active true/false, two plans, empty plans cases",
+      "G1: npm test + npm run build + git diff --stat frontend-only",
+      "V1: uat.md/uat.json BS-UI/BR-UI/BR-API/BN-regression/OIDC-1 after FRONTEND_DEPLOY"
+    ],
+    "frozen_boundaries_respected": [
+      "No backend/src/api/plans.rs or DELETE handler changes",
+      "No sole-plan auto-deactivate delete",
+      "No create-plan API changes",
+      "No Playwright E2E suite addition",
+      "No new DEC — GATE-DEC-1 closed",
+      "resolveDisplayedPlanId / isDeleteDisabled unchanged — Q0031 not reopened"
+    ],
+    "sprint_artifact_verification": "PASS — sprint.json, task.json, tasks.md, sprint.md, summary.md, progress.md, uat.md, uat.json present; acceptance_mapping 1:1 with architecture task table"
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "H1 → F1 ∥ T1 → G1 → FRONTEND_DEPLOY → V1 verify-work",
+    "notes": "F1 and T1 both depend on H1; G1 blocked on F1 + T1; V1 blocked on G1 + FRONTEND_DEPLOY"
+  },
+  "operator_gates_review": {
+    "documented": true,
+    "gates": [
+      {
+        "id": "FRONTEND_DEPLOY",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md", "uat.json"]
+      }
+    ],
+    "waived_ops_only": {
+      "backend_delete_api": "No backend change — GATE-SCOPE-1 frontend-only",
+      "selector_regression": "Q0031 selector verified PASS on localhost — BR code fix not required",
+      "new_dec": "GATE-DEC-1 closed — no new DEC"
+    }
+  },
+  "baseline_tests": {
+    "npm_test": {
+      "command": "npm test",
+      "passed": 24,
+      "failed": 0,
+      "test_files": 6,
+      "recorded_at": "2026-06-13T23:45:00Z"
+    },
+    "npm_build": {
+      "command": "npm run build",
+      "passed": true,
+      "recorded_at": "2026-06-13T23:45:00Z"
+    }
+  },
+  "test_coverage": {
+    "unit_fixtures": "T1 planSelector.test.ts: sole plan active+selected, sole active+not selected, two plans active/non-active, empty plans, SOLE_PLAN_DELETE_HINT copy",
+    "integration": "None required — frontend-only scope per GATE-SCOPE-1",
+    "verify_only": "planningFeedback.test.ts 409 path unchanged; existing planSelector 8/8 regression",
+    "operator_tests": "V1 uat.md: BS-UI, BR-UI, BR-API, BN-regression, OIDC-1 on localhost:18080 + optional omniflow",
+    "automated_gate": "G1 npm test + npm run build + git diff --stat frontend-only blast radius",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "BS",
+      "criterion": "With only one globally active plan, Delete plan remains disabled per DEC-0082 but UI shows clear explanation describing how to delete — not silent gray button with no guidance",
+      "tasks": ["H1", "F1", "T1", "G1", "V1"],
+      "operator_gates": ["FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "H1 predicate + frozen copy; F1 inline render below Delete row; T1 vitest table; pre-fix root cause PlanningPage tooltip-only L671-674"
+    },
+    {
+      "acceptance_id": "BR",
+      "criterion": "With two or more plans on /planning, selecting a non-active plan enables Delete plan and successful confirmation removes the plan — not permanently disabled after Q0031 deploy",
+      "tasks": ["G1", "V1"],
+      "operator_gates": ["FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "No selector code change planned — localhost PASS pre-fix; G1 regression via existing vitest 8/8; V1 post-deploy omniflow smoke"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "BR localhost already PASS per discovery — V1 omniflow regression primary for BR after FRONTEND_DEPLOY."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "tasks.md H1 uses PlanSummary[] in snippet; architecture uses PlanListItem — execute follows architecture."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "Optional P2 sole-plan tooltip + inline hint coexistence — not required for BS closure."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 2,
+    "covered_count": 2,
+    "gap_count": 0,
+    "task_count": 5,
+    "mandatory_task_count": 5,
+    "conditional_task_count": 0,
+    "optional_task_count": 0,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0082_aligned": true,
+    "operator_gates_documented": true,
+    "v1_e2e_smoke": true,
+    "scope_creep_beyond_architecture": false,
+    "dependency_graph_valid": true,
+    "execute_ready": true,
+    "verdict": "APPROVED",
+    "next_scheduled_phase": "execute"
+  },
+  "notes": "QA plan-verify 2026-06-13: Q0033 tasks align with docs/product/acceptance.md BUG-0024 rows BR/BS and architecture § BUG-0024 / R-0096; 5 mandatory tasks mapped; 2/2 acceptance rows covered; 0 gaps; 0 orphans; operator gate FRONTEND_DEPLOY documented; baseline npm test 24/24, build PASS. Approved for /execute."
+}

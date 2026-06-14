@@ -16,6 +16,10 @@ description: "its-magic memory-audit: read-only check for memory drift between a
 - Can be run at any phase: pre-handoff, pre-QA, pre-release, or ad-hoc.
 
 ## Inputs
+
+- **Narrow-read (US-0053 / US-0096 Tranche A)**: Start at docs/engineering/phase-context.md
+  and the story section anchor in vision/architecture/decisions when a heading exists; forbid
+  full-file reads when a section heading exists.
 Read these files to build the audit picture:
 
 - `docs/engineering/state.md` — current project status and progress snapshot

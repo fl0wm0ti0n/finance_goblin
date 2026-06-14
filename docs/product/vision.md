@@ -1484,6 +1484,54 @@ Operators want **manual subscription discovery** alongside US-0003 auto-detectio
 
 **Carry to `/research`:** explorer SQL over mirror (`GROUP BY payee_key, account_id, interval`); manual confirm API vs detection `upsert_pending`; majority-category SQL + tie-break; tag schema (`subscription_tags`, `subscription_pattern_tags`); list API `?tag=` + `?account_id=`; interaction with DEC-0085 merge on manual confirm; Grafana `$tag` variable SQL; performance on 365d window.
 
+## Discovery notes (US-0021 — 2026-06-12)
+
+Operator feedback post-US-0020: subscription **search/filter was wrongly implemented** relative to mental model. Operator wants **transaction-first** exploration of expenses auto-detection missed, with **rich filters** (recurring, account, **Geldbereich**, **category**, etc.) and ability to **mark/activate** a found recurring pattern as subscription.
+
+### Gap vs US-0020 (canonical)
+
+| US-0020 shipped | US-0021 target |
+|-----------------|----------------|
+| Recurrence-candidate explorer (`detect_recurrence_groups`) | Individual transaction ledger search |
+| Filters: account, payee, interval | + category, Geldbereich, date, amount, recurring hint |
+| Same algorithm as auto-detection | Find patterns algorithm missed; operator-driven grouping |
+| Confirm on candidate row | Confirm on selected tx group or hinted pattern |
+
+### UX references
+
+| Reference | Borrow | US-0021 application |
+|-----------|--------|---------------------|
+| **YNAB scheduled transactions** | Browse transactions → identify recurring → schedule | Transaction list + "looks recurring" hint |
+| **Truebill / Finanzguru** | Merchant search + account filter before confirm | Rich filter form on Discover |
+| **US-0018 CategoryFilter** | Searchable category combobox | Category dimension on tx search |
+| **Wealth Role column (DEC-0111)** | `account_role` labels | Geldbereich filter + column on results |
+| **US-0020 confirm modal** | Subscription vs standing order | Reuse on tx-group confirm |
+
+### Surface placement (intake proposal)
+
+| Surface | Route | Target |
+|---------|-------|--------|
+| **Transaction search** | `/subscriptions` → **Discover** tab (enhanced or dual-mode) | Paginated expense tx table with filters |
+| **Pattern hint** | Inline on filtered results | Interval/amount suggestion when txs repeat |
+| **Activate** | Row multi-select or hint row action | `POST /discover/confirm` or extension with `transaction_ids` |
+
+**Carry to `/discovery`:** dual-mode vs replace layout; transaction search API shape; hint engine threshold; Geldbereich join path; pagination cap; regression with US-0020 tags and US-0003 Pending.
+
+### Discovery audit (2026-06-13)
+
+Code + live audit (`GET /api/v1/subscriptions/discover?account_id=114`, `discovery.rs`, `SubscriptionsPage.tsx` Discover tab) confirms all four functional AC gaps:
+
+| AC | Gap | Shipped today |
+|----|-----|---------------|
+| **AC-1** | No individual tx ledger — only `DiscoverCandidate` groups | Recurrence-candidate table |
+| **AC-2** | Missing category, Geldbereich, date, amount, recurring toggle | Account + payee + interval |
+| **AC-3** | No below-threshold pattern hint on filtered txs | `min_emit_confidence: 60` group filter only |
+| **AC-4** | Confirm requires pre-grouped candidate — no tx multi-select | `POST /discover/confirm` + modal on candidate row |
+
+**PO recommendation:** dual-mode Discover (Transactions default \| Suggested patterns); new transaction search API reusing `load_expense_transactions` + SQL filters; hint engine as separate lowered-confidence pass; reuse US-0018 `CategoryFilter` and DEC-0111 `formatAccountRole`.
+
+**Carry to `/research`:** freeze API contract, dual-mode layout, hint threshold, Geldbereich join, 100 tx/page cap, operator repro fixture for qa.
+
 ## Discovery notes (BUG-0014 — 2026-06-09)
 
 Post-rebuild operator cluster on **`financegnome.omniflow.cc`** separates into **ops gates (AO/AT)**, **three code/UX gaps (AP/AQ/AS)**, and **one data/account re-verify (AR)** — not a single regression.
@@ -1685,4 +1733,166 @@ Post-sync **wealth alert evaluation** fails with PostgreSQL **42702** (`column r
 - **Dual inbox:** Wealth alerts (`/alerts`) vs subscription alerts (`/subscriptions`) — header bell aggregates wealth count + subscription cross-link per US-0005 / BUG-0008
 
 **Carry to `/research`:** confirm single-line `fbd.balance` qualification; grep alert SQL for other ambiguous JOIN columns; extend integration test to run in CI or add compile-time SQL lint; verify acct 114 overdraft triggers scarcity post-fix; subscription alert path regression scope for **BF**.
+
+## Discovery notes (BUG-0023 — 2026-06-12)
+
+Live regression on **Wealth → Crypto** with Bitunix connected — three sub-defects **BO**, **BP**, **BQ** confirmed on `localhost:18080` (`GET /api/v1/wealth`, sync `2026-06-12T21:15:31Z`). Extends **BUG-0014** AP/AQ live-deferred cluster; not a deploy/ops gap (unrealized PnL path active).
+
+### Operator UX impact
+
+| Surface | Current (live probe) | Discovery target |
+|---------|----------------------|------------------|
+| **Bitunix exchange card** | **€ -0,00** with **11** holdings | Show **~€2000** order-of-magnitude portfolio (wallet equity per **DEC-0080**) — not zero when positions + unrealized exist |
+| **Crypto subtotal headline** | **€0** while **Unrealized €376,83** visible | Headline subtotal must not contradict PnL summary — wallet equity or documented exposure pricing |
+| **Holdings Value EUR column** | All **11** rows **—**; native qty + unrealized PnL correct | **Native qty + EUR at valuation time** per row when mark prices available (**DEC-0081** AQ intent) |
+| **Total return %** | **—** with non-zero unrealized | Populate when baseline exists after sync + PnL recompute — not blocked by zero `crypto_value_eur` alone |
+
+### Sub-defect discovery verdicts
+
+| AC | Verdict | Root cause (discovery) | Fix axis |
+|----|---------|------------------------|----------|
+| **BO** | **CONFIRMED** | `subtotal_eur = sum(market_value_eur)`; API shows **only** `linear` rows (11), **no** `futures` wallet row; all `market_value_eur` null → **€0** | Wallet ingest (`bitunix.rs` `parse_futures_wallet`) + aggregation contract (**DEC-0064** / **DEC-0080**) |
+| **BP** | **CONFIRMED** | `pnl.rs` sets `market_value_eur: None` for `linear` by design; `holdings_all.value_eur` mirrors DB; `holdings_top` empty | Display-field for position exposure EUR (mark/notional) separate from subtotal rules |
+| **BQ** | **CONFIRMED** | `total_return_pct` None when `crypto_value_eur` is **0** (`portfolio/service.rs` L60–64) despite `unrealized_eur` **376.83** | Baseline + return formula must use priced wallet equity, not linear-only sum |
+
+### Hypothesis resolution (from R-0093)
+
+| ID | Verdict | Note |
+|----|---------|------|
+| **H1** Wallet row missing | **CONFIRMED** | API `holdings_all` product_types = `{linear}` only; no USDT `futures` wallet |
+| **H2** Linear NULL by design | **CONFIRMED** | Explains BP em-dash; operator still expects display EUR |
+| **H3** No mark-price path | **OPEN** | Research: Bitunix position payload fields for notional/mark |
+| **H4** Deploy/ops gap | **RULED OUT** | Recent sync + unrealized EUR computed → Q0022-era code path active |
+| **H5** Baseline zero | **PARTIAL** | `crypto_value_eur=0` blocks return % even if baseline row exists |
+
+**Product principle (unchanged from BUG-0014):** Operator expects Finanzguru-like **native amount + EUR at sync time** on crypto holdings — wallet equity for headline (~€2000), per-position exposure for Value EUR column, consistent total return when baseline history exists.
+
+**Carry to `/research`:** wallet API parse verification (SQL probe when creds available); mark-price/notional options for linear display; amend **DEC-0064** vs new display field; total-return denominator when wallet equity priced but linear excluded from subtotal sum.
+
+## Discovery notes (BUG-0022 — 2026-06-13)
+
+Regression on `/planning` **Delete plan** after **BUG-0014** AS1 / **Q0022** — operator cannot remove unwanted non-active scenarios when a global active plan exists. Not an API regression; **DEC-0082** active-plan **409** guard verified live.
+
+### Operator UX impact
+
+| Scenario | Current (discovery) | Target |
+|----------|---------------------|--------|
+| 2+ plans; select non-active in dropdown | Dropdown appears to change but header/detail stay on active plan; **Delete plan** disabled | Dropdown drives displayed plan; delete **enabled** for non-active selection |
+| Select globally active plan | Delete disabled + tooltip (intended) | Same — preserve **DEC-0082** |
+| Only one (active) plan | Delete permanently disabled | Document deactivate-first / create-second-plan workaround per **DEC-0082** risks |
+| Direct API delete active plan | **409** `active_plan_delete_forbidden` | Unchanged |
+
+### Sub-defect discovery verdicts
+
+| AC | Verdict | Root cause (discovery) | Fix axis |
+|----|---------|------------------------|----------|
+| **BM** | **CONFIRMED** | `activePlanId` `useMemo` returns `is_active` id before `selectedPlanId`; dropdown `onChange` only sets `selectedPlanId` | Prefer operator selection in selector resolution (`PlanningPage.tsx` L110–113) |
+| **BN** | **CONFIRMED** (backend); UI guard present, masked by BM | Backend **409** + `disabled={activePlanIsSelected}` correct; cannot demonstrate dropdown-driven active selection until BM fixed | No backend change; verify BN UI after BM fix |
+
+**Product principle:** Plan delete shipped in AS1 must honor operator dropdown selection — deleting a scenario is a deliberate cleanup action; blocking all deletes whenever any active plan exists violates **BUG-0014** intent while **DEC-0082** still protects the single global active plan.
+
+**Carry to `/research`:** selector id vs global active id contract; dropdown label copy; vitest coverage for delete enablement; confirm `/quick` single-file scope.
+
+## Intake notes (US-0022 — 2026-06-13)
+
+Operator deploy observability gap surfaced during BUG-0023: release marked DONE and code merged, but live `:18080` still served pre-Q0030 backend until manual `docker compose up --build`. No in-app way to verify release tag, git sha, or image age.
+
+### Target UX
+
+| Element | Behavior |
+|---------|----------|
+| **Default** | Subtle stamp (e.g. `v0.21` or `·` in sidebar footer) — low visual noise |
+| **Hover/focus** | Tooltip: release tag (`bug0023-q0030`), build id (short sha), build time UTC, optional max migration |
+| **Stale state** | Non-blocking banner: “New version available — reload” when SPA build id ≠ backend |
+
+### References
+
+| Pattern | Application |
+|---------|-------------|
+| Grafana footer version | Hover build info without cluttering nav |
+| SPA stale-chunk detection | Compare embedded hash vs `/meta` endpoint |
+| Docker `ARG GIT_SHA` at build | Single source of truth for backend + Vite define |
+
+**Carry to `/discovery`:** stamp placement in `AppLayout`; `/health` extend vs `/meta/build-info`; Docker ARG wiring; stale poll interval; omniflow Traefik cache note in tooltip.
+
+## Intake notes (BUG-0024 — 2026-06-13)
+
+Operator reports **Delete plan** always disabled on `/planning` despite **BUG-0022** / **Q0031** closure.
+
+Live localhost probe: **only one plan** (`test`, active) → delete disabled per **DEC-0082** (not necessarily a code bug). Discovery must confirm operator plan count and omniflow **FRONTEND_DEPLOY** status.
+
+**Carry to `/discovery`:** H1 sole-plan tooltip vs H2 deploy vs H3 multi-plan BM regression; operator workaround (create 2nd plan).
+
+## Discovery refinements (BUG-0024 — 2026-06-13)
+
+**Primary finding:** Operator report *immer ausgegraut* is **explained by sole-plan + active selection** on localhost — not a **Q0031** selector regression when the deployed bundle is current. **H3 ruled out** locally; **H1 confirmed** as UX gap.
+
+**Hypothesis verdicts:**
+
+| ID | Verdict | Evidence |
+|----|---------|----------|
+| **H1** sole-plan UX | **CONFIRMED (BS)** | 1 active plan → delete disabled by design (**DEC-0082**); tooltip *Set another plan active…* does not explain **create second plan → activate → delete** path |
+| **H2** omniflow pre-Q0031 bundle | **LIKELY (BR on omniflow)** | **FRONTEND_DEPLOY** still deferred per Q0031/Q0032 release notes; omniflow not probed this run |
+| **H3** multi-plan BM regression | **RULED OUT (localhost)** | 2 plans + non-active selected → delete **enabled** (`deleteDisabled=false`, title *Delete this plan*); vitest 8/8; `resolveDisplayedPlanId` wired in source |
+
+**UX expectation:** Sole-plan operators perceive a broken control because gray **Delete plan** with a generic active-plan tooltip reads as regression, not intentional **DEC-0082** guard. Finanzguru-style planning expects either actionable guidance or an inline help callout near the control.
+
+**Design direction (PO preferred — Option A):**
+
+- When **only one plan** exists and it is globally active: extend disabled-state copy to a **visible inline hint** (not tooltip-only) — e.g. *To delete this plan, create another scenario, set it active, then delete this one.*
+- When **two or more** plans and non-active selected: keep current enabled delete + confirmation modal (**BR** — already PASS on localhost).
+- **Do not** allow deleting the globally active plan without deactivate-first (**DEC-0082** unchanged).
+
+**Out of scope:** Reopening **BUG-0022**; backend DELETE contract changes; delete-with-auto-deactivate flow (defer unless research finds operator demand).
+
+Evidence: live `GET /api/v1/plans`; browser probe `/planning` localhost:18080; `frontend/src/pages/planSelector.ts`; `frontend/src/pages/PlanningPage.tsx` L111–114, L490, L667–675; [R-0096](docs/engineering/research.md#r-0096--bug-0024-plan-delete-still-disabled-live-post-q0031)
+
+**Carry to `/research`:** Freeze **GATE-COPY-1** (sole-plan inline copy), **GATE-DEPLOY-1** (omniflow **FRONTEND_DEPLOY** + **BR** smoke), **GATE-SCOPE-1** (frontend-only), **GATE-TEST-1** (vitest + optional Playwright sole-plan fixture).
+
+## Intake notes (BUG-0025 — 2026-06-13)
+
+Operator reports Firefly ledger updates (many **Wohnen - Stromkosten** transactions) not reflected in Finance Goblin.
+
+**Operator screenshot (2026-06-13):** `/forecast` **Category spending trend** — only **2026-05** bar (~€465); **2025-07 … 2026-06** otherwise **€0**. Evidence: `handoffs/evidence/bug0025-category-spending-trend-stromkosten-20260613.png`.
+
+Mirror API aligns: category **146** expense-series has txs **only in 2026-05** (4 rows). Primary suspect: **backdated Firefly imports** outside **DEC-0002** overlap window, not chart bug.
+
+**Carry to `/discovery`:** H1 overlap window vs H2 sync-mode UX; compare Firefly Strom tx dates per month vs mirror SQL.
+
+## Discovery refinements (BUG-0025 — 2026-06-13)
+
+**Defect confirmed (BW, BX likely, BY partial):** Category spending trend shows **2026-05-only** data because the **mirror** holds only **4** Strom txs (all dated May 2026) — not a chart bug. Primary suspect: **DEC-0002** incremental `start = watermark − 7d` skips **backdated** Firefly imports. Secondary: Sync Status **Last sync** can show `scheduled_exchanges` success while Firefly mirror unchanged.
+
+**H verdicts:** H1 LIKELY PRIMARY; H2 PARTIAL (manual Sync now = Full ✓; summary UX misleading); H3 CONFIRMED (operator surface = Category spending trend).
+
+Evidence: `handoffs/po_to_tl.md` (discovery-20260613-bug0025); [R-0097 §5](docs/engineering/research.md#r-0097--bug-0025-firefly-category-transactions-not-updating-stromkosten)
+
+## Intake notes (BUG-0026 — 2026-06-13)
+
+Operator screenshot: `/forecast` **Monthly** — **Income card 0.00** but chart shows **~€3000 Income bars** (2026-07+).
+
+**Root cause (code):** `monthlySummary = series[0]` without month label; API `series[0]` = **2026-06** income **0.00**, `series[1+]` = **3266.16**. Not **BUG-0012** regression.
+
+Evidence: `handoffs/evidence/bug0026-forecast-income-card-zero-20260613.png`
+
+## Discovery refinements (BUG-0026 — 2026-06-13)
+
+**Defect confirmed (BZ, CA):** Summary stat cards and **MonthlyChart** disagree because cards silently use **`series[0]`** (often the **current partial month** with **zero projected salary**) while the chart plots **all forecast months** including full income from the next month onward. Live probe account **114** matches operator screenshot: June income **0.00**, July income **3266.16**; Fixed/Variable on cards reflect June partial-month rolling/recurring spend — only **Income** is most visibly wrong, but **all four cards** lack month context.
+
+**UX expectation:** Operator reads cards as "my monthly forecast" and chart as "the same forecast over time" — without a month label they assume the card reflects visible chart bars (~€3000). Finanzguru-style monthly decomposition requires **labeled reference month** on stat cards or a shared subtitle above the grid.
+
+**Design direction (PO preferred — Option A):**
+
+- Add **reference month label** above the four-card grid (e.g. "Forecast for **July 2026**").
+- Default card month to **next full month** or **first month with non-zero projected income** when the current partial month shows income **0.00** but later months do not — avoids misleading **0.00 Income** while preserving partial-month truth when labeled.
+- **Do not** change category-filter scope (**DEC-0089**); helper copy already states filter affects trend chart only.
+- **Frontend-only** fix preferred — projection engine behavior (salary from recurring due dates) is correct.
+
+**Tension with BUG-0012 discovery:** Prior note "cards bind `series[0]`" assumed first month was representative; discovery shows partial-month salary gap is common. Update acceptance **CA** semantics: cards must show **which month**, not blindly `series[0]`.
+
+**Out of scope:** Reopening **BUG-0012**; backend bucket/projection changes; chart hover sync (Option B — defer); 12-month roll-up cards (Option C — reject).
+
+Evidence: `handoffs/evidence/bug0026-forecast-income-card-zero-20260613.png`; live `GET /api/v1/forecast/monthly?account_id=114`; `frontend/src/pages/ForecastPage.tsx` L148–152, L312–330; `frontend/src/components/forecast/MonthlyChart.tsx`; [R-0098](docs/engineering/research.md#r-0098--bug-0026-forecast-monthly-income-card-vs-chart-mismatch)
+
+**Carry to `/research`:** Freeze **GATE-MONTH-1** (default month selection), label placement, edge cases, vitest/Playwright fixture.
 

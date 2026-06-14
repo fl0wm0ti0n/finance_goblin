@@ -5,6 +5,7 @@ pub mod price_change;
 pub mod repository;
 pub mod service;
 pub mod tags;
+pub mod transaction_search;
 pub mod types;
 
 pub use service::SubscriptionService;

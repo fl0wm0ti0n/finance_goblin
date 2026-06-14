@@ -1,7 +1,19 @@
 # syntax=docker/dockerfile:1
 
+ARG BUILD_ID=unknown
+ARG RELEASE_TAG=unknown
+ARG BUILD_TIMESTAMP=unknown
+
 FROM rust:1.88-bookworm AS builder
 WORKDIR /app
+
+ARG BUILD_ID
+ARG RELEASE_TAG
+ARG BUILD_TIMESTAMP
+
+ENV BUILD_ID=$BUILD_ID
+ENV RELEASE_TAG=$RELEASE_TAG
+ENV BUILD_TIMESTAMP=$BUILD_TIMESTAMP
 
 RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
 
@@ -13,14 +25,27 @@ RUN cargo build --release
 
 FROM node:20-bookworm AS frontend
 WORKDIR /frontend
+
+ARG BUILD_ID
+ARG RELEASE_TAG
+ARG BUILD_TIMESTAMP
+
 COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci --ignore-scripts 2>/dev/null || npm install
 COPY frontend/ ./
-RUN npm run build
+RUN BUILD_ID=$BUILD_ID RELEASE_TAG=$RELEASE_TAG BUILD_TIMESTAMP=$BUILD_TIMESTAMP npm run build
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
+
+ARG BUILD_ID
+ARG RELEASE_TAG
+ARG BUILD_TIMESTAMP
+
+LABEL org.opencontainers.image.revision="${BUILD_ID}"
+LABEL org.opencontainers.image.version="${RELEASE_TAG}"
+LABEL org.opencontainers.image.created="${BUILD_TIMESTAMP}"
 
 COPY --from=builder /app/target/release/flow-finance-ai /usr/local/bin/flow-finance-ai
 COPY backend/config/default.toml /app/config/default.toml

@@ -187,6 +187,52 @@ pub struct DiscoverResponse {
     pub meta: DiscoverMeta,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct RecurringHint {
+    pub interval_days: i32,
+    pub confidence_pct: i16,
+    pub payee_key: String,
+    pub group_transaction_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TransactionSearchItem {
+    pub firefly_id: String,
+    pub account_id: String,
+    pub account_role: Option<String>,
+    pub date: chrono::NaiveDate,
+    pub amount: f64,
+    pub description: Option<String>,
+    pub category_id: Option<String>,
+    pub category_name: Option<String>,
+    pub recurring_hint: Option<RecurringHint>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TransactionSearchMeta {
+    pub page: u32,
+    pub limit: u32,
+    pub total_count: i64,
+    pub has_more: bool,
+    pub truncated: bool,
+    pub truncated_hint_scan: bool,
+    pub window_days: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TransactionSearchResponse {
+    pub transactions: Vec<TransactionSearchItem>,
+    pub meta: TransactionSearchMeta,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PreviewGroupResponse {
+    pub payee_key: String,
+    pub interval_days: i32,
+    pub median_amount: f64,
+    pub transaction_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub enum ConfirmFromDiscoverError {
     RejectedPayeeInterval,

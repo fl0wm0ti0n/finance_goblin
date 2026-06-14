@@ -39,6 +39,16 @@ pub async fn compute_hybrid_pnl(
                 },
                 None => None,
             };
+            let exposure_eur = match parse_entry_value_usdt(&h.payload) {
+                Some(entry) => match fx.to_eur(entry, "USDT", price_book).await {
+                    Ok(v) => Some(v.eur),
+                    Err(_) => {
+                        fx_incomplete = true;
+                        None
+                    }
+                },
+                None => None,
+            };
             repo.update_holding_eur(
                 &h.exchange_id,
                 &h.asset,
@@ -46,6 +56,7 @@ pub async fn compute_hybrid_pnl(
                 None,
                 upnl_eur,
                 h.avg_cost_eur,
+                exposure_eur,
             )
             .await?;
             if let Some(upnl) = upnl_eur {
@@ -67,6 +78,7 @@ pub async fn compute_hybrid_pnl(
                         h.unrealized_pnl_eur
                     },
                     h.avg_cost_eur,
+                    None,
                 )
                 .await?;
                 v.eur
@@ -160,6 +172,23 @@ async fn holding_value_eur(
     fx.to_eur(h.quantity, &h.asset, price_book).await
 }
 
+pub fn parse_entry_value_usdt(payload: &serde_json::Value) -> Option<f64> {
+    const KEYS: &[&str] = &["entryValue", "entry_value"];
+    for key in KEYS {
+        if let Some(v) = payload.get(*key) {
+            if let Some(n) = v.as_f64() {
+                return Some(n);
+            }
+            if let Some(s) = v.as_str() {
+                if let Ok(n) = s.parse() {
+                    return Some(n);
+                }
+            }
+        }
+    }
+    None
+}
+
 pub fn parse_unrealized_pnl_usdt(payload: &serde_json::Value) -> Option<f64> {
     const KEYS: &[&str] = &[
         "unrealizedPNL",
@@ -218,6 +247,12 @@ mod tests {
         }];
         let upnl = compute_avg_cost_fallback(&trades, "ETH", 2.0, 2500.0);
         assert!((upnl - 500.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn parse_entry_value_usdt_bitunix_shape() {
+        let payload = serde_json::json!({ "entryValue": "1250.75" });
+        assert_eq!(parse_entry_value_usdt(&payload), Some(1250.75));
     }
 
     #[test]

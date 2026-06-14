@@ -1,0 +1,83 @@
+{
+  "sprint_id": "Q0031",
+  "bug_id": "BUG-0022",
+  "phase": "verify-work",
+  "orchestrator_run_id": "auto-20260613-bug0022",
+  "decisions": ["DEC-0082", "DEC-0024", "DEC-0074"],
+  "research": ["R-0094"],
+  "acceptance_rows": ["BM", "BN"],
+  "acceptance_source": "docs/product/acceptance.md#BUG-0022",
+  "acceptance_mapping": {
+    "BM": {
+      "tasks": ["BM1", "T1", "G1", "V1"],
+      "primary_verify": "2+ plans with global active; select non-active → Delete enabled; confirm removes plan; list refreshes"
+    },
+    "BN": {
+      "tasks": ["BM1", "T1", "G1", "V1"],
+      "primary_verify": "Select active → delete disabled + DEC-0082 tooltip; DELETE active → 409; OIDC regression pass"
+    }
+  },
+  "verified_at": "2026-06-13T09:50:00Z",
+  "verdict": "PASS-WITH-PREREQUISITES",
+  "ready_for_verify_work": true,
+  "ready_for_release": true,
+  "operator_gates": [
+    {
+      "id": "FRONTEND_DEPLOY",
+      "status": "pending",
+      "action": "rebuild frontend only — no migration",
+      "notes": "Required before live BM/BN UI probes and /planning SPA shell"
+    }
+  ],
+  "operator_prerequisites": [
+    "FRONTEND_DEPLOY — BM1 selector fix must be live on target environment"
+  ],
+  "steps": [
+    {
+      "id": "BM-UI",
+      "row": "BM",
+      "probe": "/planning — select non-active plan → Delete enabled → confirm removes plan",
+      "result": "pass_with_prerequisites",
+      "evidence": "Code+vitest PASS (resolveDisplayedPlanId + isDeleteDisabled); live blocked — 1 plan only + FRONTEND_DEPLOY pending"
+    },
+    {
+      "id": "BM-API",
+      "row": "BM",
+      "probe": "DELETE /api/v1/plans/:id non-active → 204",
+      "result": "pass_with_prerequisites",
+      "evidence": "Vitest delete-enablement matrix PASS; no non-active plan in live env (1 plan only) — deferred post FRONTEND_DEPLOY + 2+ plans"
+    },
+    {
+      "id": "BN-UI",
+      "row": "BN",
+      "probe": "Select active plan → delete disabled + tooltip",
+      "result": "pass_with_prerequisites",
+      "evidence": "PlanningPage L670-674 isDeleteDisabled + tooltip in code; browser regression deferred FRONTEND_DEPLOY"
+    },
+    {
+      "id": "BN-API",
+      "row": "BN",
+      "probe": "DELETE /api/v1/plans/:id active → 409 active_plan_delete_forbidden",
+      "result": "pass",
+      "evidence": "DELETE 75f21c4a-34b2-469f-ad46-949b4ec1847c → HTTP 409 body active_plan_delete_forbidden; cargo unit 1/1 PASS"
+    },
+    {
+      "id": "OIDC-1",
+      "row": "regression",
+      "probe": "/planning /api/v1/plans smoke on omniflow profile",
+      "result": "pass_with_prerequisites",
+      "evidence": "GET /api/v1/plans HTTP 200; GET /health HTTP 200; GET /planning HTTP 404 pre-deploy SPA — deferred FRONTEND_DEPLOY"
+    }
+  ],
+  "automated_checks": {
+    "npm_test": "pass",
+    "npm_build": "pass"
+  },
+  "uat_counts": {
+    "pass": 1,
+    "pass_with_prerequisites": 4,
+    "fail": 0,
+    "pending": 0,
+    "total": 5
+  }
+}

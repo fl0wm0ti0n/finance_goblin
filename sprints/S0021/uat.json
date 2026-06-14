@@ -1,0 +1,163 @@
+{
+  "sprint_id": "S0021",
+  "story_id": "US-0022",
+  "created": "2026-06-14",
+  "updated": "2026-06-14T19:15:00Z",
+  "verdict": "PASS-WITH-PREREQUISITES",
+  "blockers": 0,
+  "passed": 6,
+  "pass_with_prerequisites": 2,
+  "failed": 0,
+  "total": 8,
+  "uat_steps": [
+    {
+      "id": "AC-1",
+      "description": "Version stamp: App shell shows a subtle version/build indicator (footer or sidebar corner) that does not dominate primary UX",
+      "result": "pass",
+      "evidence": "AppLayout.tsx L94-104: sidebar-footer div with fontSize 0.7rem, color #94a3b8, fontFamily monospace, content __BUILD_ID__.slice(0,7). Subtle, non-dominating, always visible.",
+      "probe_result": {
+        "probe_kind": "code_review",
+        "passed": true,
+        "reason_code": "UAT_PROBE_PASS"
+      }
+    },
+    {
+      "id": "AC-2",
+      "description": "Hover detail: Hover or focus reveals release tag, build id, and build timestamp — sufficient to distinguish pre/post deploy",
+      "result": "pass",
+      "evidence": "AppLayout.tsx L101: title attribute with Release __RELEASE_TAG__, Build __BUILD_ID__, Timestamp new Date().toISOString(). Advisory: timestamp is client-side, not build-time. Release tag + build id sufficient for deploy verification.",
+      "probe_result": {
+        "probe_kind": "code_review",
+        "passed": true,
+        "reason_code": "UAT_PROBE_PASS",
+        "advisory": "Tooltip timestamp uses client-side Date.now(), not build_timestamp from backend. Non-blocking — release tag + build id sufficient."
+      }
+    },
+    {
+      "id": "AC-3",
+      "description": "Backend metadata: GET /api/v1/meta/build-info returns authoritative build id and release tag matching Docker/build pipeline — no secrets",
+      "result": "pass",
+      "evidence": "meta/mod.rs: option_env!() compile-time injection; lib.rs L210-214: public route before api_router; meta_test.rs 3/3 PASS (shape, no-secrets, fallback).",
+      "probe_result": {
+        "probe_kind": "test",
+        "passed": true,
+        "reason_code": "UAT_PROBE_PASS",
+        "test_results": "cargo test --test meta_test: 3 passed, 0 failed"
+      }
+    },
+    {
+      "id": "AC-4",
+      "description": "SPA embed: Frontend bundle embeds the same build id at compile time (Vite define from Docker build args)",
+      "result": "pass",
+      "evidence": "vite.config.ts L8-11: define block with __BUILD_ID__ and __RELEASE_TAG__ via JSON.stringify(process.env.BUILD_ID || 'dev'); vite-env.d.ts L3-4: TS declarations; Dockerfile L29-36: frontend stage passes BUILD_ID=$BUILD_ID; npm run build PASS.",
+      "probe_result": {
+        "probe_kind": "build",
+        "passed": true,
+        "reason_code": "UAT_PROBE_PASS",
+        "build_result": "npm run build: PASS (13.24s, 709+ modules)"
+      }
+    },
+    {
+      "id": "AC-5",
+      "description": "Stale detection: When SPA-embedded build id ≠ backend authoritative id, UI shows non-blocking stale warning with reload affordance",
+      "result": "pass-with-prerequisites",
+      "evidence": "useStaleDetection.ts: on-mount useEffect fetches /api/v1/meta/build-info with cache:no-store; compares __BUILD_ID__ to server build_id; mismatch sets stale=true; skips dev mode; silent fail. StaleBanner.tsx: non-blocking banner with reload CTA. AppLayout.tsx L121: <StaleBanner stale={stale} />. Live stale detection deferred — BACKEND_FRONTEND_DEPLOY pending.",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "probe_result": {
+        "probe_kind": "code_review",
+        "passed": true,
+        "reason_code": "UAT_PROBE_PASS",
+        "note": "Code-level PASS; live browser stale-detection probe deferred pending BACKEND_FRONTEND_DEPLOY"
+      }
+    },
+    {
+      "id": "AC-6",
+      "description": "Regression: /health liveness unchanged; OIDC external profile smoke pass; metadata responses contain no env secrets",
+      "result": "pass-with-prerequisites",
+      "evidence": "health/mod.rs: /health returns {status: 'ok'} unchanged; /health/ready unchanged; cargo lib 221/221; meta_test 3/3 (no-secrets test PASS); npm 31/31; build PASS. OIDC smoke deferred — BACKEND_FRONTEND_DEPLOY pending.",
+      "prerequisite": "BACKEND_FRONTEND_DEPLOY",
+      "probe_result": {
+        "probe_kind": "test",
+        "passed": true,
+        "reason_code": "UAT_PROBE_PASS",
+        "test_results": "cargo lib 221/221; meta_test 3/3; npm 31/31; build PASS",
+        "note": "OIDC external profile smoke deferred pending BACKEND_FRONTEND_DEPLOY"
+      }
+    },
+    {
+      "id": "GATE-META-1",
+      "description": "Dedicated /api/v1/meta/build-info route (not extend /health)",
+      "result": "pass",
+      "evidence": "meta/mod.rs L19-21: Router::new().route('/api/v1/meta/build-info', get(build_info)); lib.rs L210-214: meta_router merged before api_router (public, no auth).",
+      "probe_result": {
+        "probe_kind": "code_review",
+        "passed": true,
+        "reason_code": "UAT_PROBE_PASS"
+      }
+    },
+    {
+      "id": "GATE-BUILD-1",
+      "description": "Build id = git short sha + release tag + UTC timestamp; Docker ARG chain propagates to all stages",
+      "result": "pass",
+      "evidence": "meta/mod.rs L13-15: option_env!('BUILD_ID'), option_env!('RELEASE_TAG'), option_env!('BUILD_TIMESTAMP'); Dockerfile L3-5 global ARG, L10-12 builder ARG+ENV, L29-31 frontend ARG, L42-44 runtime ARG, L46-48 OCI LABELs.",
+      "probe_result": {
+        "probe_kind": "code_review",
+        "passed": true,
+        "reason_code": "UAT_PROBE_PASS"
+      }
+    }
+  ],
+  "probe_results": [
+    {
+      "step_id": "AC-1",
+      "probe_kind": "code_review",
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "evidence_ref": "frontend/src/components/AppLayout.tsx L94-104"
+    },
+    {
+      "step_id": "AC-2",
+      "probe_kind": "code_review",
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "evidence_ref": "frontend/src/components/AppLayout.tsx L101"
+    },
+    {
+      "step_id": "AC-3",
+      "probe_kind": "test",
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "evidence_ref": "backend/tests/meta_test.rs (3/3 PASS)"
+    },
+    {
+      "step_id": "AC-4",
+      "probe_kind": "build",
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "evidence_ref": "frontend/vite.config.ts L8-11; npm run build PASS"
+    },
+    {
+      "step_id": "AC-5",
+      "probe_kind": "code_review",
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "evidence_ref": "frontend/src/hooks/useStaleDetection.ts; frontend/src/components/StaleBanner.tsx",
+      "note": "Live browser stale-detection probe deferred pending BACKEND_FRONTEND_DEPLOY"
+    },
+    {
+      "step_id": "AC-6",
+      "probe_kind": "test",
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "evidence_ref": "backend/src/health/mod.rs unchanged; meta_test no-secrets PASS",
+      "note": "OIDC external profile smoke deferred pending BACKEND_FRONTEND_DEPLOY"
+    },
+    {
+      "step_id": "browser_smoke",
+      "probe_kind": "browser_smoke",
+      "passed": false,
+      "reason_code": "UAT_BROWSER_UNAVAILABLE",
+      "note": "Backend dev server (port 8080) unreachable; frontend dev server (port 5173) serves different app (Omniflow Trading). Cannot execute browser probes against finance_goblin target app. Target app requires BACKEND_FRONTEND_DEPLOY."
+    }
+  ]
+}

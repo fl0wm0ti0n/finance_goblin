@@ -11,6 +11,10 @@ import {
   ForecastMeta,
   ForecastMonthly,
 } from "../lib/api";
+import {
+  formatForecastSummarySubtitle,
+  resolveForecastSummaryPoint,
+} from "./forecastSummaryMonth";
 
 const DailyChart = lazy(() =>
   import("../components/forecast/DailyChart").then((m) => ({ default: m.DailyChart })),
@@ -145,11 +149,10 @@ export function ForecastPage() {
   const showEmpty =
     metaQuery.isFetched && !metaQuery.isError && !metaQuery.data?.computation_id;
 
-  const monthlySummary = useMemo(() => {
-    const series = monthlyQuery.data?.series ?? [];
-    if (series.length === 0) return null;
-    return series[0];
-  }, [monthlyQuery.data]);
+  const monthlySummary = useMemo(
+    () => resolveForecastSummaryPoint(monthlyQuery.data?.series ?? []),
+    [monthlyQuery.data],
+  );
 
   const longTermData =
     longTermMode === "ml_enhanced" ? mlLongTermQuery.data : longTermQuery.data;
@@ -310,7 +313,18 @@ export function ForecastPage() {
                 </div>
               )}
               {monthlySummary && (
-                <div className="grid" style={{ marginBottom: "1rem" }}>
+                <>
+                  <p
+                    style={{
+                      margin: "0 0 0.75rem",
+                      fontSize: "0.95rem",
+                      color: "#475569",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {formatForecastSummarySubtitle(monthlySummary.month)}
+                  </p>
+                  <div className="grid" style={{ marginBottom: "1rem" }}>
                   <div className="card">
                     <div>Income</div>
                     <div className="stat">{monthlySummary.income}</div>
@@ -328,6 +342,7 @@ export function ForecastPage() {
                     <div className="stat">{monthlySummary.free_cashflow}</div>
                   </div>
                 </div>
+                </>
               )}
               <div className="card">
                 <Suspense fallback={<p>Loading chart…</p>}>

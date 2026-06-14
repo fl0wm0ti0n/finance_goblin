@@ -1981,6 +1981,25 @@ Single-writer drift safety:
 
 ## Project run steps
 
+<a id="backdated-firefly-imports"></a>
+
+### Backdated Firefly imports (BUG-0025 / DEC-0002)
+
+When bulk-importing or backdating transactions in Firefly III, the mirror may not
+immediately reflect new months on **Category spending trend** or expense-series
+charts — even though sync reports success.
+
+| Topic | Detail |
+|-------|--------|
+| **Symptom** | Category trend / expense-series missing months after a Firefly backdated import (e.g. **Wohnen - Stromkosten** shows only the most recent month) |
+| **Cause** | **DEC-0002** — Firefly `GET /api/v1/transactions?start=` filters by **transaction date**. Scheduled incremental sync uses `watermark − overlap_days` (default **7 days**). Rows dated before that window are not fetched. |
+| **Fix ≤365d** | On **Sync Status** (`/sync`), click **Sync now** — manual Full sync uses a **365-day** lookback by transaction date (post BUG-0025 fix). |
+| **Fix >365d** | Reset the transactions cursor, then run manual Full sync: `DELETE FROM sync_cursors WHERE entity_type = 'transactions';` then **Sync now**. The next Full sync uses the cold-start **365-day** path. |
+| **Safety** | Mirror upserts by Firefly transaction `id` — cursor reset does **not** create duplicate rows. |
+
+**Verify:** `GET /api/v1/categories/expense-series?category_id=<id>` should show
+bars for each month present in Firefly after remediation.
+
 ### Prerequisites
 
 - Docker Compose v2
@@ -3593,6 +3612,316 @@ docker compose up -d --build flow-finance-ai
 ```
 
 **Boundaries:** `CategoryTrendChart` lazy+Suspense unchanged; subscription list (BUG-0020) unchanged; Grafana provisioning (BUG-0019) unchanged.
+
+#### 35. BUG-0023 hotfix — Crypto wealth EUR values (Q0030 / released 2026-06-12)
+
+**Release:** BUG-0023 **DONE** — operator notes `handoffs/releases/Q0030-release-notes.md`. Crypto wealth EUR display fix per **DEC-0064**, **DEC-0080**, **DEC-0081**, **DEC-0038**: **(BO1–BO3)** Bitunix futures wallet ingest hardening (equity fallback, `code==0` reject, parse-skip warn); **(BP1)** migration 017 `exposure_eur` + `entryValue` persist; **(BP2)** `holdings_all.value_eur = market_value_eur.or(exposure_eur)` with wallet-only subtotal; **(BQ1)** baseline captured before `total_return_pct` in same recompute.
+
+**Deploy (backend only):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+Local override (`:18080`):
+
+```bash
+docker compose up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_DEPLOY (required before BO/BP/BQ live oracles):**
+
+Rebuild backend; migration `017_bug0023_exposure_eur.sql` applies on startup. Confirm tests pass before docker build:
+
+```bash
+cd backend && cargo test --test bug0023_crypto_wealth_eur
+cd backend && cargo test --lib
+```
+
+**Operator gate — EXCHANGE_SYNC (required after deploy):**
+
+```bash
+curl -X POST http://localhost:18080/api/v1/sync/trigger
+```
+
+**Operator gate — PNL_RECOMPUTE (required after exchange sync):**
+
+Post-sync PnL recompute populates `exposure_eur`, wallet `market_value_eur`, baseline, and `total_return_pct`. Triggered automatically after exchange sync in normal pipeline.
+
+**Operator smoke (post-deploy + all gates):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Integration | `cd backend && cargo test --test bug0023_crypto_wealth_eur` | 4/4 |
+| BO-API | `GET /api/v1/wealth` | `crypto.subtotal_eur` ~€2000; `bitunix.subtotal_eur` not €0 |
+| BO-UI | Wealth → Crypto — Bitunix card | Not **€-0,00** |
+| BP-API | `GET /api/v1/wealth` | Linear `holdings_all[].value_eur` non-null |
+| BP-UI | Holdings Value EUR column | Not all em dash |
+| BQ-API | `GET /api/v1/wealth` | `pnl.total_return_pct` non-null |
+| BQ-UI | PnL Total return % | Not em dash with non-zero unrealized |
+| OIDC-1 | Omniflow `/api/v1/wealth` | HTTP 200 (optional) |
+
+**Rollback:**
+
+```bash
+git revert <Q0030-code-commits>
+docker compose up -d --build flow-finance-ai
+```
+
+**Boundaries:** `holdings_top` wallet-only filter unchanged (DEC-0064); CategoryFilter (BUG-0021) unchanged; subscription list (BUG-0020) unchanged.
+
+#### 36. BUG-0022 hotfix — Plan delete selector regression (Q0031 / released 2026-06-13)
+
+**Release:** BUG-0022 **DONE** — operator notes `handoffs/releases/Q0031-release-notes.md`. Plan delete selector fix per **DEC-0082**, **DEC-0024**, **DEC-0074**: **(BM1)** `resolveDisplayedPlanId` (`selectedPlanId ?? globalActiveId ?? firstPlanId`); **(T1)** `planSelector.ts` + 8 vitest cases for `isDeleteDisabled` matrix. Frontend-only — no backend changes.
+
+**Deploy (frontend rebuild only — no migration):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+Local override (`:18080`):
+
+```bash
+docker compose up -d --build flow-finance-ai
+```
+
+**Operator gate — FRONTEND_DEPLOY (required before BM/BN live UI smoke):**
+
+Running container predates Q0031; `/planning` returns **404** pre-deploy. Confirm tests pass before docker build:
+
+```bash
+cd frontend && npm test && npm run build
+```
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Build | `cd frontend && npm test && npm run build` | 17/17; exit 0 |
+| BM-UI | `/planning` with 2+ plans — select non-active | Delete plan **enabled** |
+| BM-UI | Confirm delete modal | Non-active plan removed; list refreshes |
+| BN-UI | Select globally active plan | Delete **disabled** + tooltip |
+| BN-API | `DELETE /api/v1/plans/:active_id` | **409** `active_plan_delete_forbidden` |
+| OIDC-1 | Omniflow `/planning` + `/api/v1/plans` | HTTP 200 (optional) |
+
+**Rollback:**
+
+```bash
+git revert <Q0031-code-commits>
+docker compose up -d --build flow-finance-ai
+```
+
+**Boundaries:** Backend DEC-0082 409 guard unchanged; crypto wealth (BUG-0023) unchanged; CategoryFilter (BUG-0021) unchanged.
+
+#### 37. BUG-0026 hotfix — Forecast monthly Income card mismatch (Q0032 / released 2026-06-13)
+
+**Release:** BUG-0026 **DONE** — operator notes `handoffs/releases/Q0032-release-notes.md`. Forecast summary month fix per **DEC-0089**: **(H1)** `resolveForecastSummaryPoint` skips partial zero-income head; **(F1)** shared subtitle above card grid; **(T1)** 7 vitest cases including account **114** partial-month trap. Frontend-only — no backend changes.
+
+**Deploy (frontend rebuild only — no migration):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+Local override (`:18080`):
+
+```bash
+docker compose up -d --build flow-finance-ai
+```
+
+**Operator gate — FRONTEND_DEPLOY (required before BZ/CA live UI smoke):**
+
+Running container predates Q0032; browser reproduces Income **0.00** + no subtitle pre-deploy. Confirm tests pass before docker build:
+
+```bash
+cd frontend && npm test && npm run build
+```
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Build | `cd frontend && npm test && npm run build` | 24/24; exit 0 |
+| BZ-UI | `/forecast` Monthly account **114** | Income card **3266.16** matches July chart bar |
+| CA-UI | Summary cards subtitle | **"Forecast for July 2026"** above four cards |
+| BZ-API | `GET /api/v1/forecast/monthly?account_id=114` | series[1] income **3266.16** (live-confirmed pre-deploy) |
+| DEC-0089 | Category filter on `/forecast` | Card values unchanged |
+| OIDC-1 | Omniflow `/forecast` + monthly API | HTTP 200 (optional) |
+
+**Rollback:**
+
+```bash
+git revert <Q0032-code-commits>
+docker compose up -d --build flow-finance-ai
+```
+
+**Boundaries:** Backend forecast API unchanged; plan delete (BUG-0022) unchanged; crypto wealth (BUG-0023) unchanged; CategoryFilter (BUG-0021) unchanged.
+
+#### 39. BUG-0024 hotfix — Plan delete sole-plan copy gap (Q0033 / released 2026-06-13)
+
+**Release:** BUG-0024 **DONE** — operator notes `handoffs/releases/Q0033-release-notes.md`. Sole-plan delete guidance per **DEC-0082**: **(H1)** `shouldShowSolePlanDeleteHint` + `SOLE_PLAN_DELETE_HINT`; **(F1)** inline muted hint below **Delete plan** row on `/planning`; **(T1)** +7 vitest cases. Frontend-only — no backend changes. **Q0031** selector regression preserved.
+
+**Deploy (frontend rebuild only — no migration):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+Local override (`:18080`):
+
+```bash
+docker compose up -d --build flow-finance-ai
+```
+
+**Operator gate — FRONTEND_DEPLOY (required before BS live UI smoke):**
+
+Running container predates Q0033; sole-plan inline hint absent pre-deploy. Confirm tests pass before docker build:
+
+```bash
+cd frontend && npm test && npm run build
+```
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Build | `cd frontend && npm test && npm run build` | 31/31; exit 0 |
+| BS-UI | `/planning` with 1 sole active plan | Delete disabled + inline *To delete this plan, create another scenario, set it active, then delete this one.* |
+| BR-UI | `/planning` with 2+ plans — select non-active | Delete plan **enabled** |
+| BR-UI | Confirm delete modal | Non-active plan removed; list refreshes |
+| BN-UI | Select globally active plan | Delete **disabled** + tooltip |
+| BN-API | `DELETE /api/v1/plans/:active_id` | **409** `active_plan_delete_forbidden` |
+| OIDC-1 | Omniflow `/planning` + `/api/v1/plans` | HTTP 200 (optional) |
+
+**Rollback:**
+
+```bash
+git revert <Q0033-code-commits>
+docker compose up -d --build flow-finance-ai
+```
+
+**Boundaries:** Backend DEC-0082 409 guard unchanged; forecast Income card (BUG-0026) unchanged; crypto wealth (BUG-0023) unchanged; CategoryFilter (BUG-0021) unchanged.
+
+#### 40. BUG-0025 hotfix — Firefly Stromkosten mirror lag (Q0034 / released 2026-06-14)
+
+**Release:** BUG-0025 **DONE** — operator notes `handoffs/releases/Q0034-release-notes.md`. Firefly mirror lag fix per **DEC-0002** extension: **(B1)** manual **Sync now** uses **365-day** transaction-date lookback; scheduled incremental unchanged; **(B2)** `last_firefly_run` API split from exchange-only `last_run`; **(F1)** Sync Status hero + trigger badge + exchange secondary + DEC-0002 callout; **(D1)** runbook `#backdated-firefly-imports` + cursor-reset SQL; **(T1)** integration 3/3.
+
+**Deploy (backend + frontend rebuild — no migration):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+Local override (`:18080`):
+
+```bash
+docker compose up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_REBUILD + FRONTEND_DEPLOY (required before BW/BX/BY live smoke):**
+
+Running container predates Q0034; `last_firefly_run` absent; expense-series category **146** shows 2026-05 only; DEC-0002 callout absent. Confirm tests pass before docker build:
+
+```bash
+cd backend && cargo test --lib && cargo test --test bug0025_sync_transaction_window
+cd frontend && npm test && npm run build
+```
+
+**Post-deploy — manual Full sync:**
+
+On **Sync Status** (`/sync`), click **Sync now** — triggers manual Full Firefly ingest with 365-day lookback.
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Build | backend lib + bug0025 3/3; frontend npm 31/31 + build | exit 0 |
+| BW-API | `GET /api/v1/categories/expense-series?category_id=146` after manual Sync now | Multi-month Stromkosten bars — not 2026-05 only |
+| BW-UI | `/forecast` Category spending trend **Wohnen - Stromkosten** | Bars per month with Firefly data |
+| BX-UI | `/sync` DEC-0002 callout + runbook link | Callout visible |
+| BY-API | `GET /api/v1/sync/status` | `last_firefly_run` distinct from exchange-only `last_run` |
+| BY-UI | `/sync` hero **Last Firefly sync** + trigger badge | Hero uses Firefly run; exchange secondary when newer |
+| BY-HIST | Sync history `trigger` column | manual / scheduled / scheduled_exchanges distinguished |
+| OIDC-1 | Omniflow `/sync` + `/forecast` | HTTP 200 (optional) |
+
+**Rollback:**
+
+```bash
+git revert <Q0034-code-commits>
+docker compose up -d --build flow-finance-ai
+```
+
+**Boundaries:** Scheduled incremental sync (`watermark − overlap_days`) unchanged; plan delete sole-plan hint (BUG-0024) unchanged; forecast Income card (BUG-0026) unchanged; crypto wealth (BUG-0023) unchanged.
+
+#### 38. US-0021 — Subscription transaction explorer with rich filters (S0020 / released 2026-06-13)
+
+**Release:** US-0021 **DONE** — operator notes `handoffs/releases/S0020-release-notes.md`. Dual-mode Discover on US-0010 external profile per **DEC-0112**, **DEC-0113**, **DEC-0114**: **(AC-1)** `GET /api/v1/subscriptions/transactions/search` + Transactions mode (individual expense rows, 100/page); **(AC-2)** rich filters — account, payee, category, Geldbereich, date range; **(AC-3)** hint badges on filtered subset (row metadata only, no auto-emit); **(AC-4)** multi-select → `POST /transactions/preview-group` → confirm via DEC-0099/DEC-0085; **(AC-5)** Suggested patterns sub-tab unchanged (DEC-0098); US-0020 tags/majority + US-0003/US-0008 regression preserved; **(AC-6)** OIDC smoke template (pass-with-prerequisites at release).
+
+**Deploy (backend + frontend — no migration):**
+
+```bash
+AUTHENTIK_SECRET_KEY=unused-external-profile docker compose \
+  -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --build flow-finance-ai
+```
+
+**Operator gate — BACKEND_FRONTEND_DEPLOY (required before AC-1..AC-4 and AC-6 live smoke):**
+
+Running container predates S0020; tx-search returns **404** and `/subscriptions` returns **404** pre-deploy. Confirm tests pass before docker build:
+
+```bash
+cd backend && cargo test --lib && cargo test --test us0021_transaction_search
+cd frontend && npm test && npm run build
+```
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.external.yml \
+  --profile external up -d --force-recreate flow-finance-ai
+```
+
+Local override (`:18080`):
+
+```bash
+docker compose up -d --build flow-finance-ai
+```
+
+**Operator smoke (post-deploy):**
+
+| Step | Check | Pass |
+|------|-------|------|
+| Backend unit | `cd backend && cargo test --lib` | 221/221 |
+| Integration | `cd backend && cargo test --test us0021_transaction_search` | 6/6 |
+| Frontend unit | `cd frontend && npm test` | 17/17 |
+| App health | `curl -sf https://financegnome.omniflow.cc/health` | HTTP 200 |
+| AC-1 | `/subscriptions` Discover → **Transactions** | Individual expense rows; 100/page pagination |
+| AC-2 | Rich filters | Account, payee, category, Geldbereich, date range |
+| AC-3 | Hint badges | Account **114** + payee **SEPA-Lastschrift** — interval/confidence badges |
+| AC-4 | Multi-select activate | ≥2 txs → preview-group → confirm subscription/standing order |
+| AC-5 | **Suggested patterns** sub-tab | US-0020 discover candidates unchanged |
+| AC-5 | Regression | US-0020 tags/majority; US-0003 pending; US-0008 alert dedup |
+| AC-6 | OIDC external profile | Discover tx search + confirm flow |
+| API probe | `GET /api/v1/subscriptions/transactions/search?account_id=114` | HTTP 200 (not 404) |
+
+**Automated regression:**
+
+```bash
+cd backend && cargo test --lib
+cd backend && cargo test --test us0021_transaction_search
+cd frontend && npm test
+```
+
+**Boundaries:** `DetectionPipeline::run_candidates` unchanged; global `min_emit_confidence: 60` unchanged; DEC-0098 discover path frozen; user guide `docs/user-guides/US-0021.md`.
 
 ### Tests
 

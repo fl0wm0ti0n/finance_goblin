@@ -1,0 +1,258 @@
+{
+  "id": "Q0030",
+  "title": "BUG-0023 Crypto Wealth EUR values missing (live regression)",
+  "status": "EXECUTE_COMPLETE",
+  "bug_id": "BUG-0023",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0023",
+  "spec_pack_ref": "docs/engineering/spec-pack/BUG-0023-technical-specification.md",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["BO", "BP", "BQ"],
+  "acceptance_mapping": {
+    "BO": {
+      "tasks": ["BO1", "BO2", "BO3", "T1", "G1", "V1"],
+      "primary_verify": "futures wallet row priced; crypto.subtotal_eur and bitunix card ~EUR2000 order of magnitude; not EUR0 with 11 linear positions"
+    },
+    "BP": {
+      "tasks": ["BP1", "BP2", "T1", "G1", "V1"],
+      "primary_verify": "holdings_all[].value_eur non-null for linear from exposure_eur; market_value_eur NULL for linear; subtotal_eur wallet-only"
+    },
+    "BQ": {
+      "tasks": ["BQ1", "T1", "G1", "V1"],
+      "primary_verify": "pnl.total_return_pct non-null when baseline captured and crypto_value_eur > 0; not em dash while unrealized EUR non-zero"
+    }
+  },
+  "task_count": 9,
+  "mandatory_task_count": 9,
+  "optional_task_ids": [],
+  "estimate_total_hours": 15.5,
+  "user_guide_mode": {
+    "enabled": true,
+    "waived": true,
+    "reason": "bug regression fix; no new operator workflow"
+  },
+  "tasks": [
+    {
+      "id": "BO1",
+      "title": "Equity + unrealized key parse fix",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0023 (BO) — DEC-0080",
+      "files": ["backend/src/exchanges/bitunix.rs"],
+      "decisions": ["DEC-0080"],
+      "tests": [
+        "equity key scan accountEquity/totalEquity/equity/balance first",
+        "fallback sum available+frozen+margin+crossUnrealizedPNL+isolationUnrealizedPNL",
+        "unrealized key aliases crossUnrealizedPNL/isolationUnrealizedPNL",
+        "persist product_type=futures marginCoin USDT quantity=equity"
+      ]
+    },
+    {
+      "id": "BO2",
+      "title": "code==0 validation + parse-skip logging",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": ["BO1"],
+      "acceptance_hook": "BUG-0023 (BO) — observability",
+      "files": ["backend/src/exchanges/bitunix.rs"],
+      "decisions": ["DEC-0080"],
+      "tests": [
+        "reject JSON body when code != 0",
+        "warn diagnostic when parse_futures_wallet returns None",
+        "positions sync unchanged on wallet parse failure"
+      ]
+    },
+    {
+      "id": "BO3",
+      "title": "OpenAPI wiremock + unit tests",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["BO2"],
+      "acceptance_hook": "BUG-0023 (BO) — R-0093",
+      "files": ["backend/src/exchanges/bitunix.rs"],
+      "decisions": ["DEC-0080"],
+      "tests": [
+        "OpenAPI Get Single Account sample yields futures row non-zero equity",
+        "empty data array warn path no row",
+        "code != 0 no row persisted"
+      ]
+    },
+    {
+      "id": "BP1",
+      "title": "exposure_eur migration + pnl entryValue persist",
+      "status": "done",
+      "priority": "P1",
+      "estimate_hours": 2.5,
+      "depends_on": ["BO3"],
+      "acceptance_hook": "BUG-0023 (BP) — DEC-0064, DEC-0081",
+      "files": [
+        "backend/migrations/017_bug0023_exposure_eur.sql",
+        "backend/src/exchanges/repository.rs",
+        "backend/src/portfolio/pnl.rs"
+      ],
+      "decisions": ["DEC-0064", "DEC-0081"],
+      "tests": [
+        "nullable exposure_eur column on exchange_holdings",
+        "entryValue from linear payload converted to EUR",
+        "market_value_eur remains NULL for linear",
+        "recompute in compute_hybrid_pnl linear branch"
+      ]
+    },
+    {
+      "id": "BP2",
+      "title": "holdings_all.value_eur from exposure_eur",
+      "status": "done",
+      "priority": "P1",
+      "estimate_hours": 1,
+      "depends_on": ["BP1"],
+      "acceptance_hook": "BUG-0023 (BP) — DEC-0064",
+      "files": [
+        "backend/src/wealth/service.rs",
+        "frontend/src/pages/WealthPage.tsx"
+      ],
+      "decisions": ["DEC-0064", "DEC-0081"],
+      "tests": [
+        "value_eur = market_value_eur.or(exposure_eur) per row",
+        "subtotal_eur sum market_value_eur only",
+        "holdings_top wallet rows only unchanged"
+      ]
+    },
+    {
+      "id": "BQ1",
+      "title": "Baseline + total_return_pct integration verify",
+      "status": "done",
+      "priority": "P1",
+      "estimate_hours": 1.5,
+      "depends_on": ["BP2"],
+      "acceptance_hook": "BUG-0023 (BQ) — DEC-0038",
+      "files": [
+        "backend/src/portfolio/service.rs",
+        "backend/tests/"
+      ],
+      "decisions": ["DEC-0038"],
+      "tests": [
+        "crypto_value_eur > 0 when futures row priced",
+        "baseline capture on first priced sync",
+        "total_return_pct non-null when baseline > 0",
+        "unrealized alone must not drive return pct"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "Regression tests bug0023_crypto_wealth_eur.rs",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 2.5,
+      "depends_on": ["BQ1"],
+      "acceptance_hook": "BUG-0023 (BO)(BP)(BQ) — integration + regression",
+      "files": ["backend/tests/bug0023_crypto_wealth_eur.rs"],
+      "decisions": ["DEC-0064", "DEC-0080", "DEC-0081", "DEC-0038"],
+      "tests": [
+        "BO wiremock wallet ingest futures row",
+        "BP linear exposure_eur + API value_eur subtotal guard",
+        "BQ priced wallet baseline total_return_pct",
+        "regression wealth list shape"
+      ]
+    },
+    {
+      "id": "G1",
+      "title": "Automated gate (cargo test + frontend build + blast-radius)",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": ["T1"],
+      "acceptance_hook": "BUG-0023 (BO)(BP)(BQ) — automated verification",
+      "files": ["sprints/quick/Q0030/progress.md"],
+      "decisions": ["DEC-0064", "DEC-0080", "DEC-0081", "DEC-0038"],
+      "tests": [
+        "cargo test --test bug0023_crypto_wealth_eur PASS",
+        "cargo test --lib no regression",
+        "npm run build PASS",
+        "git diff --stat matches frozen file list"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work operator smoke BO/BP/BQ + regression",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["G1"],
+      "operator_gate": "BACKEND_DEPLOY + EXCHANGE_SYNC + PNL_RECOMPUTE",
+      "acceptance_hook": "BUG-0023 (BO)(BP)(BQ) — operator smoke matrix",
+      "files": [
+        "sprints/quick/Q0030/uat.md",
+        "sprints/quick/Q0030/uat.json"
+      ],
+      "tests": [
+        "BO-API: crypto.subtotal_eur ~EUR2000 not EUR0",
+        "BO-UI: Bitunix card not EUR-0,00",
+        "BO-SQL: futures market_value_eur populated",
+        "BP-API: linear value_eur non-null",
+        "BP-UI: Value EUR column not all em dash",
+        "BP-SUBTOTAL: wallet-only subtotal",
+        "BQ-API: total_return_pct non-null with baseline",
+        "BQ-UI: Total return not em dash",
+        "OIDC: /wealth /api/v1/wealth omniflow smoke"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "BO1 equity + unrealized key parse",
+    "BO2 code==0 validation + logging",
+    "BO3 wiremock tests",
+    "BP1 migration + pnl exposure_eur",
+    "BP2 wealth service value_eur map",
+    "BQ1 baseline + total_return verify",
+    "T1 regression tests",
+    "G1 automated gate",
+    "BACKEND_DEPLOY",
+    "EXCHANGE_SYNC",
+    "PNL_RECOMPUTE",
+    "V1 verify-work smoke"
+  ],
+  "execute_order": ["BO1", "BO2", "BO3", "BP1", "BP2", "BQ1", "T1", "G1", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "rebuild backend with BO+BP; apply migration 017",
+      "rationale": "BO/BP/BQ runtime gates require code + schema on target environment"
+    },
+    {
+      "id": "EXCHANGE_SYNC",
+      "before_tasks": ["V1"],
+      "action": "Bitunix full/exchange sync after deploy",
+      "rationale": "Wallet row ingest and position refresh"
+    },
+    {
+      "id": "PNL_RECOMPUTE",
+      "before_tasks": ["V1"],
+      "action": "post-sync PnL recompute",
+      "rationale": "Populates exposure_eur and wallet market_value_eur for API gates"
+    },
+    {
+      "id": "AP1_SQL_PROBE",
+      "before_tasks": ["V1"],
+      "action": "optional SQL probe on exchange_holdings",
+      "rationale": "Architecture operator gate for BO/BP DB oracles"
+    }
+  ],
+  "frozen_boundaries": [
+    "DEC-0064: linear excluded from sum(market_value_eur) subtotal; display via exposure_eur only",
+    "DEC-0080: wallet product_type=futures equity pricing for subtotal",
+    "DEC-0081: holdings_all value_eur surface extends display field",
+    "DEC-0038: total_return_pct denominator wallet-priced crypto_value_eur not unrealized",
+    "Forbidden: merge linear exposure_eur into subtotal",
+    "Forbidden: tier-2 ExchangePriceBook / mark-price feed",
+    "Forbidden: BUG-0014 AP2 defensive subtotal fallback",
+    "Forbidden: Grafana portfolio.json SQL edit",
+    "Forbidden: write display value into market_value_eur for linear"
+  ],
+  "decisions": ["DEC-0064", "DEC-0080", "DEC-0081", "DEC-0038"],
+  "research": ["R-0093"],
+  "operator_next": "After BO-BQ1 + T1 + G1: BACKEND_DEPLOY + EXCHANGE_SYNC + PNL_RECOMPUTE; then V1 on localhost:18080 and optional financegnome.omniflow.cc OIDC"
+}

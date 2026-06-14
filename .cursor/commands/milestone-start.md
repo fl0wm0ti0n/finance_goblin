@@ -9,6 +9,10 @@ description: "its-magic milestone start: create milestone tracking files."
 - curator
 
 ## Inputs
+
+- **Narrow-read (US-0053 / US-0096 Tranche A)**: Start at docs/engineering/phase-context.md
+  and the story section anchor in vision/architecture/decisions when a heading exists; forbid
+  full-file reads when a section heading exists.
 - Milestone name, goals, scope
 
 ## Outputs (artifacts)

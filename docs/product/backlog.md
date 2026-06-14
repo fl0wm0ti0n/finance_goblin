@@ -2152,6 +2152,322 @@ Priority: P3
 
 ---
 
+### BUG-0022 — Plan delete still broken (selector ignores dropdown)
+
+Status: DONE
+Priority: P1
+
+**environment:** Post-Q0022 localhost:18080 or omniflow; BUG-0014 AS1 delete UI shipped but operator reports delete still non-functional (2026-06-11).
+
+**steps_to_reproduce:**
+
+1. Open `/planning` with **two or more** plans where one is globally **active** (`is_active=true`).
+2. Use the **Active plan** dropdown to select a **non-active** plan.
+3. Click **Delete plan** (or observe button state).
+
+**expected:**
+
+- Dropdown selection drives the plan shown in the header and detail panels.
+- **Delete plan** is **enabled** for a selected non-active plan; confirmation modal deletes via `DELETE /api/v1/plans/:id`.
+- Selected globally **active** plan: delete control **disabled** with tooltip *Set another plan active before deleting the active plan*; direct API returns **409** per **DEC-0082**.
+
+**actual:**
+
+- `activePlanId` `useMemo` returns the globally active plan id **before** `selectedPlanId`, so dropdown changes are ignored whenever an active plan exists.
+- UI always treats the active plan as selected → `activePlanIsSelected` stays true → **Delete plan** stays **disabled**.
+- With **only one** (active) plan, delete is permanently disabled with no workaround in UI.
+
+**evidence_refs:** operator report 2026-06-11 (*Delete plan geht immer noch nicht*); `handoffs/intake_evidence/intake-20260611-plan-delete-regression.json`; `frontend/src/pages/PlanningPage.tsx` L110–113, L643–683; **BUG-0014** AS1 / **Q0022**; **DEC-0082**
+
+#### Intake evidence (BUG-0022)
+
+- `intake_run_id`: `intake-20260611-plan-delete-regression`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: (none)
+- `assumptions_confirmed`: (none)
+- Evidence bundle: `handoffs/intake_evidence/intake-20260611-plan-delete-regression.json`
+- **Decomposition:** single-bug — selector `useMemo` regression; not reopening **BUG-0014**
+
+**Related work:** **BUG-0014** DONE (**AS1** delete UI + **DEC-0082** 409 guard, **Q0022**); **US-0014** DONE (planning UX epic).
+
+**Architecture:** extends **DEC-0082**, **DEC-0024**, **DEC-0074**; `docs/engineering/architecture.md` § BUG-0022; spec-pack `docs/engineering/spec-pack/BUG-0022-*`; research [R-0094](docs/engineering/research.md#r-0094--bug-0022-plan-delete-selector-regression-activeplanid-ignores-dropdown).
+
+**Sprint:** `/quick` **Q0031** (RELEASED — `bug0022-q0031`, 2026-06-13)
+
+**Artifacts:** `sprints/quick/Q0031/*`, `handoffs/releases/Q0031-release-notes.md`, `sprints/quick/Q0031/release-findings.md`
+
+**Evidence:** `handoffs/releases/Q0031-release-notes.md`, `sprints/quick/Q0031/release-findings.md`, `sprints/quick/Q0031/uat.json`
+
+**Operator follow-up:** rebuild `flow-finance-ai` (**FRONTEND_DEPLOY**); confirm `/planning` BM/BN smoke with 2+ plans
+
+---
+
+### BUG-0023 — Crypto Wealth EUR values missing (live regression)
+
+Status: DONE
+Priority: P1
+
+**environment:** US-0010 external profile `financegnome.omniflow.cc` or localhost:18080; Bitunix connected; exchange sync success (last sync 2026-06-12 per operator screenshot). Post-**BUG-0014** Q0022 release (**DEC-0080**/**DEC-0081** crypto display). Operator portfolio ~**€2000** on Bitunix app. Do not read `.env` / `.env_prod` secrets.
+
+**steps_to_reproduce:**
+
+1. **Defect BO (crypto subtotal €0):** Open **Wealth → Crypto** tab with Bitunix **connected**. Exchange card shows **€ -0,00** (or **€0**) while operator Bitunix app reports portfolio ~**€2000**. `GET /api/v1/wealth` → `crypto.exchanges[bitunix].subtotal_eur` ≈ **0** despite **11** linear holdings.
+2. **Defect BP (Value EUR column empty):** Holdings table lists **11** `linear` positions with correct **Native qty** (BNBUSDT, BTCUSDT, ETHUSDT, …) but **Value EUR** column shows **—** for every row. **Unrealized PnL** column populated (e.g. SOLUSDT **178,15**).
+3. **Defect BQ (total return missing):** PnL summary shows **Unrealized: €378,02** (approx.) but **Total return: —**; operator expects return % when portfolio has priced exposure and baseline history.
+
+**expected:**
+
+- **BO:** Bitunix exchange card and `crypto.subtotal_eur` reflect operator portfolio value (~**€2000** order of magnitude) after exchange sync + PnL recompute — wallet equity per **DEC-0080** and/or documented exposure pricing; not **€0** with **11** open positions.
+- **BP:** Holdings **Value EUR** shows EUR equivalent at valuation time for each position (mark-to-market or documented notional) when Bitunix/market prices available — not all **—** when native quantities and unrealized PnL are present.
+- **BQ:** **Total return %** populated when baseline snapshot exists after successful exchange sync; consistent with priced crypto exposure — not **—** while unrealized EUR is non-zero.
+
+**actual:**
+
+- **BO:** Screenshot 2026-06-12 — Bitunix card **€ -0,00**; operator reports ~**€2000** on Bitunix.
+- **BP:** All **11** holdings show **Value EUR: —**; native qty correct; unrealized PnL per row populated.
+- **BQ:** **Total return: —** with **Unrealized €378,02** visible.
+
+**evidence_refs:** operator report + screenshot 2026-06-12 (Wealth Crypto tab, 11 linear positions); `assets/c__Users_flow_AppData_Roaming_Cursor_User_workspaceStorage_31f4e242ef153ed49f90e1cf690793db_images_image-200d57b3-5af1-4d34-9fae-387619d92de5.png`; post-**BUG-0014** AP/AQ operator-deferred closure; [R-0093](docs/engineering/research.md#r-0093--bug-0023-crypto-wealth-eur-values-live-regression); `backend/src/wealth/service.rs`, `backend/src/portfolio/pnl.rs`, `frontend/src/pages/WealthPage.tsx`
+
+#### Intake decomposition
+
+| Evaluator | Result |
+|-----------|--------|
+| Feature/workflow count | 3 sub-defects (BO subtotal, BP per-position EUR, BQ total return) |
+| Cross-cutting | Bitunix sync/valuation, wealth API aggregation, WealthPage Crypto tab, portfolio PnL snapshot |
+| Acceptance breadth | 3 sub-rows BO–BQ |
+| Risk | Residual **BUG-0014** AP/AQ live gap; **DEC-0064** wallet vs linear subtotal contract |
+
+**Split decision:** single bug — one crypto EUR display/pricing cluster.
+
+**Alternatives considered:** reopen **BUG-0014** — rejected (DONE Q0022; new live operator evidence with 11 positions); new US story — rejected (defect-shaped).
+
+**Related work:** **BUG-0014** DONE (AP/AQ code PASS, live deferred); **BUG-0005** DONE (futures ingest); **DEC-0064**, **DEC-0080**, **DEC-0081**; **BUG-0013** AN (crypto €0).
+
+#### Intake evidence (BUG-0023)
+
+- `intake_run_id`: `intake-20260612-crypto-eur-values`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: `(none)`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260612-crypto-eur-values.json`
+- Research: [R-0093](docs/engineering/research.md#r-0093--bug-0023-crypto-wealth-eur-values-live-regression)
+
+**Recommended next phase:** _(closed — release PASS Q0030 `bug0023-q0030`)_
+
+#### Discovery findings (2026-06-12)
+
+| Sub-defect | Verdict | Live evidence (`localhost:18080`) | Code path |
+|------------|---------|-------------------------------------|-----------|
+| **BO** | **CONFIRMED** | `crypto.subtotal_eur=-0.0`; `bitunix.subtotal_eur=-0.0`; `holdings_count=11`; last_sync `2026-06-12T21:15:31Z` | `wealth/service.rs` L127–131, L159 — subtotal = `sum(market_value_eur)` only |
+| **BP** | **CONFIRMED** | All **11** `holdings_all` rows `value_eur: null`; unrealized sum **€376.83**; `holdings_top: []` | `pnl.rs` L30–54 — linear `market_value_eur: None`; `WealthPage.tsx` L325–327 em-dash |
+| **BQ** | **CONFIRMED** | `pnl.unrealized_eur=376.83`; `pnl.total_return_pct=null` | `portfolio/service.rs` L60–64 — return when `baseline > 0` uses `crypto_value_eur` (0) |
+
+**Root-cause chain (confirmed):**
+
+1. No `product_type=futures` wallet row in wealth API — only **11** `linear` positions (`BNBUSDT`, `BTCUSDT`, …).
+2. Linear holdings intentionally lack `market_value_eur` per **DEC-0064** → subtotal and Value EUR both zero/null.
+3. Unrealized PnL USDT→EUR path **works** (non-zero per row + aggregate) — falsifies pure deploy/ops gap (**H4**).
+4. `crypto_value_eur=0` in PnL snapshot → `total_return_pct` None despite non-zero unrealized (**H5** partial).
+
+**Hypothesis resolution:** H1 CONFIRMED (wallet missing); H2 CONFIRMED (linear NULL); H3 OPEN (mark-price); H4 RULED OUT; H5 PARTIAL.
+
+**SQL probe:** deferred — operator `AP1_SQL_PROBE` on `exchange_holdings` recommended at research (no `.env` read in discovery).
+
+**Single-bug decision unchanged** — BO/BP/BQ one pricing/display cluster; reopen **BUG-0014** still rejected.
+
+**Recommended next phase:** `/research` (role: tech-lead)
+
+**Architecture:** extends **DEC-0064**, **DEC-0080**, **DEC-0081**, **DEC-0038**; `docs/engineering/architecture.md` § BUG-0023; migration `017_bug0023_exposure_eur.sql`.
+
+**Sprint:** `/quick` **Q0030** (DONE — BO1, BO2, BO3, BP1, BP2, BQ1, T1, G1, V1; released `bug0023-q0030`, 2026-06-12)
+
+**Release:** `handoffs/releases/Q0030-release-notes.md`; operator gates **BACKEND_DEPLOY → EXCHANGE_SYNC → PNL_RECOMPUTE** pending post-release smoke.
+
+---
+
+### BUG-0024 — Plan delete still disabled (live operator report post-Q0031)
+
+Status: DONE
+Priority: P1
+
+**environment:** localhost:18080 or `financegnome.omniflow.cc`; post-**BUG-0022** / **Q0031** release (`bug0022-q0031`, 2026-06-13); operator report 2026-06-13.
+
+**steps_to_reproduce:**
+
+1. Open **`/planning`** (Scenarios tab).
+2. Observe **Delete plan** button state (grayed vs enabled).
+3. **Case A (sole plan):** With only **one** plan that is globally **active** (`is_active=true`), attempt delete.
+4. **Case B (multi-plan):** Create or use **two or more** plans; select a **non-active** plan in the **Active plan** dropdown; attempt delete.
+
+**expected:**
+
+- **Case B (BM):** Non-active plan selected → **Delete plan** **enabled** → confirmation modal → plan removed (per **BUG-0022** / **Q0031** `resolveDisplayedPlanId`).
+- **Case A (BS):** Sole active plan → delete blocked per **DEC-0082**, but UI explains why (tooltip/copy: create another plan and set it active first) — not silent permanent gray with no guidance.
+- Globally **active** plan selected (any case): delete **disabled** + tooltip; API **409** per **DEC-0082**.
+
+**actual:**
+
+- Operator report 2026-06-13: **Delete plan** **always grayed out** (*immer ausgegraut*).
+- Discovery localhost:18080 (2026-06-13): initial probe **1 plan** (`test`, active) → delete disabled by design; after creating second plan (`discovery-scenario`), selecting non-active → delete **enabled** (`deleteDisabled=false`) — **H3 ruled out** on current bundle.
+- **Discovery verdict H1:** **CONFIRMED (BS)** — sole active plan + generic tooltip *Set another plan active before deleting the active plan*; no create-second-plan guidance.
+- **Discovery verdict H2:** **LIKELY (BR on omniflow)** — **FRONTEND_DEPLOY** deferred; omniflow not probed; stale bundle would reproduce pre-Q0031 **BM** if operator has 2+ plans.
+- **Discovery verdict H3:** **RULED OUT (localhost)** — multi-plan non-active selection enables delete; vitest 8/8; `resolveDisplayedPlanId` + `isDeleteDisabled` correct in source and served bundle (`assets/index-CJ94Af9n.js` contains tooltip string).
+
+**evidence_refs:** operator report 2026-06-13; `handoffs/intake_evidence/intake-20260613-plan-delete-live.json`; live `GET /api/v1/plans`; browser probe `/planning` localhost:18080; **BUG-0022** / **Q0031**; `frontend/src/pages/planSelector.ts`; `PlanningPage.tsx` L490, L667–675; **DEC-0082**; [R-0096](docs/engineering/research.md#r-0096--bug-0024-plan-delete-still-disabled-live-post-q0031)
+
+#### Intake evidence (BUG-0024)
+
+- `intake_run_id`: `intake-20260613-plan-delete-live`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: _(none)_
+- Evidence bundle: `handoffs/intake_evidence/intake-20260613-plan-delete-live.json`
+- Research: [R-0096](docs/engineering/research.md#r-0096--bug-0024-plan-delete-still-disabled-live-post-q0031)
+
+**Decomposition:** single-bug — discovery resolved H1 (**BS** confirmed) vs H2 (deploy gap, omniflow) vs H3 (**BM** ruled out localhost); not reopening **BUG-0022** (DONE with Q0031).
+
+**Discovery summary (2026-06-13):**
+
+| AC | Discovery verdict | Notes |
+|----|-------------------|-------|
+| **BR** | **NOT confirmed (localhost)**; **OPEN (omniflow)** | Multi-plan delete works on localhost post-bundle; verify after **FRONTEND_DEPLOY** |
+| **BS** | **CONFIRMED** | Sole-plan disabled state lacks actionable create→activate→delete guidance |
+
+**Related work:** **BUG-0022** DONE (**Q0031** `bug0022-q0031`); **BUG-0014** AS1; **DEC-0082**; **US-0022** (deploy version stamp — separate)
+
+**Architecture:** `docs/engineering/architecture.md` § BUG-0024 — five gates frozen (**GATE-COPY-1** inline sole-plan hint; **GATE-DEPLOY-1** **FRONTEND_DEPLOY** + omniflow **BR** smoke; **GATE-SCOPE-1** frontend-only **DEC-0082** intact; **GATE-TEST-1** vitest `shouldShowSolePlanDeleteHint`; **GATE-DEC-1** no new DEC).
+
+**Sprint:** `/quick` **Q0033** (RELEASED — `bug0024-q0033`, 2026-06-13)
+
+**Artifacts:** `sprints/quick/Q0033/*`, `handoffs/releases/Q0033-release-notes.md`, `sprints/quick/Q0033/release-findings.md`
+
+**Evidence:** `handoffs/releases/Q0033-release-notes.md`, `sprints/quick/Q0033/release-findings.md`, `sprints/quick/Q0033/uat.json`
+
+---
+
+### BUG-0025 — Firefly category transactions not updating in mirror (Stromkosten)
+
+Status: DONE
+Priority: P1
+
+**environment:** Operator ledger in Firefly III vs Finance Goblin mirror (`localhost:18080` or `financegnome.omniflow.cc`); operator report 2026-06-13; post–**BUG-0006** category ingest fixes (DONE).
+
+**steps_to_reproduce:**
+
+1. In **Firefly III**, add **multiple** transactions to category **Wohnen - Stromkosten** (or bulk-import / backdate historical rows).
+2. In Finance Goblin, trigger **Sync now** on **Sync Status** (or wait for scheduled sync).
+3. Open **`/forecast`** → select category **Wohnen - Stromkosten** → **Category spending trend** chart (US-0018 / `CategoryTrendChart` / `GET /api/v1/categories/expense-series`) and compare monthly bars to Firefly.
+
+**expected:**
+
+- After **Full Firefly sync**, mirror `transactions` rows for category **Wohnen - Stromkosten** match Firefly count and amounts.
+- **Category spending trend** shows outflow bars for **every month** that has Stromkosten transactions in Firefly—not a **single month** (e.g. only **2026-05**) with all other months at **€0**.
+- **Incremental sync** ingests new and **backdated/edited** rows per **DEC-0002** overlap contract—or Sync Status documents when a **full re-sync / cursor reset** is required.
+- Manual **Sync now** runs **Full** Firefly ingest (not exchange-only); sync history `trigger` distinguishes `manual` / `scheduled` vs `scheduled_exchanges`.
+
+**actual:**
+
+- Operator report 2026-06-13: many **Stromkosten** transactions added in Firefly but Finance Goblin still shows **only one transaction** (*weiterhin nur eine Transaktion*).
+- **Operator screenshot 2026-06-13** (`handoffs/evidence/bug0025-category-spending-trend-stromkosten-20260613.png`): **`/forecast` Category spending trend** for **Wohnen - Stromkosten** — **only one bar** at **2026-05** (~**€465** outflow); all other months in range (**2025-07** … **2026-06**) show **€0** (e.g. hover **2025-08 → €0 outflow**); summary cards **Highest month / Lowest month = 2026-05**, **MoM change −100%**.
+- Live probe localhost:18080 — mirror **939** transactions total; category **146** expense-series API also shows **4** transactions **only in 2026-05** (consistent with chart); recent sync runs include **`scheduled_exchanges`** interleaved with **`scheduled`** / **`manual`** Full runs.
+- **Hypothesis H1 (primary):** Operator added **backdated** rows (months before 2026-05) outside `start = watermark − overlap_days` window → incremental sync skips them (**R-0089** / **DEC-0002**).
+- **Hypothesis H2:** Operator sync tick ran **exchange-only** (`scheduled_exchanges`) — Firefly mirror unchanged while status shows success.
+- **Hypothesis H3:** **CONFIRMED (surface)** — operator UI is **Category spending trend** on **`/forecast`**; “one transaction” = **one month with data**, not literal tx count.
+
+**evidence_refs:** operator report 2026-06-13; operator screenshot `handoffs/evidence/bug0025-category-spending-trend-stromkosten-20260613.png`; `handoffs/intake_evidence/intake-20260613-firefly-stale-mirror.json`; live `GET /api/v1/sync/entities` (939 tx); `GET /api/v1/categories/expense-series?category_id=146`; `GET /api/v1/sync/runs`; `backend/src/firefly/mod.rs` `sync_transactions`; **DEC-0002**; **US-0018** / **DEC-0088**; [R-0097](docs/engineering/research.md#r-0097--bug-0025-firefly-category-transactions-not-updating-stromkosten)
+
+#### Intake evidence (BUG-0025)
+
+- `intake_run_id`: `intake-20260613-firefly-stale-mirror`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: _(none)_
+- Evidence bundle: `handoffs/intake_evidence/intake-20260613-firefly-stale-mirror.json`
+- Research: [R-0097](docs/engineering/research.md#r-0097--bug-0025-firefly-category-transactions-not-updating-stromkosten)
+
+**Decomposition:** single-bug — discovery resolves H1 backdated window vs H2 sync-mode confusion vs H3 UI aggregation; not reopening **BUG-0006** (category_id ingest DONE).
+
+**Related work:** **BUG-0002** / **BUG-0004** (sync pipeline); **BUG-0006** (category mirror); **BUG-0021** (category filter UX); **DEC-0002**; **R-0089**
+
+**Architecture:** `docs/engineering/architecture.md` § BUG-0025 — five gates frozen (**GATE-OVERLAP-1** manual 365d + scheduled unchanged; **GATE-SYNC-UX-1** `last_firefly_run` split + badge; **GATE-REMED-1** cursor-reset SQL; **GATE-TEST-1** integration repro; **GATE-DEC-1** extends **DEC-0002** no new DEC).
+
+**Sprint:** `/quick` **Q0034** (RELEASED — `bug0025-q0034`, 2026-06-14)
+
+**Artifacts:** `sprints/quick/Q0034/*`, `handoffs/releases/Q0034-release-notes.md`, `sprints/quick/Q0034/release-findings.md`
+
+**Evidence:** `handoffs/releases/Q0034-release-notes.md`, `sprints/quick/Q0034/release-findings.md`, `sprints/quick/Q0034/uat.json`
+
+---
+
+### BUG-0026 — Forecast monthly Income card 0.00 while chart shows income bars
+
+Status: DONE
+Priority: P2
+
+**environment:** `/forecast` **Monthly** tab; operator report 2026-06-13; post–**BUG-0012** / **Q0014** (monthly bucket projection DONE).
+
+**steps_to_reproduce:**
+
+1. Open **`/forecast`** → **Monthly** tab with a funded account (e.g. **Raiffeisenbank Giro** / id **114**).
+2. Observe summary cards (**Income**, Fixed, Variable, Free cashflow) vs **MonthlyChart** bar series below.
+3. Optional: category filter **Wohnen - Stromkosten** (per **DEC-0089** filter affects category trend only — forecast cards unchanged).
+
+**expected:**
+
+- Summary **Income** card value **matches** the chart for the **same reference month** (labeled on card), **or** cards show a documented aggregate (e.g. next full month / current month) consistent with visible chart bars—not **0.00** while chart shows ~**€3000** blue Income bars for adjacent months.
+
+**actual:**
+
+- Operator screenshot 2026-06-13 (`handoffs/evidence/bug0026-forecast-income-card-zero-20260613.png`): **Income card 0.00**; chart shows **blue Income bars ~3000** from **2026-07** onward; Fixed **86.02**, Variable **2866.57**, Free cashflow **-2952.59**.
+- Code: `frontend/src/pages/ForecastPage.tsx` — `monthlySummary = series[0]` **without month label**; `MonthlyChart` renders **entire** `monthlyQuery.data.series`.
+- Live API `GET /api/v1/forecast/monthly?account_id=116`: `series[0]` **2026-06-01** → income **0.00**; `series[1]` **2026-07-01** → income **3266.16** (matches chart bars).
+- **Root cause (intake):** Summary cards bind to **first forecast month** (partial/current month with zero projected income) while chart displays **all months** including full salary projection from month 2 — **UI slice mismatch**, not **BUG-0012** backend bucket regression.
+
+**evidence_refs:** operator report + screenshot 2026-06-13; `handoffs/evidence/bug0026-forecast-income-card-zero-20260613.png`; `handoffs/intake_evidence/intake-20260613-forecast-income-card-mismatch.json`; `frontend/src/pages/ForecastPage.tsx` L148–152; `frontend/src/components/forecast/MonthlyChart.tsx`; live `GET /api/v1/forecast/monthly`; **BUG-0012** / **Q0014**; **DEC-0089**; [R-0098](docs/engineering/research.md#r-0098--bug-0026-forecast-monthly-income-card-vs-chart-mismatch)
+
+#### Intake evidence (BUG-0026)
+
+- `intake_run_id`: `intake-20260613-forecast-income-card-mismatch`
+- `selected_pack`: `small-intake-pack`
+- `intake_work_item_kind`: `bug`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: _(none)_
+- Evidence bundle: `handoffs/intake_evidence/intake-20260613-forecast-income-card-mismatch.json`
+- Research: [R-0098](docs/engineering/research.md#r-0098--bug-0026-forecast-monthly-income-card-vs-chart-mismatch)
+
+**Decomposition:** single-bug — frontend summary month selection / labeling; not reopening **BUG-0012** (API projects non-zero income from month 2).
+
+#### Discovery refinements (2026-06-13)
+
+- **Defect confirmed:** **BZ** and **CA** — live `GET /api/v1/forecast/monthly?account_id=114` matches operator screenshot (`series[0]` 2026-06 income **0.00**, fixed **86.02**, variable **2866.57**, free **-2952.59**; `series[1]` 2026-07 income **3266.16**).
+- **Root cause confirmed:** `ForecastPage.tsx` L148–152 `monthlySummary = series[0]`; L312–330 cards render **without month label**; `MonthlyChart.tsx` plots full series — **UI slice mismatch**, not backend regression.
+- **BUG-0012 ruled out:** API projects non-zero income from month 2; `bucket_sources.income: config` on July+; partial June has zero salary by recurring due-date semantics (`project.rs`).
+- **DEC-0089 verified:** Category filter helper text scopes to trend chart only; forecast cards unchanged (correct).
+- **Fix scope:** Frontend-only preferred — month selection + labeling; PO prefers **Option A** (label cards; default next full month or first non-zero income month when partial month is zero).
+- **Research gates:** GATE-MONTH-1, GATE-LABEL-1, GATE-SCOPE-1, GATE-TEST-1, GATE-DEC-1 (see `handoffs/po_to_tl.md` discovery-20260613-bug0026).
+
+**Related work:** **BUG-0012** DONE (**Q0014**); **US-0018** / **DEC-0089** (category filter scope); **US-0002** forecast monthly view
+
+**Architecture:** extends **DEC-0089**; `docs/engineering/architecture.md` § BUG-0026; spec-pack `docs/engineering/spec-pack/BUG-0026-*`; research [R-0098](docs/engineering/research.md#r-0098--bug-0026-forecast-monthly-income-card-vs-chart-mismatch).
+
+**Sprint:** `/quick` **Q0032** (RELEASED — `bug0026-q0032`, 2026-06-13)
+
+**Artifacts:** `sprints/quick/Q0032/*`, `handoffs/releases/Q0032-release-notes.md`, `sprints/quick/Q0032/release-findings.md`
+
+**Evidence:** `handoffs/releases/Q0032-release-notes.md`, `sprints/quick/Q0032/release-findings.md`, `sprints/quick/Q0032/uat.json`
+
+---
+
 ## User stories (canonical)
 
 ### US-0001 — Self-hosted platform foundation & Firefly read-only integration
@@ -3458,6 +3774,114 @@ So that detection automation plus manual control both work and I can group servi
 **Artifacts:** `sprints/S0019/*`, `handoffs/tl_to_dev.md` (`sprint-plan-20260610-s0019-us0020`), `handoffs/releases/S0019-release-notes.md`
 
 **Recommended next phase:** _(closed — release PASS S0019 `0.20.0-us0020`; last story in intake bundle)_
+
+---
+
+### US-0021 — Subscription transaction explorer with rich filters
+
+Status: DONE
+Sprint: **S0020** (released — `0.21.0-us0021`, 2026-06-13)
+Priority: P2
+
+As a subscription manager,
+I want to search expense transactions with rich filters and activate recurring patterns the auto-detector missed,
+So that I can manually find and confirm subscriptions (e.g. by category or Geldbereich) without relying only on pre-grouped recurrence candidates.
+
+#### Scope
+
+- In: **Transaction-first search** on `/subscriptions` Discover (or equivalent): list individual mirror **expense transactions**, not only `detect_recurrence_groups` output
+- In: **Rich filters:** account, payee/description text, **category** (US-0018 catalog), **Geldbereich** (`account_role` per DEC-0111 labels), date range, optional amount band, optional **recurring-only** / pattern-hint mode
+- In: **Recurring pattern hint** when filtered transactions suggest a subscription interval (including patterns below auto-detection emit threshold)
+- In: **Manual activate:** operator selects transaction group (or accepts hint) → confirm as **subscription** or **standing order** via **DEC-0099** / **DEC-0085** contracts
+- In: Coexist with US-0020 tags, majority category, and US-0003 auto-detection + Pending tab
+- Out: Firefly write-back; global lowering of auto-detection confidence thresholds without documented operator contract
+
+#### Constraints
+
+- Read-only Firefly; product DB overlay only
+- Reuse `POST /api/v1/subscriptions/discover/confirm` semantics or extend with explicit `transaction_ids` selection — architecture decides
+- US-0008 alert dedup and US-0020 tag/filter regression preserved
+- Performance: paginated/capped results on 365d window (document limit in UI)
+
+#### Intake decomposition
+
+- `plan_area_id`: `subscription-ops`
+- `selected_pack`: `small-intake-pack`
+- `intake_run_id`: `intake-20260612-subscription-tx-explorer`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: `(none)`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260612-subscription-tx-explorer.json`
+- Research: [R-0092](docs/engineering/research.md#r-0092--us-0021-subscription-transaction-explorer-vs-recurrence-only-discover)
+
+**Split decision:** single story — transaction search API + Discover UI + manual activate is one subscription-ops vertical slice extending US-0020.
+
+**Alternatives considered:**
+
+| Alternative | Verdict |
+|-------------|---------|
+| File as BUG on US-0020 | Rejected — US-0020 AC-1 met shipped contract (account/payee/interval on recurrence groups); operator expectation is scope expansion |
+| Split API story + UI story | Rejected — no independent user value without both surfaces |
+| Replace Discover tab entirely | Deferred to architecture — may dual-mode (Transactions vs Suggested patterns) |
+
+**Related work:** US-0020 DONE (Discover recurrence candidates, tags, majority category); US-0003 (auto-detection); US-0018 (category catalog); DEC-0098..0103; DEC-0111 (`account_role` labels)
+
+**Sprint:** S0020 — TX1–TX3, UI1–UI4, PT1, T1–T2, R1, V1 (12 tasks at `SPRINT_MAX_TASKS`; P2 amount/index/weak-hints deferred)
+
+**Release:** `handoffs/releases/S0020-release-notes.md` — acceptance AC-1..AC-6 checked; operator **BACKEND_FRONTEND_DEPLOY** pending post-release live smoke.
+
+---
+
+### US-0022 — Deploy version stamp & stale-frontend detection
+
+Status: DONE
+Priority: P2
+
+**closure_note:** release PASS S0021, 2026-06-14 (`0.22.0-us0022`); acceptance AC-1..AC-6 checked; live AC-5/AC-6 operator-deferred BACKEND_FRONTEND_DEPLOY
+
+As an operator deploying Flow Finance AI,
+I want a subtle in-app build/version stamp with hover details and stale-bundle detection,
+So that I can confirm the running release matches what I deployed without `docker inspect` or guessing from UI behavior alone.
+
+#### Scope
+
+- In: **Subtle UI stamp** — footer or sidebar corner (low visual noise); **hover/focus tooltip** with release tag (e.g. `bug0023-q0030`, `0.21.0-us0021`), **build id** (git short sha or docker image id fragment), **build timestamp** (UTC), optional migration max version
+- In: **Backend authoritative metadata** — extend `GET /health` or add `GET /api/v1/meta/build-info` returning same **build id** + release label baked at compile/deploy time
+- In: **SPA build id** — inject at Vite build via `VITE_BUILD_ID` / `VITE_RELEASE_TAG` Docker build args (aligned with backend)
+- In: **Stale detection** — on app load (and optional periodic poll), compare SPA-embedded id vs backend; **non-blocking** banner or toast when mismatch (“New version available — reload”)
+- Out: Full release-management UI; semver auto-bump; exposing `.env` secrets or API keys in metadata
+
+#### Constraints
+
+- Metadata must never include secrets, PATs, or exchange keys
+- Stamp must not clutter primary UX (hidden/subtle by default; operator-only affordance)
+- Traefik/browser cache may serve old `index.html` — stale detection is the primary mitigation; document hard-refresh in tooltip when stale
+- OIDC external profile smoke unchanged; `/health` remains unauthenticated for liveness
+
+#### Intake decomposition
+
+- `plan_area_id`: `operator-observability`
+- `selected_pack`: `small-intake-pack`
+- `intake_run_id`: `intake-20260613-deploy-version-stamp`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: `(none)`
+- Evidence bundle: `handoffs/intake_evidence/intake-20260613-deploy-version-stamp.json`
+- Research: [R-0095](docs/engineering/research.md#r-0095--us-0022-deploy-version-stamp--stale-frontend-detection)
+
+**Split decision:** single story — backend metadata + SPA stamp + stale compare is one deploy-observability vertical slice.
+
+**Alternatives considered:**
+
+| Alternative | Verdict |
+|-------------|---------|
+| Settings page only | Rejected — operator wants always-available hidden stamp without navigation |
+| Split backend vs frontend stories | Rejected — no operator value without both surfaces aligned |
+| Browser-only stamp (no backend) | Rejected — cannot detect stale cached SPA vs fresh backend |
+
+**Related work:** BUG-0023 Q0030 operator deploy confusion (2026-06-12); `backend/src/health/mod.rs` (status ok only today); `frontend/src/components/AppLayout.tsx`; Docker multi-stage build; `handoffs/releases/*` tags
+
+**Recommended next phase:** `/discovery` (US-0022)
 
 ---
 

@@ -1,0 +1,91 @@
+{
+  "id": "Q0034",
+  "type": "quick",
+  "bug_ids": ["BUG-0025"],
+  "status": "PLANNED",
+  "created": "2026-06-14",
+  "goal": "Close BUG-0025 Firefly Stromkosten mirror lag: manual Full 365d lookback (B1); last_firefly_run status split (B2); Sync Status hero + DEC-0002 callout (F1); runbook cursor-reset remediation (D1); integration backdated-window repro (T1); cargo/npm gate (G1); operator verify-work BW/BX/BY + OIDC (V1). Extends DEC-0002; no new DEC.",
+  "scope": [
+    "B1: firefly/mod.rs sync_transactions trigger + MANUAL_LOOKBACK_DAYS=365 — GATE-OVERLAP-1",
+    "B2: sync/mod.rs SyncStatusResponse.last_firefly_run + latest_firefly_run() — GATE-SYNC-UX-1",
+    "F1: SyncStatusPage hero Last Firefly sync, trigger badge, exchange secondary, DEC-0002 callout — GATE-SYNC-UX-1",
+    "D1: runbook.md § backdated Firefly imports + cursor reset SQL — GATE-REMED-1",
+    "T1: backend integration backdated-window repro — GATE-TEST-1",
+    "G1: cargo test + npm test + build automated gate",
+    "V1: verify-work /sync + /forecast category 146 BW/BX/BY + OIDC smoke"
+  ],
+  "risks": [
+    "Manual 365d slow on very large ledgers — pagination + upsert dedupe; monitor records_synced",
+    ">365d backfill still skipped after manual — runbook cursor reset + callout (BX)",
+    "Exchange-only run shown as Firefly sync — hero uses last_firefly_run only",
+    "API additive field ignored by old frontend — co-deploy backend + frontend",
+    "Scheduled cost regression — manual-only widened window; scheduled path unchanged",
+    "OIDC deploy regression — V1 smoke on /sync and /forecast"
+  ],
+  "task_count": 7,
+  "mandatory_task_count": 7,
+  "conditional_task_ids": [],
+  "optional_task_ids": [],
+  "estimate_total_hours": 12.5,
+  "decisions": ["DEC-0002"],
+  "research": ["R-0097"],
+  "acceptance_rows": ["BW", "BX", "BY"],
+  "user_guide_mode": {
+    "enabled": true,
+    "waived": true,
+    "reason": "Operator guidance in runbook (D1) + Sync Status callout (F1); no new US-xxxx workflow"
+  },
+  "execute_order": ["B1", "B2", "F1", "D1", "T1", "G1", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_REBUILD",
+      "before_tasks": ["V1"],
+      "description": "Rebuild/restart backend — B1 manual 365d lookback + B2 last_firefly_run API must be live"
+    },
+    {
+      "id": "FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Rebuild frontend — F1 Sync Status hero/callout must be live for BX/BY smoke"
+    }
+  ],
+  "acceptance_mapping": {
+    "BW": {
+      "tasks": ["B1", "T1", "G1", "V1"],
+      "verify": "Manual Sync now (365d) ingests multi-month Stromkosten; GET /api/v1/categories/expense-series?category_id=146 shows bars per month with mirror data — not 2026-05 only"
+    },
+    "BX": {
+      "tasks": ["B1", "D1", "F1", "G1", "V1"],
+      "verify": "Backdated imports ingest on manual Full or Sync Status callout + runbook explain DEC-0002 overlap + cursor reset — not silent skip with misleading success"
+    },
+    "BY": {
+      "tasks": ["B2", "F1", "G1", "V1"],
+      "verify": "Hero Last Firefly sync from last_firefly_run; exchange-only runs secondary; Sync now → manual Full in history; trigger column distinguishes manual/scheduled vs scheduled_exchanges"
+    }
+  },
+  "waived_ops_only": {
+    "global_overlap_config": "No TOML overlap_days change — scheduled keeps watermark − 7d",
+    "admin_cursor_api": "Deferred — runbook SQL only (GATE-REMED-1)",
+    "expense_series_sql": "No category API SQL changes — mirror ingest fix only",
+    "category_trend_chart": "CategoryTrendChart frontend unchanged — H3 ruled out",
+    "homepage_f3": "HomePage last_firefly_run (F3) optional P1 — out of mandatory sprint",
+    "new_dec": "GATE-DEC-1 closed — extends DEC-0002 only"
+  },
+  "deploy_order": [
+    "B1 sync_transactions manual 365d lookback",
+    "B2 SyncStatusResponse.last_firefly_run",
+    "F1 SyncStatusPage hero + callout",
+    "D1 runbook remediation section",
+    "T1 integration backdated-window test",
+    "G1 automated gate",
+    "BACKEND_REBUILD",
+    "FRONTEND_DEPLOY",
+    "V1 verify-work smoke"
+  ],
+  "rollback": "git revert firefly/mod.rs + sync/mod.rs + SyncStatusPage.tsx + api.ts + runbook delta; cursor reset runbook remains safe doc-only",
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260614-bug0025-q0034",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0025",
+  "spec_pack_ref": "docs/engineering/spec-pack/BUG-0025-technical-specification.md",
+  "orchestrator_run_id": "auto-20260613-bug0025"
+}

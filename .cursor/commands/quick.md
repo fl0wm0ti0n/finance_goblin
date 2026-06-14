@@ -13,6 +13,19 @@ description: "its-magic quick: execute a small task without full planning."
 
 ## Inputs
 - Task description
+- **Narrow-read (US-0053 / US-0096 Tranche A)**: Start at `docs/engineering/phase-context.md`
+  and the story section anchor in vision/architecture/decisions when a heading exists; forbid
+  full-file reads when a section heading exists.
+
+## `/auto` routing (US-0096 / DEC-0082)
+
+When **`DELIVERY_MODE=mega_quick`** and eligibility passes, **`/auto`** materializes this
+command only (`resolved_phase_plan = ["quick"]`). See **`.cursor/commands/auto.md`** §
+**`mega_quick` routing** for seven **`MEGA_QUICK_*`** fail-closed codes and
+**`DELIVERY_MODE_INELIGIBLE`** handling.
+
+Artifacts under **`sprints/quick/Qxxxx/`**: **`task.json`** + **`summary.md`**. Second spawn
+only on test failure. Closure requires **`acceptance_met: true`** + green tests.
 
 ## Outputs (artifacts)
 - `sprints/quick/Q0001/task.json`

@@ -1,0 +1,51 @@
+{
+  "id": "S0020",
+  "story_ids": ["US-0021"],
+  "status": "RELEASED",
+  "created": "2026-06-13",
+  "orchestrator_run_id": "auto-20260613-us0021",
+  "goal": "Deliver DEC-0112 transaction search API; DEC-0113 dual-mode Discover UX; DEC-0114 hint pass; multi-select confirm via preview-group; DEC-0098 patterns tab preserved; user guide US-0021; US-0003/US-0008 regression; OIDC smoke.",
+  "scope": [
+    "GET /api/v1/subscriptions/transactions/search — SQL push-down filters, 100/page (DEC-0112)",
+    "POST /api/v1/subscriptions/transactions/preview-group — median/interval for confirm body (DEC-0112)",
+    "Hint pass on filtered subset — row metadata only, no auto-emit (DEC-0114)",
+    "SubscriptionsPage dual mode: Transactions default | Suggested patterns (DEC-0113)",
+    "Rich filter bar: account, payee, category, Geldbereich, date (DEC-0112, DEC-0111)",
+    "Paginated tx table + hint badges + truncated banner (DEC-0112, DEC-0114)",
+    "Multi-select txs → preview-group → confirm modal → POST discover/confirm (DEC-0099)",
+    "Extract existing discover candidate UI to Patterns sub-tab (DEC-0098 frozen)",
+    "Search + hint integration tests; AC-5 regression tests",
+    "docs/user-guides/US-0021.md publish (USER_GUIDE_MODE=1)",
+    "UAT OIDC external profile smoke template AC-1..AC-6"
+  ],
+  "risks": [
+    "Dual-mode UI complexity — Transactions default; shared filter state",
+    "Hint pass perf — 500 tx cap; account required",
+    "AC-3 sub-threshold expectation — GATE-HINT-2 P2 defer documented",
+    "Detection regression — no detection.rs edits; dedicated T2 tests",
+    "Geldbereich JOIN — DEC-0111 COALESCE path",
+    "AC-6 operator gate — BACKEND_FRONTEND_DEPLOY prerequisite"
+  ],
+  "task_count": 12,
+  "mandatory_p0_count": 10,
+  "mandatory_p1_count": 2,
+  "estimate_total_hours": 34,
+  "decisions": ["DEC-0112", "DEC-0113", "DEC-0114"],
+  "extends_decisions": ["DEC-0098", "DEC-0099", "DEC-0111"],
+  "research": ["R-0092"],
+  "slices": ["US-0021-S1", "US-0021-S2", "US-0021-S3", "US-0021-S4"],
+  "p2_deferred": [
+    "amount_min/max filters (DEC-0112 P2)",
+    "idx_transactions_account_date (GATE-IDX-1)",
+    "2-tx weak hints (GATE-HINT-2)"
+  ],
+  "split_decision": "no_split — 12 tasks = SPRINT_MAX_TASKS 12; P2 stretch excluded",
+  "operator_gates": ["BACKEND_FRONTEND_DEPLOY"],
+  "qa_fixture": {
+    "environment": "localhost:18080",
+    "account_id": "114",
+    "payee": "SEPA-Lastschrift",
+    "expected": "11 txs @ 31d / 95% — individual rows + hint badge in Transactions mode"
+  },
+  "next_phase": "released"
+}

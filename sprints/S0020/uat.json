@@ -1,0 +1,115 @@
+{
+  "sprint_id": "S0020",
+  "story_id": "US-0021",
+  "phase": "verify-work",
+  "orchestrator_run_id": "auto-20260613-us0021",
+  "decisions": ["DEC-0112", "DEC-0113", "DEC-0114"],
+  "extends_decisions": ["DEC-0098", "DEC-0099", "DEC-0111"],
+  "research": ["R-0092"],
+  "acceptance_rows": ["AC-1", "AC-2", "AC-3", "AC-4", "AC-5", "AC-6"],
+  "acceptance_source": "docs/product/acceptance.md#US-0021",
+  "acceptance_mapping": {
+    "AC-1": {
+      "tasks": ["TX1", "TX2", "TX3", "UI1", "UI3", "V1"],
+      "primary_verify": "Transactions mode lists individual expense txs paginated at 100/page — not candidate-only discover"
+    },
+    "AC-2": {
+      "tasks": ["TX1", "UI2", "V1"],
+      "primary_verify": "Filters: account, payee, category, Geldbereich, date range"
+    },
+    "AC-3": {
+      "tasks": ["TX2", "UI3", "V1"],
+      "primary_verify": "Hint badge on filtered txs; account 114 SEPA-Lastschrift 11 txs @ 31d / 95%"
+    },
+    "AC-4": {
+      "tasks": ["TX3", "UI4", "V1"],
+      "primary_verify": "Multi-select ≥2 txs → preview-group → confirm modal → DEC-0099 confirm"
+    },
+    "AC-5": {
+      "tasks": ["PT1", "T2", "V1"],
+      "primary_verify": "Patterns tab DEC-0098 unchanged; US-0020 tags/majority; US-0003/US-0008 regression"
+    },
+    "AC-6": {
+      "tasks": ["V1"],
+      "primary_verify": "OIDC external profile smoke on tx search + confirm flow"
+    }
+  },
+  "qa_fixture": {
+    "environment": "localhost:18080",
+    "account_id": "114",
+    "payee": "SEPA-Lastschrift",
+    "expected": "11 txs @ 31d / 95% — individual rows + hint badge in Transactions mode"
+  },
+  "verified_at": "2026-06-13T08:10:01Z",
+  "verdict": "PASS-WITH-PREREQUISITES",
+  "ready_for_verify_work": true,
+  "ready_for_release": true,
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "status": "pending",
+      "action": "rebuild backend + frontend — new routes + Discover dual-mode UI",
+      "notes": "Required before live AC-1..AC-6 UI/API probes and OIDC smoke"
+    }
+  ],
+  "operator_prerequisites": [
+    "BACKEND_FRONTEND_DEPLOY — S0020 tx-search API + dual-mode Discover must be live on target environment"
+  ],
+  "steps": [
+    {
+      "id": "AC1-TX-SEARCH",
+      "row": "AC-1",
+      "probe": "GET /api/v1/subscriptions/transactions/search?account_id=114 — individual txs[]",
+      "result": "pass_with_prerequisites",
+      "evidence": "tx_search_sql_filters_and_pagination_meta PASS; UI Transactions mode + pagination in code; live GET tx-search HTTP 404 pre-deploy"
+    },
+    {
+      "id": "AC2-FILTERS",
+      "row": "AC-2",
+      "probe": "Transactions mode — category + Geldbereich + date filters narrow results",
+      "result": "pass_with_prerequisites",
+      "evidence": "CategoryFilter, Geldbereich, date range, payee filters in UI + API; integration filter assertions PASS; live blocked"
+    },
+    {
+      "id": "AC3-HINT",
+      "row": "AC-3",
+      "probe": "Account 114 SEPA-Lastschrift — hint badge on tx rows",
+      "result": "pass_with_prerequisites",
+      "evidence": "tx_search_hint_attachment_without_pending_emit PASS; hint badge UI L766-776; account 114 live fixture deferred post-deploy"
+    },
+    {
+      "id": "AC4-CONFIRM",
+      "row": "AC-4",
+      "probe": "Multi-select txs → preview-group → confirm subscription",
+      "result": "pass_with_prerequisites",
+      "evidence": "preview_group_* tests PASS; multi-select ≥2 → txPreviewMutation → confirm modal in UI; live blocked"
+    },
+    {
+      "id": "AC5-REGRESSION",
+      "row": "AC-5",
+      "probe": "Patterns tab + tags/majority + pending detection unchanged",
+      "result": "pass",
+      "evidence": "reg_discover_candidate_pass_unchanged_ac5 PASS; Suggested patterns sub-tab preserved DEC-0098; discover API 200 account 114"
+    },
+    {
+      "id": "AC6-OIDC",
+      "row": "AC-6",
+      "probe": "/subscriptions Discover OIDC smoke on external profile",
+      "result": "pass_with_prerequisites",
+      "evidence": "GET /health 200; GET discover 200; /subscriptions 404 pre-deploy SPA; OIDC browser smoke deferred BACKEND_FRONTEND_DEPLOY"
+    }
+  ],
+  "automated_checks": {
+    "cargo_lib": "pass",
+    "us0021_integration": "pass",
+    "npm_test": "pass",
+    "npm_build": "pass"
+  },
+  "uat_counts": {
+    "pass": 1,
+    "pass_with_prerequisites": 5,
+    "fail": 0,
+    "pending": 0,
+    "total": 6
+  }
+}

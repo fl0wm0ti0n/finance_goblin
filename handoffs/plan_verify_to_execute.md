@@ -1,3 +1,143 @@
+# Plan-verify handoff — BUG-0024 / Q0033
+
+**From:** QA (`/plan-verify`)  
+**To:** Dev (`/execute`)  
+**Date:** 2026-06-13  
+**Bug:** BUG-0024  
+**Sprint:** Q0033 (`/quick`)  
+**Orchestrator:** `auto-20260613-bug0024`  
+**Verdict:** **APPROVED**
+
+## Summary
+
+Plan-verify for **Q0033** / **BUG-0024** against `docs/product/acceptance.md` rows **BR**, **BS**, `docs/engineering/architecture.md` § BUG-0024, **DEC-0082**, and **R-0096**. Sprint-plan artifacts materialized under `sprints/quick/Q0033/`. Both acceptance rows trace to five mandatory P0 tasks (H1, F1, T1, G1, V1) with decision alignment verified; frozen frontend-only blast radius matches architecture. **Execute approved.**
+
+## Verdict
+
+| Check | Result |
+|-------|--------|
+| Sprint artifacts materialized | **PASS** |
+| Acceptance BR, BS mapped to sprint tasks | **PASS** — 2/2 rows |
+| DEC-0082 in sprint scope | **PASS** |
+| Architecture → tasks 1:1 | **PASS** |
+| Operator gates documented | **PASS** — FRONTEND_DEPLOY before V1 |
+| Frozen boundaries respected | **PASS** |
+| Dependency graph valid | **PASS** |
+| Runtime baseline (pre-execute) | **PASS** — npm 24/24; build PASS |
+| **Execute ready** | **YES** |
+
+## Coverage matrix
+
+| Row | Primary tasks | Decisions / gates | Covered |
+|-----|---------------|-------------------|---------|
+| **BS** | H1, F1, T1, G1, V1 | GATE-COPY-1, DEC-0082 | **Yes** |
+| **BR** | G1, V1 | GATE-DEPLOY-1, Q0031 regression | **Yes** |
+
+**Verified:** 2/2 acceptance rows · **5/5 mandatory tasks** traced · **0 gaps**
+
+## Execute order (frozen)
+
+`H1` → `F1 ∥ T1` → `G1` → operator **FRONTEND_DEPLOY** → `V1` verify-work.
+
+## Notes for dev (non-blocking)
+
+1. Add `shouldShowSolePlanDeleteHint` + `SOLE_PLAN_DELETE_HINT` to `planSelector.ts` per frozen architecture contract.
+2. Render inline hint **immediately below** Delete plan row in `PlanningPage.tsx` when predicate true (L667–687).
+3. **Do not** change `resolveDisplayedPlanId` / `isDeleteDisabled` — Q0031 selector must remain intact.
+4. Multi-plan active selection: keep existing tooltip; no inline hint when `plans.length >= 2`.
+5. T1 table-driven vitest cases per tasks.md; preserve existing 8/8 planSelector cases.
+6. uat.md/uat.json placeholders — populate at V1/verify-work.
+
+## Evidence
+
+- `sprints/quick/Q0033/plan-verify.json`
+- `sprints/quick/Q0033/plan-verify-findings.md`
+- `sprints/quick/Q0033/{sprint.json,task.json,tasks.md,sprint.md,uat.json,uat.md}`
+- `docs/product/acceptance.md` BUG-0024 rows BR–BS
+- `docs/engineering/architecture.md` § BUG-0024
+
+## Next phase
+
+**`/execute`** in fresh subagent/chat (role: dev).
+
+No `handoffs/qa_to_dev.md` — no blocking defects.
+
+`fresh_context_marker`: plan-verify-20260613-bug0024-qa-fresh  
+`runtime_proof_id`: runtime-proof-plan-verify-20260613-bug0024-001  
+`phase_boundary`: plan-verify → execute
+
+---
+
+# Plan-verify handoff — BUG-0026 / Q0032
+
+**From:** QA (`/plan-verify`)  
+**To:** Dev (`/execute`)  
+**Date:** 2026-06-13  
+**Bug:** BUG-0026  
+**Sprint:** Q0032 (`/quick`)  
+**Orchestrator:** `auto-20260613-bug0026`  
+**Verdict:** **APPROVED**
+
+## Summary
+
+Plan-verify for **Q0032** / **BUG-0026** against `docs/product/acceptance.md` rows **BZ**, **CA**, `docs/engineering/architecture.md` § BUG-0026, **DEC-0089**, and **R-0098**. Sprint-plan artifacts materialized under `sprints/quick/Q0032/`. Both acceptance rows trace to five mandatory P0 tasks (H1, F1, T1, G1, V1) with decision alignment verified; frozen blast radius matches architecture. **Execute approved.**
+
+## Verdict
+
+| Check | Result |
+|-------|--------|
+| Sprint artifacts materialized | **PASS** |
+| Acceptance BZ, CA mapped to sprint tasks | **PASS** — 2/2 rows |
+| DEC-0089 in sprint scope | **PASS** |
+| Architecture → tasks 1:1 | **PASS** |
+| Operator gates documented | **PASS** — FRONTEND_DEPLOY before V1 |
+| Frozen boundaries respected | **PASS** |
+| Dependency graph valid | **PASS** |
+| Runtime baseline (pre-execute) | **PASS** — cargo lib 221/221; npm 17/17 |
+| **Execute ready** | **YES** |
+
+## Coverage matrix
+
+| Row | Primary tasks | Decisions / gates | Covered |
+|-----|---------------|-------------------|---------|
+| **BZ** | H1, F1, T1, G1, V1 | GATE-MONTH-1, DEC-0089 | **Yes** |
+| **CA** | H1, F1, T1, G1, V1 | GATE-LABEL-1 | **Yes** |
+
+**Verified:** 2/2 acceptance rows · **5/5 mandatory tasks** traced · **0 gaps**
+
+## Execute order (frozen)
+
+`H1` → `F1 ∥ T1` → `G1` → operator **FRONTEND_DEPLOY** → `V1` verify-work.
+
+## Notes for dev (non-blocking)
+
+1. Replace `ForecastPage.tsx` L148–152 `series[0]` with `resolveForecastSummaryPoint`.
+2. Render `formatForecastSummarySubtitle` immediately **above** `.grid` card block (L312–330).
+3. **Do not** add `categoryId` to `monthlyQuery` key — DEC-0089 cards independent of category filter.
+4. Leave `MonthlyChart.tsx` unchanged — full series plot.
+5. T1 partialMonthTrap fixture frozen: June income 0.00 → July 3266.16.
+6. uat.md/uat.json placeholders — populate at V1/verify-work.
+
+## Evidence
+
+- `sprints/quick/Q0032/plan-verify.json`
+- `sprints/quick/Q0032/plan-verify-findings.md`
+- `sprints/quick/Q0032/{sprint.json,task.json,tasks.md,sprint.md,uat.json,uat.md}`
+- `docs/product/acceptance.md` BUG-0026 rows BZ–CA
+- `docs/engineering/architecture.md` § BUG-0026
+
+## Next phase
+
+**`/execute`** in fresh subagent/chat (role: dev).
+
+No `handoffs/qa_to_dev.md` — no blocking defects.
+
+`fresh_context_marker`: plan-verify-20260613-bug0026-qa-fresh  
+`runtime_proof_id`: runtime-proof-plan-verify-20260613-bug0026-001  
+`phase_boundary`: plan-verify → execute
+
+---
+
 # Plan-verify handoff — BUG-0021 / Q0029
 
 **From:** QA (`/plan-verify`)  

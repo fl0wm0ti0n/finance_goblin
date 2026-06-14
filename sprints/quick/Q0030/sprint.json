@@ -1,0 +1,105 @@
+{
+  "id": "Q0030",
+  "type": "quick",
+  "bug_ids": ["BUG-0023"],
+  "status": "PLANNED",
+  "created": "2026-06-12",
+  "goal": "Close BUG-0023 live regression: Bitunix futures wallet ingest hardening (BO1-BO3); display-only linear exposure_eur from entryValue without DEC-0064 subtotal amend (BP1-BP2); baseline + total_return_pct verify when wallet priced (BQ1); integration tests + operator verify-work for BO/BP/BQ gates.",
+  "scope": [
+    "BO1: bitunix.rs parse_futures_wallet equity keys + unrealized key fix",
+    "BO2: JSON code==0 validation + parse-skip warn diagnostics",
+    "BO3: OpenAPI wiremock + unit tests for wallet ingest",
+    "BP1: migration 017_exposure_eur + pnl.rs entryValue to exposure_eur persist",
+    "BP2: wealth/service.rs holdings_all.value_eur from market_value_eur.or(exposure_eur)",
+    "BQ1: portfolio/service.rs baseline capture + total_return_pct integration verify",
+    "T1: backend/tests bug0023 regression BO/BP/BQ",
+    "G1: cargo test + npm build automated gate",
+    "V1: verify-work BO/BP/BQ operator smoke + OIDC regression"
+  ],
+  "risks": [
+    "Live wallet shape differs from OpenAPI — BO2 warn diagnostics mandatory pre-V1",
+    "Equity still zero after key fix — log derived components; do not AP2-mask",
+    "entryValue may differ from operator mark — accept D1 contract; release note",
+    "Baseline never captured if wallet intermittently NULL — BO must be stable before BQ",
+    "Migration 017 on production — nullable column; backward compatible",
+    "BP1+BO3 same release — deploy order BO then sync then BP verify"
+  ],
+  "task_count": 9,
+  "mandatory_task_count": 9,
+  "conditional_task_ids": [],
+  "optional_task_ids": [],
+  "estimate_total_hours": 15.5,
+  "decisions": ["DEC-0064", "DEC-0080", "DEC-0081", "DEC-0038"],
+  "research": ["R-0093"],
+  "acceptance_rows": ["BO", "BP", "BQ"],
+  "user_guide_mode": {
+    "enabled": true,
+    "waived": true,
+    "reason": "bug regression fix; no new operator workflow; V1 release note for entryValue vs mark gap if questioned"
+  },
+  "execute_order": ["BO1", "BO2", "BO3", "BP1", "BP2", "BQ1", "T1", "G1", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Rebuild backend with BO+BP fixes; apply migration 017_bug0023_exposure_eur.sql"
+    },
+    {
+      "id": "EXCHANGE_SYNC",
+      "before_tasks": ["V1"],
+      "description": "Bitunix full/exchange sync success after deploy"
+    },
+    {
+      "id": "PNL_RECOMPUTE",
+      "before_tasks": ["V1"],
+      "description": "Trigger post-sync PnL recompute (existing scheduler path) so exposure_eur and wallet market_value_eur populate"
+    },
+    {
+      "id": "AP1_SQL_PROBE",
+      "before_tasks": ["V1"],
+      "description": "Optional SQL probe on exchange_holdings per architecture § BUG-0023 operator gates"
+    }
+  ],
+  "acceptance_mapping": {
+    "BO": {
+      "tasks": ["BO1", "BO2", "BO3", "T1", "G1", "V1"],
+      "verify": "futures wallet row with market_value_eur; crypto.subtotal_eur and bitunix card ~operator portfolio ~EUR2000 order of magnitude; not EUR0 with 11 linear positions"
+    },
+    "BP": {
+      "tasks": ["BP1", "BP2", "T1", "G1", "V1"],
+      "verify": "holdings_all[].value_eur non-null for linear from exposure_eur; market_value_eur remains NULL for linear; subtotal_eur wallet-only unchanged"
+    },
+    "BQ": {
+      "tasks": ["BQ1", "T1", "G1", "V1"],
+      "verify": "pnl.total_return_pct non-null when baseline captured and crypto_value_eur > 0; not em dash while unrealized EUR non-zero"
+    }
+  },
+  "waived_ops_only": {
+    "tier2_mark_price": "ExchangePriceBook / mark-price feed out of scope",
+    "subtotal_merge_notional": "DEC-0064 forbids merging linear exposure into subtotal",
+    "bug0014_ap2_fallback": "Defensive subtotal snapshot fallback rejected",
+    "grafana_panel_edits": "No Grafana SQL changes",
+    "holdings_count_footnote": "P2 optional UX footnote out of scope"
+  },
+  "deploy_order": [
+    "BO1 equity + unrealized key parse",
+    "BO2 code==0 validation + logging",
+    "BO3 wiremock tests",
+    "BP1 migration + pnl exposure_eur",
+    "BP2 wealth service value_eur map",
+    "BQ1 baseline + total_return verify",
+    "T1 regression tests",
+    "G1 automated gate",
+    "BACKEND_DEPLOY",
+    "EXCHANGE_SYNC",
+    "PNL_RECOMPUTE",
+    "V1 verify-work smoke"
+  ],
+  "rollback": "git revert bitunix/pnl/wealth changes; migration 017 nullable column safe to leave; re-sync restores prior state",
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260612-q0030-bug0023",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0023",
+  "spec_pack_ref": "docs/engineering/spec-pack/BUG-0023-technical-specification.md",
+  "orchestrator_run_id": "auto-20260612-bug0023"
+}

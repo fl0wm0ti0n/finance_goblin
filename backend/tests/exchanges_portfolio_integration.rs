@@ -50,7 +50,7 @@ async fn exchanges_portfolio_integration() {
     .await
     .expect("upsert holdings");
 
-    repo.update_holding_eur("binance", "BTC", "spot", Some(5000.0), None, None)
+    repo.update_holding_eur("binance", "BTC", "spot", Some(5000.0), None, None, None)
         .await
         .expect("update eur");
 

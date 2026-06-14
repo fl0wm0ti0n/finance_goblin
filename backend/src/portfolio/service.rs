@@ -56,13 +56,6 @@ impl PortfolioEngine {
         let breakdown = compute_hybrid_pnl(&exchange_repo, fx, &price_book).await?;
 
         let baseline_svc = BaselineService::new(exchange_repo.clone());
-        let baseline = baseline_svc.total_baseline_eur().await?;
-        let total_return_pct = if baseline > 0.0 {
-            Some(((breakdown.crypto_value_eur - baseline) / baseline) * 100.0)
-        } else {
-            None
-        };
-
         for exchange_id in ["binance", "bybit", "bitunix"] {
             let holdings = exchange_repo.load_all_holdings().await?;
             let exchange_total: f64 = holdings
@@ -76,6 +69,13 @@ impl PortfolioEngine {
                     .await?;
             }
         }
+
+        let baseline = baseline_svc.total_baseline_eur().await?;
+        let total_return_pct = if baseline > 0.0 {
+            Some(((breakdown.crypto_value_eur - baseline) / baseline) * 100.0)
+        } else {
+            None
+        };
 
         let today = Utc::now().date_naive();
         let payload = serde_json::json!({

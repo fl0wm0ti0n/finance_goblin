@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+declare const __BUILD_ID__: string;
+declare const __RELEASE_TAG__: string;
+
 interface ImportMetaEnv {
   readonly VITE_OIDC_AUTHORITY: string;
   readonly VITE_OIDC_CLIENT_ID: string;

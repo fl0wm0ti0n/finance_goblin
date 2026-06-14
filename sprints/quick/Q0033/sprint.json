@@ -1,0 +1,74 @@
+{
+  "id": "Q0033",
+  "type": "quick",
+  "bug_ids": ["BUG-0024"],
+  "status": "PLANNED",
+  "created": "2026-06-13",
+  "goal": "Close BUG-0024 plan delete UX: sole-plan inline hint when delete disabled (H1/F1 BS); preserve Q0031 multi-plan delete (BR); vitest predicate (T1); automated gate (G1); operator verify-work BR/BS on /planning + OIDC (V1). Frontend-only; DEC-0082 intact.",
+  "scope": [
+    "H1: planSelector.ts — shouldShowSolePlanDeleteHint + SOLE_PLAN_DELETE_HINT constant",
+    "F1: PlanningPage.tsx — inline help text below Delete plan row when predicate true",
+    "T1: planSelector.test.ts — table-driven sole-plan predicate cases",
+    "G1: npm test + npm run build automated gate",
+    "V1: verify-work /planning BR/BS + OIDC smoke post-FRONTEND_DEPLOY"
+  ],
+  "risks": [
+    "Hint shown when delete unexpectedly enabled — predicate requires activePlanIsSelected === true",
+    "Copy clutter on multi-plan active selection — gated on plans.length === 1 only",
+    "Omniflow BR fails post-deploy — verify bundle/version stamp before selector regression hunt",
+    "Tooltip-only BS closure — inline element required not title alone",
+    "Reopening BUG-0022 — explicit out-of-scope; selector verified PASS on localhost"
+  ],
+  "task_count": 5,
+  "mandatory_task_count": 5,
+  "conditional_task_ids": [],
+  "optional_task_ids": [],
+  "estimate_total_hours": 4.5,
+  "decisions": ["DEC-0082"],
+  "research": ["R-0096"],
+  "acceptance_rows": ["BR", "BS"],
+  "user_guide_mode": {
+    "enabled": true,
+    "waived": true,
+    "reason": "UX copy fix; no new operator workflow"
+  },
+  "execute_order": ["H1", "F1", "T1", "G1", "V1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Rebuild frontend — Q0031/Q0032 bundles + sole-plan hint must be live for omniflow BR/BS smoke"
+    }
+  ],
+  "acceptance_mapping": {
+    "BS": {
+      "tasks": ["H1", "F1", "T1", "G1", "V1"],
+      "verify": "Sole active plan: delete disabled + inline hint describing create→activate→delete workflow — not silent gray button"
+    },
+    "BR": {
+      "tasks": ["G1", "V1"],
+      "verify": "2+ plans: non-active selected → Delete enabled → confirm removes plan — localhost PASS; omniflow after FRONTEND_DEPLOY"
+    }
+  },
+  "waived_ops_only": {
+    "backend_delete_api": "No backend change — GATE-SCOPE-1 frontend-only; DEC-0082 409 unchanged",
+    "create_plan_api": "No create-plan API change — hint references existing create affordance",
+    "playwright": "0 spec files — defer to V1 operator smoke",
+    "new_dec": "GATE-DEC-1 closed — no new DEC"
+  },
+  "deploy_order": [
+    "H1 planSelector helper + copy constant",
+    "F1 PlanningPage inline hint wire",
+    "T1 vitest sole-plan cases",
+    "G1 automated gate",
+    "FRONTEND_DEPLOY",
+    "V1 verify-work smoke"
+  ],
+  "rollback": "git revert planSelector.ts + PlanningPage.tsx delta; frontend-only — no migration",
+  "next_phase": "execute",
+  "sprint_plan_ref": "sprint-plan-20260613-bug0024-q0033",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0024",
+  "spec_pack_ref": "docs/engineering/spec-pack/BUG-0024-technical-specification.md",
+  "orchestrator_run_id": "auto-20260613-bug0024"
+}

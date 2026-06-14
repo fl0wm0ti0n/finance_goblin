@@ -23,6 +23,10 @@ At the end of `/resume`, append an isolation evidence entry to
 - `evidence_ref=docs/engineering/state.md` (resume resolution summary and next-phase recommendation)
 
 ## Inputs
+
+- **Narrow-read (US-0053 / US-0096 Tranche A)**: Start at docs/engineering/phase-context.md
+  and the story section anchor in vision/architecture/decisions when a heading exists; forbid
+  full-file reads when a section heading exists.
 - `docs/engineering/state.md`
 - `docs/engineering/decisions.md`
 - `sprints/S0001/summary.md`

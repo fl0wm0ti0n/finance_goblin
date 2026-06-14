@@ -1,0 +1,78 @@
+{
+  "sprint_id": "S0021",
+  "story_id": "US-0022",
+  "phase": "plan-verify",
+  "verdict": "PASS",
+  "status": "approved",
+  "created": "2026-06-14",
+  "verified_at": "2026-06-14T18:51:00Z",
+  "acceptance_coverage": {
+    "AC-1": {
+      "tasks": ["F3", "G1", "V1"],
+      "status": "covered",
+      "notes": "Subtle stamp in AppLayout sidebar-footer; does not dominate primary UX"
+    },
+    "AC-2": {
+      "tasks": ["F3", "V1"],
+      "status": "covered",
+      "notes": "Hover/focus tooltip reveals release tag + build id + build timestamp (UTC)"
+    },
+    "AC-3": {
+      "tasks": ["B1", "T1", "G1", "V1"],
+      "status": "covered",
+      "notes": "GET /api/v1/meta/build-info returns {build_id, release_tag, build_timestamp}; no secrets"
+    },
+    "AC-4": {
+      "tasks": ["B2", "F1", "F2", "G1"],
+      "status": "covered",
+      "notes": "Docker ARG chain + Vite define inject build id at compile time"
+    },
+    "AC-5": {
+      "tasks": ["F4", "F5", "V1"],
+      "status": "covered",
+      "notes": "On-mount stale detection: mismatch → banner + reload CTA; no false positive when ids match"
+    },
+    "AC-6": {
+      "tasks": ["B1", "G1", "V1"],
+      "status": "covered",
+      "notes": "/health liveness unchanged; OIDC external profile smoke pass; no env secrets in metadata"
+    }
+  },
+  "task_traceability": {
+    "B1": {"status": "traced", "acceptance": ["AC-3"], "gate": "GATE-META-1"},
+    "B2": {"status": "traced", "acceptance": ["AC-4"], "gate": "GATE-BUILD-1"},
+    "F1": {"status": "traced", "acceptance": ["AC-4"], "gate": "architecture (Vite define)"},
+    "F2": {"status": "traced", "acceptance": ["AC-4"], "gate": "architecture (TS declarations)"},
+    "F3": {"status": "traced", "acceptance": ["AC-1", "AC-2"], "gate": "GATE-UI-1"},
+    "F4": {"status": "traced", "acceptance": ["AC-5"], "gate": "GATE-STALE-1"},
+    "F5": {"status": "traced", "acceptance": ["AC-5"], "gate": "architecture (non-blocking banner)"},
+    "T1": {"status": "traced", "acceptance": ["AC-3"], "gate": "GATE-TEST-1"},
+    "G1": {"status": "traced", "acceptance": ["all"], "gate": "architecture (quality gate)"},
+    "R1": {"status": "traced", "acceptance": [], "gate": "USER_GUIDE_MODE=1"},
+    "V1": {"status": "traced", "acceptance": ["AC-6"], "gate": "architecture (verify-work + OIDC smoke)"}
+  },
+  "gates": {
+    "GATE-META-1": {"status": "frozen", "traced_to": ["B1"], "notes": "Dedicated /api/v1/meta/build-info, not extend /health"},
+    "GATE-BUILD-1": {"status": "frozen", "traced_to": ["B2"], "notes": "Git short sha + release tag + UTC timestamp"},
+    "GATE-STALE-1": {"status": "frozen", "traced_to": ["F4"], "notes": "On-mount fetch only, no periodic poll"},
+    "GATE-UI-1": {"status": "frozen", "traced_to": ["F3"], "notes": "AppLayout sidebar-footer, subtle by default"}
+  },
+  "decisions": {
+    "DEC-0038": {"status": "aligned", "notes": "Phase boundary: sprint-plan → plan-verify → execute"},
+    "GATE-DEC-1": {"status": "closed", "notes": "No new DEC required; all gates are implementation-level"}
+  },
+  "baselines": {
+    "cargo_lib": "221/221",
+    "npm_test": "31/31",
+    "build": "PASS"
+  },
+  "gaps": [],
+  "orphans": [],
+  "gap_count": 0,
+  "orphan_count": 0,
+  "task_count": 11,
+  "acceptance_count": 6,
+  "gate_count": 4,
+  "next_phase": "execute",
+  "next_role": "dev"
+}

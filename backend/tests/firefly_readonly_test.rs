@@ -107,7 +107,8 @@ async fn sync_uses_get_only_against_mock_firefly() {
     let client = FireflyClient::new(&cfg.firefly, pool.clone());
 
     let _ = flow_finance_ai::firefly::sync::sync_reference_entities(&client, &pool).await;
-    let _ = flow_finance_ai::firefly::sync::sync_transactions(&client, &pool, 7).await;
+    let _ =
+        flow_finance_ai::firefly::sync::sync_transactions(&client, &pool, 7, "scheduled").await;
 
     let received = mock.received_requests().await.unwrap();
     assert!(!received.is_empty(), "expected GET requests to mock Firefly");

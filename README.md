@@ -15,6 +15,9 @@ backend, React frontend, and provisioning under the its-magic phased workflow.
 
 Recent closed work (newest first). Full history: [`docs/product/backlog.md`](docs/product/backlog.md).
 
+- US-0021 — Subscription tx explorer: dual-mode Discover, rich filters, hint badges, multi-select activate (S0020)
+- BUG-0022 — Plan delete selector regression: selectedPlanId-first resolution + planSelector vitest delete enablement (Q0031)
+- BUG-0023 — Crypto wealth EUR values: Bitunix wallet ingest hardening + exposure_eur display + baseline return ordering (Q0030)
 - BUG-0021 — Frontend UX polish: static CategoryFilter on Forecast/Wealth + wealth Role column COALESCE/labels (Q0029)
 - BUG-0018 — Alert evaluation SQL: qualify `fbd.balance` in `evaluate_scarcity` to fix PostgreSQL 42702 (Q0026)
 - BUG-0017 — Post-sync forecast recompute: audit CHECK migration, FK CASCADE retention, ForecastPage loading guard (Q0025)

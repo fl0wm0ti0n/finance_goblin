@@ -8,1401 +8,6 @@ Flow Finance AI is a self-hosted analytics layer on Firefly III. **US-0001** del
 
 ---
 
-# BUG-0019 — Grafana metrics wrong (cashflow zeros, sync entity counts)
-
-**Status:** architecture complete (2026-06-10)  
-**Discovery:** `discovery-20260610-bug0019` in `handoffs/po_to_tl.md`  
-**Research:** [R-0089](research.md#r-0089--bug-0019-grafana-cashflow-zeros-account_id-default--sync-entity-counts-per-run-cursor)  
-**Decisions:** **DEC-0108** (provisioning-only fix); extends **DEC-0107** (separate read path — unchanged)  
-**Acceptance:** `docs/product/acceptance.md` rows **BG** (CA), **BH** (CB)
-
-### Root cause (frozen, R-0089)
-
-- **CA:** `$account_id` variable `"sort": 1` re-sorts options alphabetically after the SQL `ABS(balance) DESC` order → default becomes unfunded Cash wallet (116, all-zero rows) instead of funded 114 (731 non-zero rows); no `current` set, kiosk embed passes no `var-account_id`. Query/selection problem — data for 114 is non-zero. Same latent defect in `forecast-horizons.json`.
-- **CB:** `platform-health.json` panel 2 reads `sync_cursors.records_synced` verbatim; `upsert_cursor` overwrites it with the **per-run** window count → 0-new-tx incremental run writes `transactions: 0` vs 922 mirror rows. Panel semantics wrong, cursor semantics correct.
-- **Not root cause:** embed transport (BUG-0001B fixed), retention race (rows inserted before `mark_success`; retention deletes only old successes), data-side zeros for 114.
-
-### Architecture contract (DEC-0108) — provisioning-only
-
-| Change | File | Detail |
-|--------|------|--------|
-| CA-1 | `grafana/provisioning/dashboards/analytics/cashflow.json` | `$account_id` variable `"sort": 0` + add `current` (first option); bump `version` |
-| CA-2 | same file, panels 1–3 | latest-success subquery gains `AND model_kind = 'baseline'` (align with API default) |
-| CA-3 | `grafana/provisioning/dashboards/analytics/forecast-horizons.json` | `$account_id` `"sort": 0` + `current`; bump `version` (panels already filter `$forecast_variant`) |
-| CB-1 | `grafana/provisioning/dashboards/platform-health.json` panel 2 | replace `rawSql` with per-entity mirror `COUNT(*)` UNION ALL (transactions, accounts, categories, budgets, tags, piggy_banks) LEFT JOIN `sync_cursors` for `last_successful_sync_at`; bump `version`; full SQL sketch in DEC-0108 |
-
-**Forbidden:** backend/frontend/migration edits (`upsert_cursor`, `sync_transactions`, `AnalyticsEmbedPage.tsx`); hardcoding account id 114.
-
-**Rejected alternatives:** embed-forwarded `var-account_id` (coupling, deferrable); household SUM panels (changes BG meaning); cumulative `records_synced` (overlap re-fetch overcounts); backend `total_records` column (duplicates live SQL). Full table: DEC-0108.
-
-### Deploy / operator steps
-
-1. Apply the three JSON edits; bump each dashboard `version`.
-2. **Re-provision Grafana:** `docker compose restart grafana` (provisioning reload required — JSON dashboards are loaded at startup/scan interval).
-3. Verify via kiosk embed (`AnalyticsEmbedPage`) **and** direct Grafana URL (covers no-`var-account_id` path).
-4. Rollback: `git revert` of the JSON files + Grafana restart (no schema/data state).
-
-### Verification gates
-
-| Gate | Proof |
-|------|-------|
-| **BG** | Cashflow panels 1–2 non-zero (negative) for default account = 114; matches `GET /api/v1/forecast/monthly?account_id=114` (25 points, non-zero from Jul 2026) |
-| **BH** | Platform Health `transactions` = `SELECT COUNT(*) FROM transactions` (922) after Full sync **and** after a subsequent 0-new-tx incremental run |
-| Static | JSON checks: `account_id` `sort: 0` in both dashboards; platform-health panel 2 SQL references mirror tables |
-| OIDC | Re-run BG/BH on omniflow profile (provisioning-only blast radius) |
-
-### Risks
-
-| Risk | Mitigation |
-|------|------------|
-| Cached dashboard after provisioning edit | Restart Grafana + `version` bump |
-| Fresh install (all balances 0) → arbitrary default account | Acceptable; runbook note |
-| `model_kind='baseline'` freezes cashflow panels off ML | Accepted; future `$forecast_variant` wiring per R-0051 |
-| Mirror COUNT(*) ≠ "synced" if Firefly-side deletions linger | BH specifies mirror truth; reconciliation out of scope |
-
-**Out of scope (flag to PO):** 43 `ml_enhanced` computations stuck `status='running'` accumulate unbounded (retention prunes successes only) — recommend new backlog bug.
-
-`isolation_scope`: artifact + repo source reads only; no host `.env` / secrets read.
-
----
-
-# BUG-0018 — Alert evaluation SQL failure (balance ambiguous)
-
-**Status:** architecture complete (2026-06-10)  
-**Full section:** `docs/engineering/architecture-archive/architecture-pack-20260609-a.md` § BUG-0018  
-**Decisions:** **DEC-0107** · **Sprint:** `/quick` **Q0026** (PLANNED — BE1 + T1 + V1) · **Acceptance:** BE, BF
-
----
-
-# BUG-0016 — SPA deep links return HTTP 404
-
-**Status:** architecture complete (2026-06-09)  
-**Discovery:** `discovery-20260609-bug0016` in `handoffs/archive/po-to-tl-pack-20260609-a.md`  
-**Research:** [R-0086](research.md#r-0086--bug-0016-spa-deep-link-fallback-axum-vs-traefik)  
-**Decisions:** **DEC-0104** (Axum SPA `index.html` fallback); extends **DEC-0057** (Grafana proxy ordering — unchanged); **no Traefik label change**  
-**Sprint:** `/quick` **Q0024** (PLANNED — AX1 + AX2 + V1)  
-**Acceptance:** `docs/product/acceptance.md` row **AX** (execute: **AX1**, **AX2**, **V1**)  
-**Spec-pack:** `docs/engineering/spec-pack/BUG-0016-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
-**Related:** UI-001 (UI audit curl evidence); BUG-0009 (analytics 404 advisory superseded for shell routing only)
-
-### Root cause (frozen)
-
-`build_router` merges `health`, `analytics::grafana_routes`, and `api::routes` before a `tower_http::ServeDir` fallback — ordering is correct per R-0056 / **DEC-0057**. The defect is the fallback itself: plain `ServeDir` returns **404** when no file exists at the request path (e.g. `/forecast`). `/` works because `index.html` exists at the directory root; client-side sidebar navigation works because the shell is already loaded.
-
-**Not root cause:** React Router misconfiguration, page components, Traefik host rules, or OIDC redirect handling.
-
-`isolation_scope`: artifact + repo source reads; no host `.env` / `.env_prod` secrets read.
-
-### Architecture contract (DEC-0104)
-
-```text
-BUG-0016
-├── AX1 — SPA fallback in build_router (P0)
-│   └── ServeDir::fallback(ServeFile::new(index.html)) → HTTP 200
-├── AX2 — Integration tests (P0)
-│   └── Deep links 200; /api/v1/* and /analytics/grafana/* ≠ HTML
-└── V1 — verify-work curl + browser smoke (P0)
-    └── AX matrix on :18080; omniflow hard-refresh; OIDC /callback
-```
-
-**Deploy:** Single backend change; rebuild `flow-finance-ai` image. No Traefik label edits (R-0086 §5).
-
-### Route ordering (must-not-break)
-
-| Order | Prefix | Handler | SPA fallback? |
-|-------|--------|---------|---------------|
-| 1 | `/health` | `health::routes` | No |
-| 2 | `/analytics/grafana/*` | `analytics::grafana_routes` (**DEC-0057**) | No — proxy JSON/assets/WebSocket |
-| 3 | `/api/v1/*` | `api::routes` (JWT when OIDC on) | No — JSON 404/401 preserved |
-| 4 | * | `ServeDir` + `index.html` fallback | Yes — client routes + `/callback` |
-
-**`/callback`:** No Axum redirect or catch-all rewrite to `/`. Serving `index.html` at `/callback` is correct — `App.tsx` registers `/callback` outside `ProtectedRoute` for OIDC token exchange.
-
-### Implementation contract
-
-```rust
-use tower_http::services::{ServeDir, ServeFile};
-
-let index = static_dir.join("index.html");
-let spa = ServeDir::new(static_dir).fallback(ServeFile::new(index));
-router = router.fallback_service(spa);
-```
-
-| API | Status on deep link | Use? |
-|-----|---------------------|------|
-| `ServeDir::fallback(ServeFile::new(index.html))` | **200** | **Yes** — matches AX |
-| `ServeDir::not_found_service(ServeFile::new(index.html))` | **404** (body = index.html) | **No** |
-| Plain `ServeDir` (current) | **404** empty | Current bug |
-
-Apply identically to the `frontend/dist` dev branch.
-
-### Regression matrix (acceptance AX)
-
-**Primary AX paths (curl — localhost `:18080`, `AUTH_DEV_BYPASS`):**
-
-| Path | Expected after fix |
-|------|-------------------|
-| `GET /forecast` | 200, `text/html`, body contains `<div id="root">` or Vite shell marker |
-| `GET /subscriptions` | 200 HTML shell |
-| `GET /planning` | 200 HTML shell |
-| `GET /sync` | 200 HTML shell |
-| `GET /analytics/cashflow` | 200 HTML shell |
-
-**Expanded same-contract paths:** `/wealth`, `/alerts`, `/chat`, `/settings`, `/analytics/{platform-health,budgets,portfolio,subscriptions,forecast-horizons}`.
-
-**Protected prefixes (must stay non-HTML):**
-
-| Path | Expected |
-|------|----------|
-| `GET /api/v1/health` or representative API route | JSON, not HTML |
-| `GET /analytics/grafana/api/health` | Proxy response, not SPA index |
-| `GET /assets/{hashed}.js` | 200 static file with correct `Content-Type` |
-| `GET /api/v1/nonexistent` | JSON 404, not `index.html` |
-
-**Browser smoke (operator):** Hard-refresh Forecast, Planning, Analytics embed; bookmark reopen; omniflow with Traefik `auth` + optional OIDC; `/callback?code=…&state=…` completes.
-
-### Alternatives rejected
-
-| Alternative | Why rejected |
-|-------------|--------------|
-| Traefik catch-all / nginx sidecar | Duplicate responsibility; no acceptance gain (R-0086 §2) |
-| `not_found_service` | 404 status fails AX curl gate |
-| Redirect unknown paths to `/` | Breaks bookmarked URLs |
-| Backend `/callback` handler | Conflicts with React OIDC flow |
-| `axum_extra::SpaRouter` | Unnecessary nesting; Vite already emits `/assets/*` at root |
-
-### Risks
-
-| Risk | Mitigation |
-|------|------------|
-| API paths receive `index.html` | Preserve merge order; AX2 integration test |
-| Grafana proxy swallowed by SPA | `grafana_routes` before fallback; test `/analytics/grafana/…` |
-| `index.html` missing in image | Dockerfile copies `dist` → `/app/static` |
-| Traefik `/analytics/*` no-auth exposes SPA slug | Pre-existing US-0011 tradeoff; document, do not widen |
-| OIDC `/callback` broken by redirect | Do not add `Redirect` fallback |
-
-### Decisions
-
-| ID | Topic | Summary |
-|----|-------|---------|
-| **DEC-0104** | SPA fallback | Axum-only; `ServeDir::fallback(ServeFile)` → HTTP 200; Traefik pass-through |
-
-Full record: `decisions/DEC-0104.md`
-
-### Acceptance mapping
-
-| Row | Tasks | Verify |
-|-----|-------|--------|
-| **AX** | AX1, AX2, V1 | Curl matrix + browser smoke + OIDC `/callback` |
-
-### Next phase
-
-`/plan-verify` — audit Q0024 acceptance AX coverage; then `/execute`.
-
----
-
-## US-0016 — Root README for operators and contributors (living documentation)
-
-**Status:** Architecture complete (2026-06-08)  
-**Discovery:** `discovery-20260608-us0016` in `handoffs/po_to_tl.md`  
-**Research:** [R-0066](research.md#r-0066--root-readme-split-layout-and-living-doc-maintenance), [R-0067](research.md#r-0067--us-0016-root-readme-research-template-parity-product-status-maintenance-hooks)  
-**Decisions:** **DEC-0070** (template parity posture, Product status placement, maintenance hooks); extends doc-profile split layout (US-0077 / runbook § documentation profile validation)  
-**Sprint:** Single sprint recommended (~6–8 tasks) under `SPRINT_MAX_TASKS` (12)  
-**Acceptance:** `docs/product/acceptance.md` § US-0016 (6 rows)  
-**Spec-pack:** `docs/engineering/spec-pack/US-0016-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
-**User-guide:** No per-story guide required; root README links `docs/user-guides/` when `USER_GUIDE_MODE=1` (`docs/user-guides/US-xxxx.md` schema per US-0032)
-
-### Problem
-
-Root `README.md` is **missing**. First clone fails `validate_doc_profile.py` with `README.md missing`. Operators and contributors lack a single entry document for product purpose, compose Quickstart, and doc navigation. The living-doc promise requires curated status updates at phase boundaries without per-commit automation or backlog duplication.
-
-`isolation_scope`: artifact + repo source only; no host `.env` / secrets read.
-
-### Architecture contract (DEC-0070)
-
-```text
-US-0016
-├── R1 — Root README split layout (P0)
-│   └── README.md: 5 user H2s + ## Contributing; Flow Finance AI content
-├── R2 — Product status subsection (P0)
-│   └── ### Product status under ## Purpose; 8 bullets max; backlog link
-├── R3 — Related documentation + compose (P0)
-│   └── user-guides, runbook, spec paths; minimal/bundled-firefly/external commands
-├── R4 — Validator + CI gate (P0)
-│   └── validate_doc_profile --no-template-parity until template/ ships
-├── R5 — Runbook maintenance hooks (P0)
-│   └── § README maintenance (US-0016); release + refresh-context checklist
-├── R6 — Developer shard pointer (P1)
-│   └── docs/developer/README.md workflow note
-└── T1 — Template flip gate (deferred)
-    └── Drop --no-template-parity when full template/ tree lands (out of US-0016 default execute)
-```
-
-**Out of scope:** Full `template/` installer mirror; auto-README on every commit; its-magic framework manual; application code changes.
-
-### R1 — Split layout (frozen)
-
-Active profile: `DOC_AUDIENCE_PROFILE=both`, `DOC_DETAIL_LEVEL=balanced` (merged scratchpad).
-
-| Surface | Required elements |
-|---------|-------------------|
-| Root `README.md` | H2: `Purpose`, `Quickstart`, `Examples`, `Limitations`, `Related documentation` (exact titles per `doc_profile_lib.USER_KEY_TO_H2`) |
-| Root pointer | `## Contributing` → [`docs/developer/README.md`](docs/developer/README.md) |
-| Forbidden in root | Any `DEV_*` H2 titles (`doc_profile_lib.dev_h2_forbidden_in_root`) |
-| Developer shard | `DEV_PREREQS`, `DEV_WORKFLOW`, `DEV_QUALITY_GATES`, `DEV_ARCHITECTURE` in `docs/developer/README.md` only |
-
-**H2 budget:** `count_profile_root_h2s` counts required `USER_*` titles only — `## Contributing` and extra H2s do not consume budget ([R-0067](research.md#r-0067--us-0016-root-readme-research-template-parity-product-status-maintenance-hooks) §2). For `(both, balanced)`: 5 required user H2s vs budget 8.
-
-**Content sources ([R-0066](research.md#r-0066--root-readme-split-layout-and-living-doc-maintenance)):**
-
-| Section | Source |
-|---------|--------|
-| Purpose | Product value proposition; link backlog for history |
-| Quickstart | Compose profiles from `.env.example` (minimal, bundled-firefly, external omniflow) |
-| Examples | Sync + analytics routes; copy-paste friendly |
-| Limitations | Known sharp edges; unsupported envs |
-| Related documentation | `docs/user-guides/`, `docs/engineering/runbook.md`, architecture/decisions index, spec-pack paths when `SPEC_PACK_MODE=1` |
-
-**Alternatives rejected:** DEV_* sections in root; dedicated `## Product status` H2; nesting status under Related documentation ([R-0067](research.md#r-0067--us-0016-root-readme-research-template-parity-product-status-maintenance-hooks)).
-
-### R2 — Product status (frozen)
-
-| Contract | Value |
-|----------|-------|
-| Placement | `### Product status` immediately under `## Purpose` |
-| Format | `{US-xxxx\|BUG-xxxx} — {one-line outcome}` |
-| Order | Reverse-chronological (newest first) |
-| Cap | **8** bullets — drop oldest |
-| History | Link `docs/product/backlog.md`; never duplicate acceptance tables |
-
-**Anti-patterns:** Full backlog dump; secrets; placeholder stubs left after release.
-
-### R3 — Template parity posture (frozen)
-
-| Repo state | Command | AC-6 |
-|------------|---------|------|
-| `template/` **absent** (current) | `python scripts/validate_doc_profile.py --repo . --no-template-parity` | Satisfied vacuously ("when tree exists") |
-| `template/` **present** | Default (no flag) | Requires `template/README.md` + `template/docs/developer/README.md` parity |
-
-**Rejected:** Partial stub `template/README.md` only — parity requires dev shard ([R-0067](research.md#r-0067--us-0016-root-readme-research-template-parity-product-status-maintenance-hooks) §1).
-
-**Flip gate:** Remove `--no-template-parity` in the **same change set** that adds the full `template/` mirror. Document in runbook § README maintenance.
-
-### R4 — Maintenance hooks (frozen)
-
-Phase-boundary updates only — not per-commit ([R-0066](research.md#r-0066--root-readme-split-layout-and-living-doc-maintenance), [R-0067](research.md#r-0067--us-0016-root-readme-research-template-parity-product-status-maintenance-hooks) §3).
-
-#### Release (`/release`)
-
-After backlog reconciliation (≈ step 10), before runbook readiness (≈ step 14):
-
-1. For each **US** or **BUG** in target sprint → **DONE** / **CLOSED**, append one Product status bullet.
-2. Trim to 8 most recent entries.
-3. Run `python scripts/validate_doc_profile.py --repo . --no-template-parity` — non-zero → fail closed; remediation → runbook § README maintenance.
-
-#### Refresh-context (`/refresh-context`)
-
-After backlog status reconciliation:
-
-1. If closures since prior refresh, verify Product status includes closed id(s); update if missing.
-2. If README or doc-profile surfaces touched, run validator with `--no-template-parity`.
-
-#### Developer shard
-
-One sentence in `docs/developer/README.md` § Workflow or Quality gates pointing to runbook § README maintenance.
-
-#### Runbook (execute)
-
-New subsection **`README maintenance (US-0016)`** under § documentation profile validation — embed hooks above; document both validator commands and template flip gate.
-
-### File touch list (frozen)
-
-| Path | Task | Change |
-|------|------|--------|
-| `README.md` | R1–R2 | Create; split layout + Product status + content |
-| `docs/developer/README.md` | R6 | Workflow pointer to README maintenance |
-| `docs/engineering/runbook.md` | R5 | § README maintenance (US-0016) |
-| `tests/run-tests.sh` or CI doc gate | R4 | `validate_doc_profile --no-template-parity` |
-| `.env.example` | R1 | Reference only for Quickstart content (no structural change required) |
-
-**No touch:** Application source, compose behavior, `template/` tree (deferred).
-
-### Validation strategy
-
-| Check | Type | Pass criteria |
-|-------|------|---------------|
-| AC-1 Split layout | `validate_doc_profile.py` | All required user H2s present with non-stub content |
-| AC-2 Contributing | Validator + manual | `## Contributing` present; zero DEV_* H2 in root |
-| AC-3 Related docs | Manual + optional-mode warnings | user-guides, runbook, compose commands; spec crosslink when `SPEC_PACK_MODE=1` |
-| AC-4 Validator | CI + local | Exit 0 with `--no-template-parity` |
-| AC-5 Runbook | Doc review | § README maintenance with release + refresh hooks |
-| AC-6 Template | Vacuous | N/A until `template/` exists |
-
-### Risks
-
-| Risk | Mitigation |
-|------|------------|
-| Stale Product status | Release fail-closed validator + refresh-context verify ([R-0067](research.md#r-0067--us-0016-root-readme-research-template-parity-product-status-maintenance-hooks) §3) |
-| `--no-template-parity` left on after template ships | DEC-0070 flip gate + runbook note |
-| Scope creep (backlog dump) | 8-bullet cap + backlog link ([R-0066](research.md#r-0066--root-readme-split-layout-and-living-doc-maintenance)) |
-| Operator confusion (two validator commands | Runbook documents both; architecture cites current posture |
-
-### Decisions (US-0016)
-
-| ID | Topic | Summary |
-|----|-------|---------|
-| DEC-0070 | Root README living documentation | `--no-template-parity` until full `template/`; `### Product status` under Purpose; release + refresh-context hooks |
-
-Full record: `decisions/DEC-0070.md`
-
-### Acceptance mapping
-
-| AC | Architecture slice | Verify |
-|----|-------------------|--------|
-| AC-1 | R1 | Validator + content review |
-| AC-2 | R1 | No DEV_* in root; Contributing pointer |
-| AC-3 | R1, R3 | Related docs + compose commands |
-| AC-4 | R4 | `validate_doc_profile --no-template-parity` exit 0 |
-| AC-5 | R5 | Runbook § README maintenance |
-| AC-6 | T1 (deferred) | Vacuous until `template/` lands |
-
-### Next phase
-
-`/sprint-plan` — decompose 6 acceptance criteria; expect ~6–8 tasks (README content, Product status seed, runbook hooks, dev shard pointer, CI validator flag). Single sprint under `SPRINT_MAX_TASKS` (12).
-
----
-
-## BUG-0008 — Subscription alerts vs list mismatch & under-detection
-
-**Status:** architecture complete (2026-06-08)  
-**Discovery:** `discovery-20260608-bug0008` in `handoffs/po_to_tl.md`  
-**Research:** [R-0068](research.md#r-0068--bug-0008-subscription-alert-dedup-unread-count-contract-orphan-lifecycle), [R-0069](research.md#r-0069--bug-0008-detection-recall-levers-ai-path-boundary); addenda R-0009–R-0013  
-**Decisions:** **DEC-0071** (W bundle); **DEC-0072** (X Phase 1 recall)  
-**Sprint:** `/quick` **Q0018** (recommended)  
-**Acceptance:** `docs/product/acceptance.md` rows **W**, **X**  
-**Spec-pack:** `docs/engineering/spec-pack/BUG-0008-{design-concept,crs,technical-specification}.md`  
-**User guide:** `docs/user-guides/BUG-0008.md`  
-**Related:** BUG-0004 DONE (J partial — 11 pending baseline); BUG-0007 DONE (coordinate — additive AI JSON only); US-0003 subscription engine; US-0005 unified alerts boundary
-
-### Symptom chain (frozen)
-
-Operator on US-0010 external profile: 922+ transactions synced; subscription alerts unread count diverges from `/subscriptions` list; detection recall below operator expectation.
-
-| Sub | Verdict | Root cause |
-|-----|---------|------------|
-| **W** | CONFIRMED | Bare `insert_alert` every sync — no fingerprint dedup; banner = raw alert list length (83 unread vs 6 pending live) |
-| **X** | CONFIRMED | Payee-only grouping fragments SEPA memos; 365-day window; `category_ids` unused; hardcoded min_emit 60 |
-
-**Live probe (2026-06-08):** 6 pending, 12 total patterns, 83 unread `new_detection` alerts, unified `/api/v1/alerts/unread-count` = 0 (US-0005 — not operator symptom).
-
-`isolation_scope`: artifact + repo source reads; public omniflow API probes (discovery/research); no host `.env` / `.env_prod` secrets read.
-
-### Sequencing (mandatory)
-
-```text
-BUG-0008
-├── W — DEC-0071 (P0, execute first)
-│   ├── W1 — Migration: fingerprint column + partial unique index + backfill dedupe
-│   ├── W2 — Repository: insert_alert → upsert_alert (ON CONFLICT)
-│   ├── W3 — Detection: emit alert only on new pending or tier increase
-│   ├── W4 — API: GET /api/v1/subscriptions/alerts/unread-count
-│   ├── W5 — Lifecycle: mark-read orphans on confirm/reject/inactive
-│   ├── W6 — Frontend: banner + toast from unread-count API
-│   └── W7 — Tests: dedup, reconciled count, lifecycle
-└── X — DEC-0072 Phase 1 (P0, after W1–W3 minimum)
-    ├── X1 — Payee normalization (SEPA token strip, entity suffix collapse)
-    ├── X2 — Transfer-type counterparty priority guard
-    ├── X3 — detection_window_days 365 → 730 (config)
-    ├── X4 — Integration tests (forecast + subscription regression)
-    └── X5 — (Phase 2 gate) Category-aware grouping ≥70% threshold — same sprint if capacity
-```
-
-**Rule:** W dedup before X recall threshold tuning. X without W re-amplifies alert spam (discovery risk #1).
-
-**Deploy order:** (W1 → W2 → W3) backend migration + repository → (W4 → W5) API + lifecycle → W6 frontend → (X1 → X2 → X3) recurrence core → X4 tests → optional X5 → operator verify. Single backend PR acceptable if W slices land before X in commit order.
-
-### W — Alert dedup & unread count (DEC-0071)
-
-#### Fingerprint contract (frozen)
-
-| `alert_type` | Fingerprint |
-|--------------|-------------|
-| `new_detection` | `sub_alert:new_detection:{pattern_id}` |
-| `price_change` | `sub_alert:price_change:{pattern_id}:{direction}:{round(new_amount,2)}` |
-| `interval_change` | `sub_alert:interval_change:{pattern_id}:{interval_days}` |
-
-Partial unique: `(fingerprint) WHERE read_at IS NULL`. Upsert updates `body`, `sync_run_id`, `created_at` on conflict.
-
-**Files:** `backend/migrations/`, `backend/src/subscriptions/{repository,detection}.rs`.
-
-#### Unread-count API (frozen)
-
-`GET /api/v1/subscriptions/alerts/unread-count` — see **DEC-0071 §2** for response schema.
-
-| UI surface | Field | Reject |
-|------------|-------|--------|
-| `/subscriptions` banner | `unread_new_detection` | Raw `alerts.length` |
-| Post-sync toast | sessionStorage delta on `unread_new_detection` | List poll without dedup |
-| Header bell badge | _(unchanged)_ | Combined subscription + unified count |
-
-**Files:** `backend/src/subscriptions/{routes,service}.rs`, `frontend/src/pages/SubscriptionsPage.tsx`.
-
-#### Orphan lifecycle (frozen)
-
-| Event | SQL action |
-|-------|------------|
-| confirm / reject / inactive | Mark-read unread alerts for `pattern_id` |
-
-**Files:** `backend/src/subscriptions/service.rs` (confirm/reject handlers).
-
-#### BUG-0007 coordinate (frozen)
-
-- **New route only** — no `list_patterns` filter changes
-- Additive JSON on existing routes forbidden unless coordinate table updated
-- AI tool wrappers unchanged
-
-### X — Detection recall Phase 1 (DEC-0072)
-
-#### Normalization rules (frozen)
-
-| Rule | Example |
-|------|---------|
-| Strip SEPA reference tokens | `SVWZ+`, card suffixes |
-| Collapse legal suffixes | `GmbH`, `AB` |
-| Transfer-type guard regex | `SVWZ\|UEBERWEISUNG\|Lastschrift` → prefer `counterparty_name` |
-
-**Files:** `backend/src/recurrence/{normalize,group}.rs`, `backend/src/subscriptions/detection.rs`.
-
-#### Config change (frozen)
-
-`detection_window_days`: **365 → 730** in `backend/config/default.toml`.
-
-#### Phase 2 gate (optional same sprint)
-
-When ≥**70%** txs in payee group share `category_id`, secondary grouping key `cat:{category_id}`. Execute only after Phase 1 probe shows recall gain without W violation.
-
-#### AI boundary (frozen)
-
-| Path | Verdict |
-|------|---------|
-| In-pipeline LLM | **Reject** |
-| Async enrichment job | **Defer** — document in release notes |
-| Acceptance **X** footer | Rule improvements in architecture/release notes |
-
-**min_emit_confidence** stays **60** hardcoded until W closed + operator FP review — do not wire to TOML in BUG-0008 execute unless Phase 2 gate opens.
-
-### Task map (Q0018)
-
-| Order | Task | Layer | Est. | Acceptance |
-|-------|------|-------|------|------------|
-| 1 | **W1** fingerprint migration + backfill | backend migration | 3h | **W** |
-| 2 | **W2** upsert_alert repository | backend subscriptions | 2h | **W** |
-| 3 | **W3** detection emit gate | backend detection | 2h | **W** |
-| 4 | **W4** unread-count API route | backend API | 2h | **W** |
-| 5 | **W5** orphan lifecycle hooks | backend service | 1.5h | **W** |
-| 6 | **W6** frontend banner + toast | frontend | 2h | **W** |
-| 7 | **W7** backend unit/integration tests | backend tests | 3h | **W** regression |
-| 8 | **X1** payee normalization | backend recurrence | 3h | **X** |
-| 9 | **X2** transfer counterparty priority | backend recurrence | 2h | **X** |
-| 10 | **X3** detection window config | backend config | 0.5h | **X** |
-| 11 | **X4** forecast + subscription integration tests | backend tests | 2h | **X** regression |
-| 12 | **V1** operator verify omniflow | verify-work | 1h | **W**, **X** |
-
-**Count:** 12 tasks (= `SPRINT_MAX_TASKS` 12) → **`/quick` Q0018**; no split. Phase 2 category grouping (**X5**) deferred to follow-up quick if sprint at capacity — recommend execute X5 only if W7+X4 complete under estimate.
-
-**Total estimate:** ~24h (dev ~23h + operator V1 ~1h).
-
-### Test strategy
-
-| Check | Type | Pass criteria |
-|-------|------|---------------|
-| W1 | Migration | Backfill dedupes duplicates; partial unique index present |
-| W2 | Unit | ON CONFLICT upsert; no duplicate unread fingerprints |
-| W3 | Unit | No alert on unchanged pending pattern resync |
-| W4 | Integration | `reconciled: true` when counts align; JOIN guard |
-| W5 | Unit | confirm/reject mark-read orphans |
-| W6 | Frontend | Banner uses unread-count; not list length |
-| X1–X2 | Unit | SEPA fixture merges under single payee key |
-| X3 | Config | 730-day window loads from TOML |
-| X4 | Integration | Forecast recurring unaffected or improved |
-| Privacy | Regression | OIDC + bundled-firefly deploy smoke |
-| V1 | Operator | Banner count ≤ pending; patterns > 12 baseline |
-
-### Decisions (BUG-0008)
-
-| ID | Topic | Summary |
-|----|-------|---------|
-| DEC-0071 | W bundle | Fingerprint dedup + unread-count API + orphan lifecycle + US-0005-only bell |
-| DEC-0072 | X Phase 1 | Normalization + counterparty priority + 730-day window; Phase 2 gated; AI deferred |
-
-Full records: `decisions/DEC-0071.md`, `decisions/DEC-0072.md`
-
-### Risks
-
-| Risk | Mitigation |
-|------|------------|
-| X before W | Frozen task order; W1–W3 before X1 |
-| Over-merge (X2) | Transfer-type guard only |
-| Forecast regression | X4 integration tests (DEC-0013 shared core) |
-| Partial unique + NULL backfill | W1 backfill before NOT NULL |
-| BUG-0007 coordinate | Additive unread-count route only |
-
-### Acceptance mapping
-
-| Row | Architecture slice | Verify |
-|-----|-------------------|--------|
-| **W** | W1–W7 | Reconciled unread-count vs pending; no 33-vs-11 class mismatch |
-| **X** | X1–X4 (+ optional X5) | Patterns > 12 baseline; no alert spam (`unread_new_detection <= pending_patterns`) |
-
-Static intake numbers are snapshots — test reconciled semantics and relative recall gain.
-
-### Next phase
-
-**`/sprint-plan` Q0018** — materialize `sprints/quick/Q0018/task.json` from task table; W-before-X task order frozen; then `/plan-verify` → `/execute`.
-
----
-
-## BUG-0013 — Omniflow analytics regression cluster (budgets MTD, crypto pricing)
-
-**Status:** architecture complete (2026-06-08)  
-**Discovery:** `discovery-20260608-bug0013` in `handoffs/po_to_tl.md`  
-**Research:** [R-0076](research.md#r-0076--omniflow-analytics-regression-hypotheses-post-us-0015) §5–7, [R-0077](research.md#r-0077--bug-0013-grafana-embed-failed-to-fetch-annotation-runner)  
-**Decisions:** **DEC-0079** (AL MTD SQL); **DEC-0080** (AN/AK Bitunix valuation); extends **DEC-0064**, **DEC-0038**, **DEC-0039**; **no DEC-0064 amend** this sprint  
-**Sprint:** `/quick` **Q0020** (recommended)  
-**Acceptance:** `docs/product/acceptance.md` rows **AI**–**AN** (execute scope: **AL**, **AK**, **AN**; **AI**/**AJ**/**AM** waived or ops-only)  
-**Related:** US-0015 DONE (not root cause); BUG-0005 DONE (DEC-0064 ingest — valuation gap residual); BUG-0009/0010 DONE (AI refuted on live probe)
-
-### Symptom chain (frozen)
-
-Operator post-US-0015 cluster on `financegnome.omniflow.cc` decomposes to **two confirmed code defects** and **four non-code items** — not a single US-0015 regression.
-
-| Sub | Verdict | Root cause | Execute |
-|-----|---------|------------|---------|
-| **AI** | REFUTED (ops/stale) | Baseline forecast non-zero acct **114** after Full sync + recompute | **V1** re-smoke only |
-| **AJ** | REFUTED (expected empty) | 0 price-change events in 90d | Optional **AJ1** copy |
-| **AK** | CONFIRMED | Linear holdings unpriced → crypto **€0**; performance % needs snapshot history | **AN1** + optional **AK2** |
-| **AL** | CONFIRMED | MTD planned sums 730 future plan days (no upper date bound) | **AL1** |
-| **AM** | NOT REPRODUCED | curl ds/query + annotations **200** | Waived per **R-0077** |
-| **AN** | CONFIRMED | Same as AK — sync OK, EUR valuation missing | **AN1** |
-
-**Live probe (2026-06-08):** acct 114 forecast non-zero; budgets MTD **−150337.6** / actual **0**; Bitunix **7** linear rows all `market_value_eur` NULL; exchange sync success `18:29:40Z`.
-
-`isolation_scope`: artifact + repo source reads; public omniflow curl probes (discovery/research); **no** host `.env` / `.env_prod` secrets read.
-
-### Operator gates (mandatory before V1)
-
-1. **BACKEND_FRONTEND_DEPLOY** — US-0015 image live on omniflow.
-2. **Full Firefly sync** — not exchanges-only (wealth snapshot + forecast freshness).
-3. **Forecast recompute** — baseline panels on `$account_id=114`.
-
-### Fix slices
-
-```text
-BUG-0013
-├── AL — DEC-0079 (P0, Grafana-only)
-│   └── AL1 — MTD panel id 5: planned CTE `<= CURRENT_DATE`; optional mid-month footnote
-├── AN/AK — DEC-0080 (P0, backend)
-│   ├── AN1a — bitunix.rs: wallet `data[]` parse + `unrealizedPNL` field keys
-│   ├── AN1b — pnl.rs: futures wallet EUR via stablecoin path; linear unrealized USDT→EUR
-│   └── AN1c — bitunix.rs tests: array wallet mock + linear unrealized persist
-├── Optional UX (P2 — sprint capacity)
-│   ├── AJ1 — subscriptions price-changes empty-state copy
-│   └── AK2 — portfolio performance % min-snapshot footnote
-└── V1 — verify-work omniflow smoke (AL + AN acceptance rows)
-```
-
-**Deploy order:** AL1 (Grafana JSON) + AN1 (backend) in one release; operator **Full sync** after deploy; V1 probes.
-
-**Out of scope:** US-0013 ML overlay; MetaMask extension noise; AM1 unless HAR non-200; DEC-0064 exposure_eur display (tier 2 gate).
-
-### AL1 — Budgets MTD upper bound (DEC-0079)
-
-#### Problem
-
-Panel id **5** `planned` CTE:
-
-```sql
-... AND pdc.ts >= date_trunc('month', CURRENT_DATE)
-```
-
-Missing `<= CURRENT_DATE` → sums entire future plan horizon within dashboard time range.
-
-#### Contract (frozen)
-
-| CTE | SQL addition |
-|-----|--------------|
-| `planned` | `AND pdc.ts::date <= CURRENT_DATE` |
-| `actual` | unchanged |
-| Deviation row | `(SELECT total FROM actual) - (SELECT total FROM planned)` with capped planned |
-
-**Files:** `grafana/provisioning/dashboards/analytics/budgets.json` panel **5** `rawSql` only.
-
-**Alternatives rejected:** `$__timeFilter` on summary (includes future); backend MTD view (over-engineered for SQL bug).
-
-**Risks:** UTC `CURRENT_DATE` vs operator TZ — consistent with existing deviation chart UTC usage.
-
-### AN1 — Bitunix futures valuation (DEC-0080)
-
-#### Problem chain
-
-1. Wallet API returns `data: [{...}]` — `parse_futures_wallet` reads `data.account` → **no wallet row**.
-2. `recompute_pnl` → `holding_value_eur` → `fx.to_eur(qty, "INJUSDT")` → `Unpriced` → `continue` skips unrealized conversion.
-3. Wealth `crypto.subtotal_eur` = sum `market_value_eur` — all NULL → **€0**.
-
-#### Wallet parse contract (AN1a — frozen)
-
-```text
-data = body["data"]
-account = if data.is_array() → first object with marginCoin/available
-          else → data["account"] ?? data
-equity = accountEquity | (available + margin + frozen)
-asset  = marginCoin | "USDT"
-market_value_usd = Some(equity) when asset in {USDT, USDC}
-product_type = "futures"
-```
-
-Add **`unrealizedPNL`** to position and wallet `parse_f64_field` key lists.
-
-**Test:** Mock array-shaped `data: [{ marginCoin: "USDT", available: "250", ... }]` — assert futures wallet row.
-
-#### Valuation contract (AN1b — frozen)
-
-| `product_type` | Subtotal (`market_value_eur`) | `unrealized_pnl_eur` |
-|----------------|------------------------------|----------------------|
-| `futures` | `fx.to_eur(quantity, asset)` | from wallet if present |
-| `linear` | **skip** — not in `crypto_value_eur` sum | parse payload unrealized; `fx.to_eur(pnl, "USDT")`; **do not** flag `fx_incomplete` for symbol |
-| `spot` | existing path | existing path |
-
-**Reject:** Price linear notional into `market_value_eur` (DEC-0064 double-count).
-
-**Files:** `backend/src/exchanges/bitunix.rs`, `backend/src/portfolio/pnl.rs`.
-
-**Deferred tier 2:** `ExchangePriceBook` population in `portfolio/service.rs` (spot tickers).
-
-#### Acceptance mapping (AK/AN)
-
-| Check | Post-AN1 expectation |
-|-------|---------------------|
-| `GET /api/v1/wealth` `crypto.subtotal_eur` | **> 0** when USDT futures wallet equity &gt; 0 |
-| `holdings_top` | Non-empty when wallet priced |
-| `unrealized_pnl_eur` on linear rows | Populated from exchange payload |
-| Grafana portfolio crypto stat | Non-zero after sync + recompute |
-| Performance % | May remain NULL until ≥2 snapshots (**AK2** docs only) |
-
-### AM — Embed Failed to fetch (waived)
-
-Per **R-0077**: curl **200** on ds/query + annotations; console `handleAnnotationQueryRunnerError` likely annotation cancel or WS cosmetic. **No AM1 execute** unless operator HAR shows non-200. Optional: disable built-in dashboard annotation on budgets (P2).
-
-### Task table (sprint-plan input)
-
-| ID | Sub | Task | Files | Priority |
-|----|-----|------|-------|----------|
-| **AL1** | AL | MTD planned `<= CURRENT_DATE` + optional footnote | `budgets.json` | P0 |
-| **AN1** | AN/AK | Wallet parse + pnl linear unrealized EUR + tests | `bitunix.rs`, `pnl.rs` | P0 |
-| **AJ1** | AJ | Price-changes empty-state copy | `subscriptions.json` | P2 optional |
-| **AK2** | AK | Performance % min-snapshot panel note | `portfolio.json` | P2 optional |
-| **V1** | all | verify-work smoke post deploy + Full sync | acceptance AI–AN | P0 |
-
-**Count:** 3 mandatory (AL1, AN1, V1) + 2 optional → **`/quick` Q0020** (≤ `SPRINT_MAX_TASKS` 12).
-
-### Codebase map (BUG-0013 slice)
-
-| Path | Role | Touch |
-|------|------|-------|
-| `grafana/.../budgets.json` | MTD summary SQL | AL1 |
-| `backend/src/exchanges/bitunix.rs` | Wallet/position parse | AN1a,c |
-| `backend/src/portfolio/pnl.rs` | EUR valuation loop | AN1b |
-| `backend/src/wealth/service.rs` | Crypto subtotal read | verify only |
-| `backend/src/fx/service.rs` | USDT→EUR stable path | used by AN1b |
-
-**`/sprint-plan`** — materialize `sprints/quick/Q0020/` from task table; then `/plan-verify` → `/execute`.
-
----
-
-## BUG-0011 — Planning mode broken (empty plan, compare sums, plan-vs-actual 404)
-
-**Status:** architecture complete (2026-06-08)  
-**Discovery:** `discovery-20260608-bug0011` in `handoffs/archive/po-to-tl-pack-20260606-b.md`  
-**Research:** [R-0070](research.md#r-0070--bug-0011-planning-mode-compare-delta-empty-state-api-first-run-ux); addenda [R-0015](research.md#r-0015--plan-engine-delta-overlay-on-forecast-baseline), [R-0016](research.md#r-0016--plan-scenario-versioning-immutable-snapshots-vs-editable-drafts), [R-0017](research.md#r-0017--plan-vs-ist-daily-computation--aggregation-grain), [R-0020](research.md#r-0020--grafana-dashboard-3-budgets-planistdeviation-provisioning)  
-**Decisions:** **DEC-0073** (AE overlay-only compare delta); **DEC-0074** (AF 200 `no_active_plan`)  
-**Sprint:** `/quick` **Q0019** (recommended)  
-**Acceptance:** `docs/product/acceptance.md` rows **AD**, **AE**, **AF**  
-**Spec-pack:** `docs/engineering/spec-pack/BUG-0011-{design-concept,crs,technical-specification}.md`  
-**User guide:** `docs/user-guides/BUG-0011.md`  
-**Related:** US-0004 DONE (plan engine); US-0014 OPEN (holistic UX epic — deferred); BUG-0004 superseded 404 note
-
-**ID coordination:** US-0090 caveman compression forward-refs renumbered **DEC-0073 → DEC-0075** (runbook + scripts); BUG-0011 owns DEC-0073/DEC-0074.
-
-### Symptom chain (frozen)
-
-Operator on US-0010 external profile: `/planning` unusable — empty plan click no-op, Compare shows illogical negatives on zero-adjustment plans, Plan vs Actual tab broken by 404.
-
-| Sub | Verdict | Root cause |
-|-----|---------|------------|
-| **AD** | CONFIRMED | No add-adjustment UI; first-run empty state Leasing-only; Custom Apply silent no-op |
-| **AE** | CONFIRMED | `version_metrics` / `project_adjustments_in_memory` sum full `planned_net`, not overlay delta |
-| **AF** | CONFIRMED | `NoActivePlan` → HTTP 404; `pvaQuery` no guided empty state (contrast risk-score 200 `no_score`) |
-
-`isolation_scope`: artifact + repo source reads; no host `.env` / `.env_prod` secrets read.
-
-### Sequencing (mandatory)
-
-```text
-BUG-0011
-├── AE — DEC-0073 (backend compare metric, execute first)
-│   ├── AE1 — monthly_overlay_delta_sum helper (overlay.rs / project.rs)
-│   ├── AE2 — repository version_metrics + service in-memory path
-│   └── AE3 — compare metric unit tests (zero overlay → 0.00)
-├── AF — DEC-0074 (after AE1 helper frozen)
-│   ├── AF1 — PlanVsActualApiResponse tagged enum; route 200 no_active_plan
-│   └── AF2 — PVA tab guided empty state (mirror risk-score)
-└── AD — execute (parallel after AF1 API contract frozen)
-    ├── AD1 — first-run empty state + Create empty plan (POST template=custom)
-    ├── AD2 — inline add/edit adjustment form (POST/PATCH)
-    ├── AD3 — Custom Apply toast + query invalidation
-    └── AD4 — compare help footnote + post-create Set active banner
-→ T1 — integration tests (compare + plan-vs-actual)
-→ V1 — operator OIDC /planning three-tab smoke
-```
-
-**Rule:** AE overlay helper before AF API shape freeze; AD PVA UX after AF1; Grafana Dashboard 3 **unchanged** (R-0020).
-
-### AE — Overlay-only compare delta (DEC-0073)
-
-#### Metric contract (frozen)
-
-| Field | Formula | Empty plan |
-|-------|---------|------------|
-| `monthly_delta_sum` | Sum `build_overlay_deltas` for current month through `min(today, month_end)` | **0.00** when adjustments empty |
-| `projected_month_end_balance` | Full scenario `planned_balance` at month-end horizon | May be negative (baseline forecast) — not zeroed |
-
-**Files:** `backend/src/plan/{overlay,project,repository,service}.rs`.
-
-**Endpoint scope:** `/compare` + React Compare tab only — not Grafana `budgets` panels.
-
-#### Impact table (non-empty plans)
-
-| Template | Before (bug) | After (correct) |
-|----------|--------------|-----------------|
-| Custom / Current, 0 lines | ~full forecast net | **0.00** delta |
-| Leasing (+€300/mo) | baseline + leasing | **~-300/mo** overlay |
-| Savings mode | baseline-dominated | net overlay (removals + cut) |
-
-Release note mandatory — numbers shift for all plans (R-0016 alignment).
-
-### AF — Plan-vs-actual empty API (DEC-0074)
-
-#### API contract (frozen)
-
-Mirror `RiskScoreApiResponse` pattern in `backend/src/api/plans.rs`:
-
-```json
-{ "status": "no_active_plan", "reason": "no_active_plan" }
-```
-
-HTTP **200** when no active plan; existing `ok` payload unchanged when active.
-
-**Reject:** 404 via `plan_error_status`; auto-activate on create; 200 + empty `rows` only.
-
-#### Frontend contract (frozen)
-
-| Surface | Behavior |
-|---------|----------|
-| `pvaQuery` | `retry: false`; branch on `status` |
-| `no_active_plan` | Guided card — create plan + Set active CTA |
-| `ok` | Existing chart/table |
-
-**Files:** `backend/src/api/plans.rs`, `backend/src/plan/types.rs`, `frontend/src/pages/PlanningPage.tsx`.
-
-### AD — First-run + add-line UX (execute scope, no DEC)
-
-| Gap | Fix |
-|-----|-----|
-| Empty state Leasing-only | Template card grid + **Create empty plan** (`POST { name, template: "custom" }`) |
-| No POST wiring | Inline form above table → `add_adjustment` / `update_adjustment` |
-| Custom Apply silent | Toast "Custom plan ready — add lines below" |
-| Set active reminder | Inline banner after first create |
-
-Bound to **US-0014** for wizard/tooltip polish — out of BUG-0011 scope.
-
-### Codebase map (planning slice)
-
-| Path | Role | BUG-0011 touch |
-|------|------|----------------|
-| `backend/src/plan/overlay.rs` | `build_overlay_deltas` | AE1 helper |
-| `backend/src/plan/repository.rs` | `version_metrics`, `build_compare_metrics` | AE2 |
-| `backend/src/plan/service.rs` | `plan_vs_actual`, `project_adjustments_in_memory` | AE2, AF1 |
-| `backend/src/api/plans.rs` | routes, `plan_error_status`, `risk_score` pattern | AF1 |
-| `frontend/src/pages/PlanningPage.tsx` | Scenarios / Compare / PVA tabs | AD1–AD4, AF2 |
-| `grafana/provisioning/dashboards/analytics/budgets.json` | Dashboard 3 | **No change** |
-
-### Task map (Q0019)
-
-| Order | Task | Layer | Est. | Acceptance |
-|-------|------|-------|------|------------|
-| 1 | **AE1** overlay delta helper | backend plan | 2h | **AE** |
-| 2 | **AE2** wire repository + service compare paths | backend plan | 2h | **AE** |
-| 3 | **AE3** compare metric unit tests | backend tests | 2h | **AE** |
-| 4 | **AF1** tagged PVA API 200 `no_active_plan` | backend API | 2h | **AF** |
-| 5 | **AF2** PVA guided empty state | frontend | 2h | **AF** |
-| 6 | **AD1** first-run Create empty plan | frontend | 2h | **AD** |
-| 7 | **AD2** inline add/edit adjustment form | frontend | 3h | **AD** |
-| 8 | **AD3** Custom Apply toast + invalidation | frontend | 1h | **AD** |
-| 9 | **AD4** compare footnote + Set active banner | frontend | 1h | **AE**, **AD** |
-| 10 | **T1** compare + PVA integration tests | backend tests | 2h | **AD/AE/AF** |
-| 11 | **V1** operator OIDC `/planning` smoke | verify-work | 1h | footer |
-
-**Count:** 11 tasks (< `SPRINT_MAX_TASKS` 12) → **`/quick` Q0019**; no split.
-
-**Total estimate:** ~20h (dev ~19h + operator V1 ~1h).
-
-### Test strategy
-
-| Check | Type | Pass criteria |
-|-------|------|---------------|
-| AE3 | Unit | Zero adjustments → `monthly_delta_sum` = 0.00; Leasing ~-300 overlay |
-| AF1 | Unit | `no_active_plan` serializes 200 tagged JSON |
-| T1 | Integration | Compare endpoint + PVA route with/without active plan |
-| AD2 | Manual/UI | POST adjustment creates row; table editable |
-| Grafana | Regression | Dashboard 3 panels unchanged (no SQL edit) |
-| V1 | Operator | `/planning` Scenarios + Compare + Plan vs Actual on OIDC deploy |
-
-### Triad check (architecture phase)
-
-| Surface | Check | Result |
-|---------|-------|--------|
-| `docs/product/backlog.md#BUG-0011` | Discovery notes + research resolution linked | pass |
-| `docs/product/acceptance.md` BUG-0011 | AD/AE/AF unchanged; mapped to tasks | pass |
-| `backend/src/plan/*` + `api/plans.rs` | Root causes documented in codebase map | pass |
-| `frontend/src/pages/PlanningPage.tsx` | AD/AF gaps documented | pass |
-| R-0070 | Six questions resolved; DEC-0073/0074 recommended | pass |
-
-`triad_hot_surface`: post-write `--check` required; architecture § BUG-0011 appended; decisions DEC-0073/DEC-0074 formalized.
-
-### Decisions (BUG-0011)
-
-| ID | Topic | Summary |
-|----|-------|---------|
-| DEC-0073 | AE compare metric | Overlay-only `monthly_delta_sum`; projected balance unchanged; shared helper |
-| DEC-0074 | AF empty API | PVA 200 tagged `no_active_plan`; guided frontend; no auto-activate |
-
-Full records: `decisions/DEC-0073.md`, `decisions/DEC-0074.md`
-
-### Risks
-
-| Risk | Mitigation |
-|------|------------|
-| Compare number shift (non-empty plans) | Release note; R-0016 intent |
-| DEC-0073 ID collision (US-0090) | Renumbered to DEC-0075 in runbook/scripts |
-| Negative projected balance on empty overlay | Help text; do not zero balance |
-| PVA breaking change (404→200) | Changelog + user guide |
-| Scope creep into US-0014 | AD bounded; epic deferred |
-
-### Acceptance mapping
-
-| Row | Architecture slice | Verify |
-|-----|-------------------|--------|
-| **AD** | AD1–AD3 | Create empty plan + add-line UX; not silent no-op |
-| **AE** | AE1–AE3, AD4 | Zero/neutral compare deltas on empty plan |
-| **AF** | AF1–AF2 | PVA 200 JSON; guided tab when no active plan |
-| Footer | V1 | OIDC `/planning` three-tab regression |
-
-### Next phase
-
-**`/sprint-plan` Q0019** — materialize `sprints/quick/Q0019/task.json` from task table; AE-before-AF order frozen; then `/plan-verify` → `/execute`.
-
----
-
-## US-0013 — Production ML forecast & wealth analytics hardening
-
-**Status:** Architecture complete (2026-06-08)  
-**Discovery:** `discovery-20260608-us0013` in `handoffs/po_to_tl.md`  
-**Research:** [R-0071](research.md#r-0071--us-0013-production-ml-enablement-on-omniflow-external-profile); addenda R-0043, R-0044, R-0045, R-0053, R-0062  
-**Decisions:** **DEC-0076** (external ML compose contract); extends DEC-0049, DEC-0052, DEC-0056, DEC-0066  
-**Depends on:** US-0009 (ML feature stack), US-0010 (external profile), BUG-0010 DONE (baseline prerequisite)  
-**Sprint:** **S0014** recommended — slices US-0013-S1..S4  
-**Acceptance:** `docs/product/acceptance.md` § US-0013 (10 rows)  
-**Spec-pack:** `docs/engineering/spec-pack/US-0013-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
-**User guide:** `docs/user-guides/US-0013.md` (`USER_GUIDE_MODE=1`)
-
-### Problem
-
-US-0009 delivered a feature-complete ML stack, but omniflow (`--profile external`) is **baseline-only by design**: `stats-forecast` starts only on Compose profile `[full]`; `docker-compose.external.yml` has no sidecar; `[forecast_ml] enabled=false` default (DEC-0049). Result: zero `ml_enhanced` computations, empty Grafana ML panels, Compare disabled with `sidecar_disabled` (DEC-0066).
-
-BUG-0010 closed baseline numbers (AA/AB/AC); AC3 production ML path was explicitly deferred to **US-0013**. Gap is **infra wiring + operator opt-in + verification** — not new ML research or UI greenfield.
-
-`isolation_scope`: artifact + repo source reads; no host `.env` / secrets read.
-
-### System context (external profile — target state)
-
-```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  Traefik (external network) — financegnome.omniflow.cc                       │
-└───────┬──────────────────────┬──────────────────────┬────────────────────────┘
-        │                      │                      │
-        ▼                      ▼                      ▼
-┌───────────────┐    ┌─────────────────┐    ┌─────────────────────────┐
-│ flow-finance-ai│    │ grafana         │    │ stats-forecast (NEW)    │
-│ traefik only   │    │ traefik only    │    │ profiles: [full,external]│
-│ FORECAST_ML_   │    │ internal embed  │    │ traefik network         │
-│ ENABLED=true   │    │ via DEC-0057    │    │ host :8091 → :8090      │
-└───────┬───────┘    └────────┬────────┘    └───────────┬─────────────┘
-        │                     │                         │
-        │ POST /v1/forecast   │ SQL                     │ GET /health
-        └─────────────────────┴─────────────────────────┘
-                                │
-                                ▼
-                    ┌───────────────────────┐
-                    │ Host postgres (traefik)│
-                    │ ml_enhanced rows       │
-                    └───────────────────────┘
-```
-
-**Baseline authority unchanged (DEC-0050):** Alerts, plan hook, AI default, Grafana default variant remain `model_kind=baseline`.
-
-### Architecture contract (DEC-0076)
-
-```text
-US-0013
-├── S1 — External compose + ML config enablement (P0)
-│   ├── docker-compose.external.yml: stats-forecast overlay (profiles [external], traefik network)
-│   ├── flow-finance-ai env: FORECAST_ML_ENABLED, STATS_FORECAST_URL
-│   ├── .env.example omniflow ML block
-│   └── compose-config-check.sh: 3-service external set + stats-forecast traefik assert
-├── S2 — Sync ML pipeline + API persistence (P0)
-│   ├── Verify forecast_ml phase + health_ok() gate (existing code)
-│   └── Verify GET /forecast variant=ml_enhanced after Full sync
-├── S3 — UI + Grafana ML parity (P0)
-│   ├── Verify ForecastPage Compare + sidecar_disabled copy (DEC-0066)
-│   ├── Verify WealthPage portfolio-forecast + FX banner (DEC-0065, R-0034)
-│   └── Verify Grafana forecast-horizons $forecast_variant=ml_enhanced
-└── S4 — Runbook + CI sidecar fixture (P0)
-    ├── runbook § Omniflow ML enablement
-    └── retain forecast_ml_integration + compose assert (dual CI guard)
-```
-
-**Out of scope:** New ML models; monthly bucket attribution (US-0015); Grafana empty-state-only (BUG-0009 DONE).
-
-### S1 — Compose overlay (frozen)
-
-#### Profile union pattern
-
-| File | `stats-forecast` contract |
-|------|---------------------------|
-| `docker-compose.yml` (base) | `profiles: [full]`; port `${STATS_FORECAST_PORT:-8090}:8090`; healthcheck unchanged |
-| `docker-compose.external.yml` (overlay) | **Additive** `profiles: [external]` on same service key; `networks: [traefik]`; port `${STATS_FORECAST_PORT:-8091}:8090` |
-
-Compose merges profile arrays → `[full, external]` on one service definition → **one container** when either profile active.
-
-**Rejected:** duplicate `stats-forecast:` block in overlay; `profiles: [full, external]` on base only (starts sidecar on minimal unintentionally).
-
-#### External overlay execute sketch
-
-```yaml
-# docker-compose.external.yml (append to existing services)
-  stats-forecast:
-    profiles: [external]
-    networks:
-      traefik:
-    ports:
-      - "${STATS_FORECAST_PORT:-8091}:8090"
-
-  flow-finance-ai:
-    environment:
-      FORECAST_ML_ENABLED: ${FORECAST_ML_ENABLED:-false}
-      STATS_FORECAST_URL: ${STATS_FORECAST_URL:-http://stats-forecast:8090}
-```
-
-Operator enables ML by setting `FORECAST_ML_ENABLED=true` in `.env` — preserves DEC-0049 default-off.
-
-#### Network contract
-
-| Element | Value |
-|---------|-------|
-| Sidecar attachment | **Traefik-only** — matches `flow-finance-ai` external merge (no default network) |
-| Internal URL | `http://stats-forecast:8090` (container port, not host remap) |
-| Host debug | `curl localhost:${STATS_FORECAST_PORT:-8091}/health` |
-
-**Rejected:** dual-network sidecar — unnecessary when backend is traefik-only (R-0071).
-
-#### CI compose assert (frozen)
-
-Update `scripts/compose-config-check.sh`:
-
-| Check | Before | After |
-|-------|--------|-------|
-| External `config --services` | `flow-finance-ai grafana` | `flow-finance-ai grafana stats-forecast` |
-| Traefik network | flow-finance-ai, grafana | + stats-forecast |
-
-DEC-0056 anti-combination guards (`minimal+external` no firefly-iii) **unchanged**.
-
-### S2 — Sync + API (verify-first)
-
-Existing implementation — **no algorithm changes** expected:
-
-| Component | Path | Contract |
-|-----------|------|----------|
-| Sync phase | `backend/src/sync/mod.rs` | `forecast_ml` after baseline; phase label "ML forecast…" |
-| Health gate | `backend/src/forecast_ml/sidecar.rs` | `health_ok()` GET `/health` before ML pass |
-| Skip metadata | `backend/src/forecast_ml/service.rs` | `record_skip_on_baseline` on failure (DEC-0052) |
-| Min history | `default.toml` `[forecast_ml]` | `min_monthly_points = 12` unchanged |
-| API | `backend/src/api/forecast.rs` | `variant=ml_enhanced` returns bands + series |
-
-**Sidecar SLO (frozen):**
-
-| Layer | Contract |
-|-------|----------|
-| Runtime | `health_ok()` before ML phase; 60s HTTP timeout |
-| Compose healthcheck | `start_period: 30s` — advisory only |
-| Cold start | First sync may `sidecar_unavailable` — manual re-sync acceptable (DEC-0052) |
-
-### S3 — UI + Grafana (verify-first)
-
-| Surface | Path | Verify |
-|---------|------|--------|
-| Forecast Compare | `frontend/src/pages/ForecastPage.tsx` | Baseline + ML overlay when data exists |
-| Degraded copy | ForecastPage + meta API | `sidecar_disabled` per DEC-0066 |
-| Wealth outlook | `frontend/src/pages/WealthPage.tsx` | Portfolio horizons; signed totals (DEC-0065) |
-| Grafana ML | `grafana/.../forecast-horizons.json` | `$forecast_variant=ml_enhanced` panels with data |
-| ML off banner | Grafana provisioning | BUG-0009 banner remains when ML disabled |
-
-**No new React/Grafana features** — verification on external profile post-enablement.
-
-### S4 — Runbook + CI (execute)
-
-| Deliverable | Content |
-|-------------|---------|
-| Runbook § Omniflow ML enablement | Compose union, env vars, health probe, Full sync prerequisite, min history, degraded troubleshooting |
-| CI dual guard | `compose-config-check.sh` update + `forecast_ml_integration` retained in `tests/run-tests.sh` |
-| User guide | `docs/user-guides/US-0013.md` (operator path) |
-
-### Codebase map (ML enablement slice)
-
-| Path | Role | US-0013 touch |
-|------|------|---------------|
-| `docker-compose.yml` | Base `stats-forecast` `[full]` | Reference only — no base profile change |
-| `docker-compose.external.yml` | Omniflow overlay | **S1** — sidecar + env passthrough |
-| `.env.example` | Operator docs | **S1** — `FORECAST_ML_ENABLED`, `STATS_FORECAST_URL` |
-| `scripts/compose-config-check.sh` | CI compose assert | **S1/S4** — 3-service + traefik assert |
-| `backend/src/config/mod.rs` | Env merge | **Verify** — `FORECAST_ML_ENABLED`, `STATS_FORECAST_URL` |
-| `backend/src/sync/mod.rs` | Sync mutex + `forecast_ml` phase | **S2 verify** |
-| `backend/src/forecast_ml/{service,sidecar}.rs` | ML orchestration + health | **S2 verify** |
-| `backend/src/api/{forecast,wealth}.rs` | ML variant + portfolio API | **S2/S3 verify** |
-| `frontend/src/pages/ForecastPage.tsx` | Compare + degraded UX | **S3 verify** |
-| `frontend/src/pages/WealthPage.tsx` | Portfolio forecast horizons | **S3 verify** |
-| `grafana/provisioning/dashboards/analytics/forecast-horizons.json` | ML panels | **S3 verify** |
-| `backend/tests/forecast_ml_integration.rs` | Wiremock sidecar test | **S4 retain** |
-| `docs/engineering/runbook.md` | Operator procedures | **S4** — new section |
-| `docs/user-guides/US-0013.md` | Operator guide | **S4** — created at architecture |
-
-### Recommended sprint S0014 (slices — sprint-plan materializes tasks)
-
-| Slice | Boundary | Tasks (est.) | Acceptance rows |
-|-------|----------|--------------|-----------------|
-| **US-0013-S1** | Compose + env + CI assert | ~4 | AC-1 |
-| **US-0013-S2** | Sync verify + API `ml_enhanced` | ~2 | AC-2, AC-3, AC-4 |
-| **US-0013-S3** | React + Grafana verify | ~3 | AC-5, AC-6, AC-7 |
-| **US-0013-S4** | Runbook + integration test | ~2 | AC-8, AC-9 |
-
-**Count:** ~11 tasks (< `SPRINT_MAX_TASKS` 12) → **single sprint S0014**; no split.
-
-**Sequencing:** S1 before S2 (sidecar must start); S2 before S3 (data prerequisite); S4 may parallel S3 after S1 lands.
-
-### Test strategy
-
-| Check | Type | Pass criteria |
-|-------|------|---------------|
-| Compose assert | `scripts/compose-config-check.sh` | 3 external services; stats-forecast on traefik |
-| Integration | `cargo test --test forecast_ml_integration` | Wiremock sidecar + skip metadata |
-| API smoke | Manual or integration | `variant=ml_enhanced` non-empty after Full sync |
-| UI smoke | Operator V1 | Compare tab + wealth horizons on omniflow |
-| Grafana | Panel query | `$forecast_variant=ml_enhanced` returns data |
-| Profile guard | compose-config-check | `minimal+external` still excludes firefly-iii |
-
-### Triad check (architecture phase)
-
-| Surface | Check | Result |
-|---------|-------|--------|
-| `docs/product/backlog.md#US-0013` | Discovery + research resolution linked | pass |
-| `docs/product/acceptance.md` § US-0013 | 10 rows unchanged; mapped to S1–S4 | pass |
-| `docker-compose.external.yml` + `compose-config-check.sh` | Gap documented in codebase map | pass |
-| `backend/src/forecast_ml/` + `sync/mod.rs` | Verify-first paths documented | pass |
-| R-0071 | 5/5 discovery questions resolved; DEC-0076 formalized | pass |
-
-`triad_hot_surface`: post-write `--check` required; architecture § US-0013 appended; DEC-0076 formalized; spec-pack + user guide created.
-
-### Decisions (US-0013)
-
-| ID | Topic | Summary |
-|----|-------|---------|
-| DEC-0076 | External ML compose contract | Overlay additive `external` profile on `stats-forecast`; traefik network; env opt-in; dual CI guard |
-
-Full record: `decisions/DEC-0076.md`
-
-### Risks
-
-| Risk | Mitigation |
-|------|------------|
-| Cold-start race (first sync skips ML) | Runbook: re-sync after health OK; DEC-0052 skip acceptable |
-| CI drift (compose-check not updated with overlay) | Atomic PR: S1 compose + compose-check together |
-| Host memory (sidecar RSS on shared omniflow) | Monitor; R-0044 footprint bounded; runbook note |
-| `minimal+external` profile regression | DEC-0056 guard unchanged in compose-config-check |
-| Short mirror history | `insufficient_history` skip; Full sync prerequisite in runbook |
-| FX incomplete crypto portfolio | `portfolio_forecast_low_confidence` banner — not block (R-0034) |
-
-### Acceptance mapping
-
-| Row | Architecture slice | Verify |
-|-----|-------------------|--------|
-| AC-1 | S1 | External overlay starts sidecar; env documented |
-| AC-2 | S2 | Sidecar health gate before ML phase |
-| AC-3 | S2 | Sync ML phase + skip metadata; UI phase label |
-| AC-4 | S2 | `ml_enhanced` persisted; API variant returns series |
-| AC-5 | S3 | Forecast Compare overlay |
-| AC-6 | S3 | Wealth ML portfolio overlay; signed totals |
-| AC-7 | S3 | Grafana ML panels with data |
-| AC-8 | S4 | Runbook omniflow ML section |
-| AC-9 | S4 | CI wiremock + compose assert |
-| Prerequisite | — | BUG-0010 AA/AB/AC DONE (checked) |
-
-### Next phase
-
-`/sprint-plan` **S0014** — materialize US-0013-S1..S4 tasks from slice table; S1-before-S2 sequencing frozen; then `/plan-verify` → `/execute`.
-
----
-
-## US-0014 — Planning mode intuitive UX completion
-
-**Status:** Architecture complete (2026-06-08)  
-**Discovery:** `discovery-20260608-us0014` in `handoffs/po_to_tl.md` / `handoffs/archive/po-to-tl-pack-20260606-k.md`  
-**Research:** [R-0072](research.md#r-0072--us-0014-planning-ux-epic-gap-beyond-bug-0011), [R-0073](research.md#r-0073--us-0014-planning-mutation-error-toast-patterns)  
-**Decisions:** **DEC-0077** (planning mutation feedback); frozen **DEC-0073**, **DEC-0074**, **DEC-0024**  
-**Depends on:** BUG-0011 DONE (Q0019), US-0004 (plan engine)  
-**Sprint:** **S0015** recommended — slices US-0014-S1..S3  
-**Acceptance:** `docs/product/acceptance.md` § US-0014 (9 rows)  
-**Spec-pack:** `docs/engineering/spec-pack/US-0014-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
-**User guide:** `docs/user-guides/US-0014.md` (`USER_GUIDE_MODE=1`)
-
-### Problem
-
-Q0019 shipped **5 of 8** epic acceptance rows in `PlanningPage.tsx` (onboarding grid, Compare footnote, PVA guided card, template paths, set-active banner skeleton). US-0014 closes the remaining **polish + error surfaces + operator smoke** — not first-run greenfield.
-
-| AC | Discovery verdict | Execute weight |
-|----|-------------------|----------------|
-| AC-1 Onboarding | Shipped | S1 verify |
-| AC-2 Add-lines | Partial | S2 primary |
-| AC-3 Compare UX | Shipped (DEC-0073) | S3 verify |
-| AC-4 PVA guided | Shipped (DEC-0074) | S3 verify |
-| AC-5 Templates | Partial | S1 confirmation toasts |
-| AC-6 Set-active | Partial | S1 Dashboard 3 copy |
-| AC-7 Errors | **Gap** | **S2 primary** |
-| AC-8 OIDC | Verify | S3 smoke |
-
-`isolation_scope`: artifact + repo source reads; no host `.env` / secrets read.
-
-### System context (unchanged backend)
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│  /planning (PlanningPage.tsx) — three tabs                      │
-├─────────────┬─────────────────────┬─────────────────────────────┤
-│  Scenarios  │  Compare            │  Plan vs Actual             │
-│  templates  │  overlay delta      │  200 no_active_plan         │
-│  add form   │  DEC-0073 0.00      │  guided card DEC-0074       │
-│  set active │  contextual footnote│  month selector             │
-└─────────────┴─────────────────────┴─────────────────────────────┘
-         │                    │                    │
-         └────────────────────┴────────────────────┘
-                              │
-                              ▼
-              POST/PATCH/DELETE /api/v1/plans/*  (contracts frozen)
-                              │
-                              ▼
-              Grafana Dashboard 3 uid=budgets (active plan, DEC-0024)
-```
-
-**No backend metric or API contract changes** unless execute finds regression.
-
-### Architecture contract (DEC-0077)
-
-```text
-US-0014
-├── S1 — Verify shipped UX + banner + confirmation toasts (P1)
-│   ├── V1 — AC-1 empty-state template grid regression verify
-│   ├── T1 — Extend set-active banner: Plan vs Actual + Grafana Dashboard 3 (AC-6)
-│   └── T2 — Success toasts on createPlan + Create from {template} (AC-5)
-├── S2 — Mutation feedback + invalidation (P0 — primary)
-│   ├── T1 — planningFeedback helper (success/error card variants)
-│   ├── T2 — onError on all 7 mutations (AC-7)
-│   └── T3 — addAdjustment success toast + plan-vs-actual invalidation (AC-2)
-└── S3 — Verify + operator smoke + user guide (P1)
-    ├── V1 — AC-3 Compare footnote + 0.00 overlay; AC-4 PVA guided card
-    ├── T1 — docs/user-guides/US-0014.md (first-run, Set active, Compare semantics)
-    └── V1 — OIDC `/planning` three-tab smoke (AC-8; BACKEND_FRONTEND_DEPLOY gate)
-```
-
-**Out of scope:** Compare formula changes (DEC-0073); PVA API shape (DEC-0074); auto-activate first plan; global toast library / MutationCache refactor.
-
-### S1 — Verify + banner + confirmations (frozen)
-
-#### AC-1 verify-only
-
-Empty branch already ships: name field, primary **Create empty plan**, six-template `card-grid`. Execute **must not rewrite** — regression checklist only.
-
-#### Set-active banner (AC-6)
-
-Extend yellow banner copy:
-
-| Element | Contract |
-|---------|----------|
-| Plan vs Actual | Existing — active plan required for PVA data |
-| Grafana | Add cue: Dashboard 3 **Budgets** (`uid=budgets`) reflects the **active** plan |
-| Trigger | `showSetActiveBanner` after `createPlanMutation` success when `is_active=false` |
-| Dismiss | Clears on successful `activateMutation` (existing) |
-
-#### Confirmation toasts (AC-5)
-
-| Path | Message pattern |
-|------|-----------------|
-| Create empty plan | `Plan "{name}" created` |
-| Create from template | `Plan "{name}" created from {template label}` |
-| Apply template (existing plan) | `Template applied` or template-specific |
-
-Use DEC-0077 success variant (green card, 4s auto-dismiss).
-
-### S2 — Mutation feedback (frozen — DEC-0077)
-
-#### Helper contract
-
-```typescript
-// frontend/src/pages/planningFeedback.ts (or inline in PlanningPage.tsx)
-showPlanningFeedback({ kind: 'success' | 'error', message: string })
-formatPlanningError(err: unknown, fallback: string): string
-```
-
-| Variant | Background | Dismiss |
-|---------|------------|---------|
-| success | `#ecfdf5` | Auto 4s |
-| error | `#fef2f2` | Manual Dismiss button |
-
-Single active slot — new feedback replaces prior (prevents toast flood on retry).
-
-#### Mutation matrix
-
-| Mutation | onError (required) | onSuccess toast | Extra invalidation |
-|----------|-------------------|-----------------|-------------------|
-| `createPlanMutation` | ✓ | ✓ create confirmation | `plan-vs-actual` |
-| `activateMutation` | ✓ | ✓ "Plan set as active" | `plan-vs-actual` (existing `plans`) |
-| `applyTemplateMutation` | ✓ | ✓ all templates | existing keys |
-| `createVersionMutation` | ✓ | optional | — |
-| `addAdjustmentMutation` | ✓ | ✓ "Adjustment added" | **`plan-vs-actual`** |
-| `updateAdjustmentMutation` | ✓ | optional | **`plan-vs-actual`** |
-| `deleteAdjustmentMutation` | ✓ | optional | **`plan-vs-actual`** |
-
-**Rejected:** Global `MutationCache` — no toast library; one-page scope (R-0073).
-
-#### Error message extraction
-
-`apiFetch` throws `Error` with response body text. Helper truncates to 240 chars; prepends mutation label when empty.
-
-### S3 — Verify + smoke + docs (frozen)
-
-| Surface | Verify |
-|---------|--------|
-| Compare footnote L600–603 | Overlay-only delta vs projected balance |
-| Compare `monthly_delta_sum` | **0.00** on zero-adjustment plan (DEC-0073) |
-| PVA `no_active_plan` | Guided card + Scenarios / Set active buttons (DEC-0074) |
-| OIDC smoke | All three tabs on US-0010 external profile |
-
-**Operator gate:** **BACKEND_FRONTEND_DEPLOY** before V1 omniflow smoke (same as Q0019).
-
-### Codebase map (planning UX slice)
-
-| Path | Role | US-0014 touch |
-|------|------|---------------|
-| `frontend/src/pages/PlanningPage.tsx` | Primary UX surface | **S1–S3** — mutations, banner, toasts |
-| `frontend/src/pages/planningFeedback.ts` | Feedback helper (new, optional extract) | **S2** — DEC-0077 |
-| `frontend/src/lib/api.ts` | `apiFetch` error shape | Reference — no change expected |
-| `backend/src/api/plans.rs` | Plans API | **Verify only** — frozen |
-| `backend/src/plan/overlay.rs` | Compare delta | **Verify only** — DEC-0073 |
-| `grafana/provisioning/dashboards/analytics/budgets.json` | Dashboard 3 | **Copy reference only** — no SQL edit |
-| `docs/user-guides/US-0014.md` | End-user guide | **S3** — created at architecture |
-| `docs/engineering/spec-pack/US-0014-*.md` | Spec-pack trio | Created at architecture |
-
-### Recommended sprint S0015 (slices — sprint-plan materializes tasks)
-
-| Slice | Boundary | Tasks (est.) | Acceptance rows |
-|-------|----------|--------------|-----------------|
-| **US-0014-S1** | Verify AC-1 + banner + create confirmations | ~3 | AC-1, AC-5, AC-6 |
-| **US-0014-S2** | Mutation helper + errors + invalidation | ~3 | AC-2, AC-7 |
-| **US-0014-S3** | Verify Compare/PVA + user guide + OIDC smoke | ~2 | AC-3, AC-4, AC-8 |
-
-**Count:** ~8 tasks (< `SPRINT_MAX_TASKS` 12) → **single sprint S0015**; no split.
-
-**Sequencing:** S2 helper (T1) before S2 onError wiring (T2); S1 verify may parallel S2; S3 after S2 lands (smoke validates error paths).
-
-### Test strategy
-
-| Check | Type | Pass criteria |
-|-------|------|---------------|
-| AC-1 regression | Manual / component | Empty state shows grid + Create empty plan |
-| AC-7 error surface | Manual | Force 4xx/5xx (e.g. invalid amount) → red error card visible |
-| AC-2 add-line | Manual | Submit adjustment → success toast + Compare/PVA refresh |
-| AC-3/AC-4 | Manual | Zero-overlay 0.00; PVA guided when no active plan |
-| AC-6 | Manual | Banner mentions Dashboard 3 after create |
-| AC-8 | Operator V1 | OIDC `/planning` three-tab smoke on omniflow |
-| Backend regression | `cargo test --test plans_integration` | Existing 5 tests pass — no API change |
-
-### Triad check (architecture phase)
-
-| Surface | Check | Result |
-|---------|-------|--------|
-| `docs/product/backlog.md#US-0014` | Discovery audit + slice boundaries linked | pass |
-| `docs/product/acceptance.md` § US-0014 | 9 rows unchanged; mapped to S1–S3 | pass |
-| `frontend/src/pages/PlanningPage.tsx` | Gap matrix documented in codebase map | pass |
-| R-0072 + R-0073 | Discovery questions resolved; DEC-0077 formalized | pass |
-| DEC-0073 / DEC-0074 | Frozen — no architecture drift | pass |
-
-`triad_hot_surface`: post-write `--check` required; architecture § US-0014 appended; DEC-0077 formalized; spec-pack + user guide created.
-
-### Decisions (US-0014)
-
-| ID | Topic | Summary |
-|----|-------|---------|
-| DEC-0077 | Planning mutation feedback | Page-local helper; mandatory onError; success confirmations; PVA invalidation |
-
-Full record: `decisions/DEC-0077.md`
-
-### Risks
-
-| Risk | Mitigation |
-|------|------------|
-| Duplicate Q0019 work | S1/S3 verify-only for shipped AC-1/AC-3/AC-4 — do not rewrite empty state |
-| Toast flood on retry | Single active feedback slot |
-| Over-scoping global toast lib | DEC-0077 explicitly page-local; extract later if needed |
-| OIDC smoke without deploy | BACKEND_FRONTEND_DEPLOY gate on V1 |
-| Negative projected balance confusion | Help text only — DEC-0073 frozen |
-
-### Acceptance mapping
-
-| Row | Architecture slice | Verify |
-|-----|-------------------|--------|
-| Prerequisite | — | BUG-0011 DONE (checked) |
-| AC-1 | S1 | Empty-state regression |
-| AC-2 | S2 | Add-line success + invalidation |
-| AC-3 | S3 | Compare footnote + 0.00 overlay |
-| AC-4 | S3 | PVA guided card |
-| AC-5 | S1 | Create confirmation toasts |
-| AC-6 | S1 | Set-active + Dashboard 3 banner |
-| AC-7 | S2 | All mutation onError surfaces |
-| AC-8 | S3 | OIDC three-tab smoke |
-
-### Next phase
-
-`/sprint-plan` **S0015** — materialize US-0014-S1..S3 tasks from slice table; S2-weighted sequencing; then `/plan-verify` → `/execute`.
-
----
-
 ## US-0015 — AI-assisted forecast category bucket mapping
 
 **Status:** Architecture complete (2026-06-06)  
@@ -2993,4 +1598,1347 @@ Schema and APIs per DEC-0101/0102. UI: global tag manager; multi-select chips on
 `runtime_proof_id`: `runtime-proof-architecture-20260610-us0020-001`
 
 `triad_hot_surface`: architecture § US-0020 appended; decisions DEC-0098..DEC-0103 formalized; spec-pack US-0020 created; state checkpoint; post-write `--check` required.
+
+---
+
+# BUG-0023 — Crypto Wealth EUR values missing (live regression)
+
+**Status:** architecture complete (2026-06-12)  
+**Discovery:** `discovery-20260612-bug0023` in `handoffs/po_to_tl.md`  
+**Research:** [R-0093 §5](research.md#r-0093--bug-0023-crypto-wealth-eur-values-live-regression)  
+**Decisions:** extends **DEC-0064**, **DEC-0080**, **DEC-0081**, **DEC-0038**; **GATE-DEC-1 closed — no new DEC** (subtotal contract unchanged)  
+**Sprint:** `/quick` recommended (≤10 tasks)  
+**Acceptance:** `docs/product/acceptance.md` rows **BO**, **BP**, **BQ**  
+**Spec-pack:** `docs/engineering/spec-pack/BUG-0023-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
+**Related:** BUG-0014 DONE (AP/AQ live deferred); BUG-0013 DONE (**DEC-0080**); **R-0079** AP2 rejected for this bug
+
+### Root cause (frozen, R-0093 §5)
+
+Live regression on Bitunix-connected Wealth **Crypto** tab decomposes to a **single upstream wallet-ingest failure** with three downstream display symptoms — not a wealth aggregation rewrite or deploy gap (H4 ruled out).
+
+| Layer | Finding | Symptom |
+|-------|---------|---------|
+| **Wallet ingest** | `parse_futures_wallet` silent `None` (no log); equity formula omits `crossUnrealizedPNL`/`isolationUnrealizedPNL`; HTTP client ignores JSON `code` | No `product_type=futures` row persisted (**H1**) |
+| **Subtotal** | `wealth/service.rs` `subtotal_eur = sum(market_value_eur)` | **€0** when wallet row missing (**BO**) |
+| **Linear display** | `pnl.rs` sets `market_value_eur: None` for linear per **DEC-0064** | `holdings_all[].value_eur` NULL (**BP**, **H2**) |
+| **Total return** | `portfolio/service.rs` `total_return_pct` None when `crypto_value_eur=0` | **—** despite unrealized EUR (**BQ**, **H5**) |
+
+**Live probe (2026-06-12):** `GET /api/v1/wealth` — `crypto.subtotal_eur=0`, **11** linear rows, all `value_eur=null`, `pnl.unrealized_eur≈376.83`, `pnl.total_return_pct=null`; positions sync succeeds; no futures wallet row.
+
+`isolation_scope`: artifact + repo source reads; no host `.env` / secrets read.
+
+### Architecture gates (frozen)
+
+| Gate | Decision | Rationale | Alternatives rejected |
+|------|----------|-----------|----------------------|
+| **GATE-BO-1** | Wallet parse hardening in `bitunix.rs` | Equity keys + `code==0` validation + parse-skip logging + OpenAPI wiremock | Re-open wealth aggregation; ops-only redeploy (H4 ruled out) |
+| **GATE-BP-1** | **D1** — `entryValue` → display `exposure_eur` (not `market_value_eur`) | Satisfies BP without **DEC-0064** amend; payload already stored | Tier-2 mark-price API (scope); merge notional into subtotal (violates **DEC-0064**) |
+| **GATE-AGG-1** | Subtotal = `sum(market_value_eur)` wallet-only | Preserves **DEC-0064** / **DEC-0080** double-count guard | Sum linear notionals into subtotal; **BUG-0014** AP2 defensive snapshot fallback (masks parse bug) |
+| **GATE-BQ-1** | Denominator = wallet-priced `crypto_value_eur`; baseline on first priced sync | Resolves automatically when BO priced; unrealized alone must not drive return (**DEC-0038**) | Use unrealized as return numerator; portfolio snapshot subtotal override |
+| **GATE-DEC-1** | **No new DEC** | Contracts unchanged — implementation gap under existing decisions | New DEC only if subtotal merges position notional (rejected) |
+
+### Fix slices
+
+```text
+BUG-0023
+├── BO — wallet ingest + observability (P0)
+│   ├── BO1 — parse_futures_wallet: equity keys + unrealized key fix
+│   ├── BO2 — JSON code==0 validation + parse-skip warn diagnostics
+│   └── BO3 — wiremock + unit tests (Bitunix OpenAPI sample)
+├── BP — linear Value EUR display (P1)
+│   ├── BP1 — migration exposure_eur + pnl.rs entryValue→EUR persist
+│   └── BP2 — wealth/service.rs map holdings_all.value_eur from exposure_eur
+├── BQ — downstream verify (P1)
+│   └── BQ1 — baseline capture + total_return_pct when wallet priced
+├── T1 — integration/regression tests (BO/BP/BQ)
+├── G1 — automated gate (cargo test + npm build)
+└── V1 — operator verify-work (localhost:18080 + OIDC smoke)
+```
+
+**Deploy order:** BO → exchange sync + PnL recompute → BP (can ship same release) → V1.
+
+**Out of scope:** Tier-2 `ExchangePriceBook` / mark-price feed; merge linear notional into subtotal; **BUG-0014** AP2 defensive subtotal; Grafana panel edits; `holdings_count` UX footnote (P2 optional).
+
+### BO — Wallet parse hardening (GATE-BO-1)
+
+#### BO1 — Equity + unrealized key coverage
+
+| Change | Contract |
+|--------|----------|
+| Equity fallback sum | `available + frozen + margin + crossUnrealizedPNL + isolationUnrealizedPNL` when direct equity keys absent |
+| Equity key scan | Retain `accountEquity`, `totalEquity`, `equity`, `balance` first |
+| Unrealized keys | Add `crossUnrealizedPNL`, `isolationUnrealizedPNL` alongside existing aliases |
+| Persist row | `product_type=futures`, `asset=marginCoin` (default USDT), `quantity=equity`, `market_value_usd=Some(qty)` for USDT |
+
+**Files:** `backend/src/exchanges/bitunix.rs`
+
+#### BO2 — Fail-visible sync path
+
+| Change | Contract |
+|--------|----------|
+| JSON `code` | Reject body when `code != 0` (or missing on error responses) before parse |
+| Parse skip | `warn!` with redacted shape diagnostic (marginCoin present, equity keys tried, derived sum) when `parse_futures_wallet` returns `None` |
+| Sync continuation | Positions sync unchanged — wallet failure must be observable in logs |
+
+**Files:** `backend/src/exchanges/bitunix.rs` (HTTP helper if shared)
+
+#### BO3 — Regression tests
+
+| Test | Contract |
+|------|----------|
+| OpenAPI sample | Official Get Single Account array shape → futures row with non-zero equity |
+| Zero-equity skip | Empty `data: []` → warn path, no row |
+| `code != 0` | No row persisted; error surfaced |
+
+**Files:** `backend/src/exchanges/bitunix.rs` tests; wiremock fixture per R-0093 web refs
+
+**Risks:** Live payload still differs from OpenAPI — BO2 logging mandatory before operator V1; equity formula may need field alias iteration post-deploy.
+
+### BP — Per-position Value EUR display (GATE-BP-1, D1)
+
+Preserve **DEC-0064**: linear rows **excluded** from `sum(market_value_eur)` subtotal. Populate **display-only** EUR for the Value EUR column.
+
+#### BP1 — Persist `exposure_eur` at recompute
+
+| Step | Contract |
+|------|----------|
+| Parse | `entryValue` from linear position `payload` (Bitunix pending-positions API) |
+| Convert | `fx.to_eur(entryValue, "USDT", price_book)` |
+| Persist | New nullable column `exposure_eur` on `exchange_holdings`; **do not** set `market_value_eur` for linear |
+| Recompute | Extend `update_holding_eur` (or sibling) in linear branch of `compute_hybrid_pnl` |
+
+**Files:** `backend/migrations/017_bug0023_exposure_eur.sql`, `backend/src/exchanges/repository.rs`, `backend/src/portfolio/pnl.rs`
+
+**Alternative rejected:** Write display value into `market_value_eur` — would inflate subtotal and violate **DEC-0064** / **DEC-0080**.
+
+#### BP2 — Wire through wealth API
+
+| Surface | Contract |
+|---------|----------|
+| `holdings_all[].value_eur` | `market_value_eur.or(exposure_eur)` per row |
+| `holdings_top` | Priced wallet rows only (unchanged) |
+| `crypto.subtotal_eur` | `sum(market_value_eur)` only — **no** `exposure_eur` merge |
+
+**Files:** `backend/src/wealth/service.rs` (minimal); `frontend/src/pages/WealthPage.tsx` pass-through only if API shape unchanged
+
+**Acceptance copy alignment:** "EUR equivalent at valuation time" = exchange-reported `entryValue` notional + FX, not external mark feed.
+
+**Risks:** `entryValue` may differ from operator mark-to-market — acceptable per D1; document in release notes if operator questions gap.
+
+### BQ — Total return % (GATE-BQ-1)
+
+No separate execute slice beyond BO + baseline path verification.
+
+| Step | Code | Expected after BO |
+|------|------|-------------------|
+| `compute_hybrid_pnl` | Futures row priced → `crypto_value_eur > 0` | Non-zero wallet equity |
+| Baseline capture | `capture_if_missing` when exchange `sum(market_value_eur) > 0` | First priced sync captures baseline |
+| `total_return_pct` | `(crypto_value_eur - baseline) / baseline` when `baseline > 0` | Populated when baseline exists |
+
+**BQ1 (verify task):** Integration test or SQL probe post-fix: wallet row priced → baseline row exists → API `pnl.total_return_pct` non-null with non-zero unrealized.
+
+**Files:** `backend/src/portfolio/service.rs` (verify-only unless baseline bug found); tests
+
+**Rejected:** Drive `total_return_pct` from unrealized alone — violates **DEC-0038** PnL boundary.
+
+### Operator gates (V1)
+
+1. **BACKEND_FRONTEND_DEPLOY** — rebuild with BO+BP fixes.
+2. **Exchange sync** — Bitunix Full/exchange sync success.
+3. **PnL recompute** — trigger post-sync (existing scheduler path).
+4. **AP1 SQL probe** (from **BUG-0014**, still valid):
+
+```sql
+SELECT product_type, asset, quantity, market_value_eur, exposure_eur, unrealized_pnl_eur
+FROM exchange_holdings WHERE exchange_id = 'bitunix' ORDER BY product_type, asset;
+```
+
+| Probe outcome | Pass criterion |
+|---------------|----------------|
+| `futures` row | `market_value_eur` ≈ operator ~€2000 order of magnitude |
+| Linear rows | `exposure_eur` populated; `market_value_eur` NULL |
+| API BO | `crypto.subtotal_eur` matches wallet row, not €0 |
+| API BP | `holdings_all[].value_eur` non-null for linear with `entryValue` |
+| API BQ | `pnl.total_return_pct` non-null when baseline captured |
+
+### Task table (sprint-plan input)
+
+| ID | Sub | Task | Files | Priority |
+|----|-----|------|-------|----------|
+| **BO1** | BO | Equity + unrealized key parse fix | `bitunix.rs` | P0 |
+| **BO2** | BO | `code==0` validation + parse-skip logging | `bitunix.rs` | P0 |
+| **BO3** | BO | OpenAPI wiremock + unit tests | `bitunix.rs` tests | P0 |
+| **BP1** | BP | `exposure_eur` migration + pnl `entryValue` persist | `migrations/`, `repository.rs`, `pnl.rs` | P1 |
+| **BP2** | BP | `holdings_all.value_eur` from `exposure_eur` | `wealth/service.rs` | P1 |
+| **BQ1** | BQ | Baseline + total_return integration verify | `portfolio/service.rs`, tests | P1 |
+| **T1** | all | Regression tests BO/BP/BQ | `backend/tests/` | P0 |
+| **G1** | all | Automated gate | `cargo test`, `npm run build` | P0 |
+| **V1** | all | Operator verify-work | acceptance BO–BQ | P0 |
+
+**Count:** 9 mandatory tasks ≤ `SPRINT_MAX_TASKS` (12) → **`/quick`** recommended.
+
+### Codebase map (BUG-0023 slice)
+
+| Path | Role | Touch |
+|------|------|-------|
+| `backend/src/exchanges/bitunix.rs` | Wallet parse + sync | BO1–BO3 |
+| `backend/src/exchanges/repository.rs` | `exposure_eur` persist | BP1 |
+| `backend/migrations/017_bug0023_exposure_eur.sql` | Display column | BP1 |
+| `backend/src/portfolio/pnl.rs` | Linear display valuation | BP1 |
+| `backend/src/portfolio/service.rs` | Baseline + total return | BQ1 verify |
+| `backend/src/wealth/service.rs` | Subtotal + holdings_all | BP2 |
+| `frontend/src/pages/WealthPage.tsx` | Value EUR column | pass-through |
+
+### Decisions (BUG-0023)
+
+| Topic | Contract | Existing DEC |
+|-------|----------|--------------|
+| Subtotal source | Wallet `market_value_eur` only | **DEC-0064**, **DEC-0080** |
+| Linear in subtotal | Excluded | **DEC-0064** |
+| Value EUR column | Display `exposure_eur` from `entryValue` | extends **DEC-0081** holdings surface |
+| Total return denominator | Wallet-priced `crypto_value_eur` | **DEC-0038** |
+| New DEC | **None** — GATE-DEC-1 closed | — |
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Live wallet shape differs from OpenAPI | BO2 warn diagnostics + operator payload capture (redacted) pre-V1 |
+| Equity still zero after key fix | Log derived components; escalate to Bitunix field alias — do not AP2-mask |
+| `entryValue` ≠ operator mark | Accept D1 contract; release note |
+| Baseline never captured if wallet intermittently NULL | BO must be stable before BQ acceptance |
+| Migration on production | Nullable column; backward compatible |
+
+### Next phase
+
+`/sprint-plan` — materialize `/quick` sprint from task table; then `/plan-verify` → `/execute`.
+
+`runtime_proof_id`: `runtime-proof-architecture-20260612-bug0023-001`
+
+`triad_hot_surface`: architecture § BUG-0023 appended; spec-pack BUG-0023 created; GATE-DEC-1 closed without new DEC; state checkpoint; post-write `--check` required.
+
+---
+
+# BUG-0022 — Plan delete selector regression (activePlanId ignores dropdown)
+
+**Status:** architecture complete (2026-06-13)  
+**Discovery:** `discovery-20260613-bug0022` in `handoffs/po_to_tl.md`  
+**Research:** [R-0094](research.md#r-0094--bug-0022-plan-delete-selector-regression-activeplanid-ignores-dropdown)  
+**Decisions:** extends **DEC-0082** frontend selector contract; **GATE-DEC-1 closed — no new DEC**  
+**Sprint:** `/quick` **Q0031** recommended (4 tasks)  
+**Acceptance:** `docs/product/acceptance.md` rows **BM**, **BN**  
+**Spec-pack:** `docs/engineering/spec-pack/BUG-0022-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
+**Related:** BUG-0014 DONE / Q0022 AS1 (**DEC-0082** shipped); post-Q0022 frontend regression only
+
+### Root cause (frozen, R-0094 §1)
+
+Post-**Q0022** AS1 regression: backend **DEC-0082** guard is intact; frontend selector priority is inverted.
+
+| Layer | Finding | Symptom |
+|-------|---------|---------|
+| **State** | `selectedPlanId` updated on dropdown `onChange` | Operator selection stored |
+| **Derived id** | `activePlanId` useMemo: `active?.id ?? selectedPlanId ?? first` | Global `is_active` **always wins** over dropdown |
+| **Dropdown** | Controlled `value={activePlanId}` | Reverts to global active when any active plan exists |
+| **Delete guard** | `activePlanIsSelected = plan(activePlanId)?.is_active` | Always **true** when global active exists |
+| **Delete control** | `disabled={activePlanIsSelected}` | Permanently disabled under BM repro |
+| **Backend** | `DELETE` non-active **204**; active **409** `active_plan_delete_forbidden` | BN API path correct; UI masked by BM |
+
+**Live probe (2026-06-13):** `DELETE /api/v1/plans/:id` non-active **204**; active **409** per **DEC-0082**. PVA tab uses `/api/v1/plans/active/plan-vs-actual` — decoupled from dropdown id.
+
+`isolation_scope`: artifact + repo source reads; no host `.env` / secrets read.
+
+### Architecture gates (frozen)
+
+| Gate | Decision | Rationale | Alternatives rejected |
+|------|----------|-----------|----------------------|
+| **GATE-SEL-1** | **Option A** — invert useMemo priority: `selectedPlanId ?? globalActiveId ?? firstPlanId` | Minimal diff (~1 useMemo); single derived id; React derived-state best practice ([R-0094](research.md#r-0094--bug-0022-plan-delete-selector-regression-activeplanid-ignores-dropdown) web refs) | **B** split `displayedPlanId` + `globalActivePlanId` (more rename churn); **C** useEffect sync (dual source of truth); **D** uncontrolled dropdown |
+| **GATE-DEC82-1** | **No backend change** | 409 guard + tooltip logic correct once selector fixed | Backend delete policy change; auto-activate successor |
+| **GATE-TEST-1** | Vitest pure helper `resolveDisplayedPlanId` + delete enablement cases | Closes selector test gap; BM/BN guard logic unit-testable | RTL full-page smoke only (lower priority) |
+| **GATE-SCOPE-1** | `/quick` — 2–4 tasks; `PlanningPage.tsx` primary | Well under `SPRINT_MAX_TASKS=12`; same track as Q0022 AS1 | Full sprint split unnecessary |
+| **GATE-LABEL-1** | Rename dropdown **"Active plan"** → **"Plan"** (P2 defer OK) | Reduces operator confusion when viewing non-active scenario | Keep misleading label (cosmetic only) |
+| **GATE-DEC-1** | **No new DEC** | Clarifies **DEC-0082** §2 frontend contract — selector semantics only | New DEC for selector naming |
+
+### Selector contract (frozen)
+
+```text
+displayedPlanId = selectedPlanId ?? plans.find(is_active)?.id ?? plans[0]?.id ?? null
+
+deleteDisabled = plans.find(p => p.id === displayedPlanId)?.is_active === true
+deleteTooltip   = deleteDisabled
+  ? "Set another plan active before deleting the active plan"
+  : "Delete this plan"
+```
+
+**Implementation note:** May keep identifier `activePlanId` and change useMemo only, or rename to `displayedPlanId` in one pass — execute choice; contract is priority order, not name.
+
+**Downstream consumers (unchanged semantics after fix):**
+
+| Consumer | Contract |
+|----------|----------|
+| Plan detail / versions / compare / adjustments | Operate on **displayed** plan id |
+| Set active button | `activateMutation.mutate(displayedPlanId)` |
+| Delete confirm modal | Delete **displayed** plan id |
+| PVA tab | `/api/v1/plans/active/plan-vs-actual` — **not** tied to dropdown |
+| `deletePlanMutation` success | Invalidate `plans`, `plan-detail`, `plan-vs-actual`; clear `selectedPlanId` if deleted |
+
+### Fix slices
+
+```text
+BUG-0022
+├── BM — selector priority fix (P0)
+│   └── BM1 — invert useMemo in PlanningPage.tsx; verify activePlanIsSelected uses same id
+├── T1 — vitest selector + delete enablement (P0)
+├── G1 — automated gate (npm test + build) (P0)
+├── V1 — verify-work BM/BN on /planning + OIDC smoke (P0)
+└── L1 — dropdown label rename "Plan" (P2 optional, GATE-LABEL-1)
+```
+
+**Out of scope:** Backend `plans.rs` / `plan/service.rs`; PVA endpoint; sole-plan delete policy (**DEC-0082** §Risks acceptable); Grafana Dashboard 3 overlay; new DEC.
+
+### BM — Selector priority (GATE-SEL-1)
+
+#### BM1 — Invert `activePlanId` useMemo
+
+| Change | Contract |
+|--------|----------|
+| useMemo priority | `selectedPlanId ?? plans.find(is_active)?.id ?? plans[0]?.id ?? null` |
+| Dropdown | Remains controlled: `value={activePlanId}` + `onChange` → `setSelectedPlanId` |
+| Delete guard | `activePlanIsSelected = plan(activePlanId)?.is_active` — now reflects **displayed** plan |
+| Set-active banner | `!activePlanIsSelected` when viewing non-active — correct after fix |
+
+**Files:** `frontend/src/pages/PlanningPage.tsx` (L110–113 useMemo primary; L489, L643–683 consumers)
+
+**Alternative rejected:** Split `globalActivePlanId` + `displayedPlanId` — clearer naming but ~20 call-site renames for same behavior.
+
+### BN — Active delete guard (GATE-DEC82-1)
+
+No code change expected. Verify after BM1:
+
+| Surface | Expected |
+|---------|----------|
+| UI — active plan selected in dropdown | Delete **disabled** + tooltip per **DEC-0082** |
+| UI — non-active plan selected | Delete **enabled**; confirm modal → **204** |
+| API — `DELETE` active plan | **409** `active_plan_delete_forbidden` (unchanged) |
+| `planningFeedback.test.ts` | 409 message path unchanged |
+| `active_plan_delete_returns_409_with_code` | Backend test unchanged |
+
+### T1 — Vitest coverage (GATE-TEST-1)
+
+Extract pure helper (suggested location: `frontend/src/pages/planSelector.ts` or colocated export from `PlanningPage.tsx`):
+
+```typescript
+resolveDisplayedPlanId(plans, selectedPlanId): string | null
+isDeleteDisabled(plans, displayedPlanId): boolean
+```
+
+| Case | Expected |
+|------|----------|
+| Selected non-active + global active exists | Displayed = selected; delete **enabled** |
+| Selected null + global active exists | Displayed = global active; delete **disabled** |
+| Selected null + no global active | Displayed = first plan |
+| Empty plans | Displayed = null; delete disabled |
+| Displayed plan `is_active === true` | `isDeleteDisabled === true` |
+
+**Files:** new `planSelector.ts` (or equivalent) + `planSelector.test.ts`
+
+### Operator verification (V1)
+
+1. **BACKEND_FRONTEND_DEPLOY** — frontend rebuild only (no migration).
+2. Create or use **2+ plans** with one global active.
+3. **BM:** Select non-active in dropdown → **Delete plan** enabled → confirm → plan removed; list refreshes.
+4. **BN:** Select active plan → delete disabled + tooltip; direct API `DELETE` active → **409**.
+5. OIDC-enabled deploy regression per acceptance **BN**.
+
+### Task table (sprint-plan input)
+
+| ID | Sub | Task | Files | Priority |
+|----|-----|------|-------|----------|
+| **BM1** | BM | Invert selector useMemo priority | `PlanningPage.tsx` | P0 |
+| **T1** | BM/BN | Vitest `resolveDisplayedPlanId` + delete enablement | `planSelector.ts`, `planSelector.test.ts` | P0 |
+| **G1** | all | Automated gate | `npm test`, `npm run build` | P0 |
+| **V1** | all | verify-work `/planning` BM/BN + OIDC | `sprints/quick/Q0031/uat.md` | P0 |
+| **L1** | UX | Dropdown label "Active plan" → "Plan" | `PlanningPage.tsx` L641 | P2 optional |
+
+**Count:** 4 mandatory + 1 optional P2 ≤ `SPRINT_MAX_TASKS` (12) → **`/quick` Q0031** recommended.
+
+### Codebase map (BUG-0022 slice)
+
+| Path | Role | Touch |
+|------|------|-------|
+| `frontend/src/pages/PlanningPage.tsx` | Selector useMemo, dropdown, delete guard | BM1 (+ optional L1) |
+| `frontend/src/pages/planSelector.ts` | Pure helper (new) | T1 |
+| `frontend/src/pages/planSelector.test.ts` | Vitest cases | T1 |
+| `frontend/src/pages/planningFeedback.test.ts` | 409 message regression | verify only |
+| `backend/src/api/plans.rs` | Active delete 409 | **no change** |
+| `backend/src/plan/service.rs` | `ActivePlanDeleteForbidden` | **no change** |
+
+### Decisions (BUG-0022)
+
+| Topic | Contract | Existing DEC |
+|-------|----------|--------------|
+| Selector priority | Operator selection wins over global active for viewing/editing/delete | extends **DEC-0082** §2 frontend |
+| Active delete guard | UI disabled + API **409** | **DEC-0082** |
+| Single global active | Set active on displayed plan | **DEC-0024** |
+| PVA tab | Active endpoint, not dropdown | **DEC-0074** |
+| New DEC | **None** — GATE-DEC-1 closed | — |
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Stale `selectedPlanId` after external delete | Existing mutation success clears id; plans refetch |
+| Name `activePlanId` misleading post-fix | Optional rename or L1 label change |
+| Single-plan operator cannot delete | **DEC-0082** §Risks — acceptable; tooltip explains |
+| Browser automation empty SPA (discovery) | BM/BN verified via code + API + vitest; operator visual in V1 |
+
+### Next phase
+
+`/sprint-plan` (role: tech-lead) — materialize `/quick` **Q0031** from task table; then `/plan-verify` → `/execute`.
+
+`runtime_proof_id`: `runtime-proof-architecture-20260613-bug0022-001`
+
+`triad_hot_surface`: architecture § BUG-0022 appended; spec-pack BUG-0022 created; six gates frozen; GATE-DEC-1 closed without new DEC; state checkpoint; post-write `--check` required.
+
+---
+
+# US-0021 — Subscription transaction explorer with rich filters
+
+**Status:** Architecture complete (2026-06-13)  
+**Discovery:** `discovery-20260613-us0021` in `handoffs/po_to_tl.md`  
+**Research:** [R-0092 §5–8](research.md#r-0092--us-0021-subscription-transaction-explorer-vs-recurrence-only-discover)  
+**Decisions:** **DEC-0112** (transaction search API); **DEC-0113** (dual-mode Discover UX); **DEC-0114** (hint pass boundary); extends **DEC-0098**, **DEC-0099**, **DEC-0111**  
+**Depends on:** US-0020 DONE (discover patterns tab), US-0018 DONE (category catalog), DEC-0111 DONE (`formatAccountRole`), DEC-0085/0099 (confirm path)  
+**Sprint:** **S0020** recommended (single sprint ≤12 tasks; P2 optional defer)  
+**Acceptance:** `docs/product/acceptance.md` § US-0021 (AC-1..AC-6)  
+**Spec-pack:** `docs/engineering/spec-pack/US-0021-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
+**User guide:** `docs/user-guides/US-0021.md` (`USER_GUIDE_MODE=1`; execute publishes content)
+
+### Problem
+
+US-0020 shipped recurrence-candidate Discover (`detect_recurrence_groups` → `DiscoverCandidate` rows). Operator expectation (intake) is **transaction-first** ledger search with **category**, **Geldbereich**, **date**, and **manual tx-group activate** for expenses auto-detection missed. Scope expansion — not a US-0020 defect.
+
+| AC | Discovery verdict | Architecture slice |
+|----|-------------------|-------------------|
+| AC-1 Transaction search | **Gap** | **S1** — DEC-0112 search API + paginated tx table |
+| AC-2 Rich filters | **Gap** (partial baseline) | **S1/S2** — SQL push-down + filter bar |
+| AC-3 Pattern hint | **Gap** | **S1** — DEC-0114 hint pass on filtered subset |
+| AC-4 Manual activate | **Partial** | **S2** — multi-select → preview-group → DEC-0099 confirm |
+| AC-5 Regression | Verify | **S4** — no detection threshold changes |
+| AC-6 OIDC | Deferred qa | **V1** smoke |
+
+`isolation_scope`: artifact + repo source reads; `fresh_context_marker`: `architecture-20260613-us0021-tl-fresh`; no host `.env` / secrets read.
+
+### Research gates resolved (R-0092 — 9 gates)
+
+| Gate | Decision | Alternative rejected |
+|------|----------|---------------------|
+| **GATE-UX-1** | **DEC-0113** — dual mode: Transactions (default) \| Suggested patterns | Replace recurrence table |
+| **GATE-API-1** | **DEC-0112** — `GET /transactions/search` | `/discover?mode=transactions` |
+| **GATE-FILTER-1** | SQL push-down + accounts JOIN (DEC-0111 COALESCE) | In-memory post-load filter |
+| **GATE-HINT-1** | **DEC-0114** — separate hint pass; `min_emit_confidence: 60`; row metadata only | Lower global detection threshold |
+| **GATE-HINT-2** | **P2 defer** — 2-tx weak hints | Required MVP (scorer returns 0 below 60) |
+| **GATE-PAGE-1** | Offset **100/page** hard cap; `total_count` + `has_more` | Keyset cursor MVP; 50 cap |
+| **GATE-IDX-1** | **P2 defer** — `idx_transactions_account_date` | Blocking MVP |
+| **GATE-CONFIRM-1** | Reuse `POST /discover/confirm`; add `POST .../preview-group` | New confirm payload |
+| **GATE-DEC-1** | **DEC-0112**, **DEC-0113**, **DEC-0114** | Extend DEC-0098/0099 only |
+
+### System context
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Browser — SubscriptionsPage Discover tab (DEC-0113 dual mode)              │
+│    [Transactions | Suggested patterns]  — Transactions DEFAULT              │
+│    Transactions: rich filters + paginated tx table + hint badges            │
+│    Multi-select → preview-group → confirm modal → POST discover/confirm     │
+│    Patterns: existing DEC-0098 candidate table (unchanged)                  │
+└───────────────────────────────┬─────────────────────────────────────────────┘
+                                │ GET  /api/v1/subscriptions/transactions/search (DEC-0112)
+                                │ POST /api/v1/subscriptions/transactions/preview-group
+                                │ POST /api/v1/subscriptions/discover/confirm (DEC-0099)
+                                │ GET  /api/v1/subscriptions/discover (DEC-0098 — Patterns tab)
+                                │ GET  /api/v1/categories (US-0018)
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  flow-finance-ai (Axum) — subscriptions module                              │
+│    search_transactions: SQL filters + pagination (DEC-0112)                   │
+│    attach_recurring_hints: detect_recurrence_groups on subset (DEC-0114)     │
+│    preview_transaction_group: median + interval for confirm body            │
+│    confirm_from_discover + merge (DEC-0085/0099) — UNCHANGED                │
+│                                                                             │
+│  DetectionPipeline::run_candidates ──▶ UNCHANGED (AC-5)                   │
+│  run_discover (Patterns tab) ──▶ UNCHANGED (DEC-0098)                     │
+└───────────────────────────────┬─────────────────────────────────────────────┘
+                                │ mirror transactions + categories + accounts.payload
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  PostgreSQL — transactions, categories, accounts (read-only mirror)         │
+│  subscription_patterns overlay — confirm writes only (DEC-0099)             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**AC-5 boundary:** No changes to `DetectionPipeline`, `detection.rs` thresholds, or `run_discover` candidate pass. Hint pass is display-only metadata on search responses.
+
+### Architecture contract
+
+```text
+US-0021
+├── S1 — Transaction search API (P0)
+│   ├── T1 — Repository SQL search + COUNT + Geldbereich JOIN (DEC-0112, GATE-FILTER-1)
+│   ├── T2 — Search service + hint pass attachment (DEC-0114)
+│   └── T3 — GET /transactions/search + POST /preview-group routes
+├── S2 — Transactions mode UI (P0)
+│   ├── T4 — Dual-mode tab shell; Transactions default (DEC-0113)
+│   ├── T5 — Rich filter bar: account, payee, category, Geldbereich, date
+│   ├── T6 — Paginated tx table + hint badges + truncated banner
+│   └── T7 — Multi-select + preview-group → confirm modal (DEC-0099)
+├── S3 — Patterns tab preservation (P0)
+│   └── T8 — Extract existing discover UI to Suggested patterns sub-tab (DEC-0098 frozen)
+├── S4 — Tests + docs (P0/P1)
+│   ├── T9 — Search + hint integration tests
+│   ├── T10 — US-0003/US-0008 regression tests (AC-5)
+│   └── T11 — docs/user-guides/US-0021.md
+├── P2 — Optional stretch
+│   ├── amount_min/max filters (DEC-0112 P2)
+│   ├── idx_transactions_account_date migration (GATE-IDX-1)
+│   └── 2-tx weak hints (GATE-HINT-2)
+└── V1 — verify-work OIDC external profile smoke (AC-6)
+```
+
+**Out of scope:** Firefly write-back; changes to global auto-detection thresholds; replacing DEC-0098 patterns tab; keyset pagination MVP; all-accounts search without cap.
+
+### S1 — Transaction search (DEC-0112, DEC-0114)
+
+#### `GET /api/v1/subscriptions/transactions/search`
+
+See **DEC-0112** for frozen query params and response shape.
+
+#### Hint attachment (DEC-0114)
+
+After SQL load (≤500 tx hint budget), run `detect_recurrence_groups` with `min_emit_confidence: 60`. Map group membership to row `recurring_hint`. Exclude confirmed/rejected fingerprints (same as DEC-0098).
+
+#### `POST /api/v1/subscriptions/transactions/preview-group`
+
+**Body:** `{ "transaction_ids": ["…"] }` (≥2)  
+**Response:** `{ payee_key, interval_days, median_amount, transaction_ids }`  
+Feeds existing `DiscoverConfirmBody` → `POST /discover/confirm` (DEC-0099).
+
+**Files:** `backend/src/subscriptions/repository.rs`, `discovery.rs` or `transaction_search.rs`, `api/subscriptions.rs`
+
+### S2 — Transactions mode UI (DEC-0113)
+
+- Segmented control: **Transactions** | **Suggested patterns** (default Transactions)
+- Reuse `CategoryFilter` (US-0018), `formatAccountRole` (DEC-0111)
+- Table columns: select, date, description, amount, category, Geldbereich, hint badge
+- Pagination: page controls; banner when `has_more` or `truncated`
+
+**Primary files:** `frontend/src/pages/SubscriptionsPage.tsx`, `frontend/src/lib/api.ts`
+
+### S3 — Patterns tab (DEC-0098 unchanged)
+
+Move current Discover candidate UI behind **Suggested patterns** sub-mode. No API or confirm contract changes.
+
+### QA operator repro fixture
+
+| Field | Value |
+|-------|-------|
+| Environment | `localhost:18080` |
+| Account | **114** |
+| Discover probe | SEPA-Lastschrift grouped candidate — 11 txs, 31d, 95% |
+| Tx-search expected | Same payee as individual rows; hint badge when `recurring_hint=true` |
+
+### Task table (S0020 sprint-plan input)
+
+| ID | Slice | Task | Files | Priority |
+|----|-------|------|-------|----------|
+| **TX1** | S1 | Repository SQL search + COUNT + role JOIN | `repository.rs` | P0 |
+| **TX2** | S1 | Search service + hint pass | `discovery.rs` / `transaction_search.rs` | P0 |
+| **TX3** | S1 | GET search + POST preview-group routes | `api/subscriptions.rs` | P0 |
+| **UI1** | S2 | Dual-mode tab shell (DEC-0113) | `SubscriptionsPage.tsx` | P0 |
+| **UI2** | S2 | Rich filter bar | `SubscriptionsPage.tsx` | P0 |
+| **UI3** | S2 | Tx table + pagination + hints | `SubscriptionsPage.tsx` | P0 |
+| **UI4** | S2 | Multi-select confirm flow | `SubscriptionsPage.tsx` | P0 |
+| **PT1** | S3 | Patterns sub-tab extraction | `SubscriptionsPage.tsx` | P0 |
+| **T1** | S4 | Search + hint integration tests | `subscriptions/` tests | P0 |
+| **T2** | S4 | AC-5 regression tests | `subscriptions/` tests | P1 |
+| **R1** | S4 | User guide US-0021 | `docs/user-guides/US-0021.md` | P1 |
+| **V1** | — | OIDC smoke AC-1..AC-6 | `uat.json` | P0 |
+
+**Count:** 9 mandatory P0 (TX1–TX3, UI1–UI4, PT1, T1, V1) + 2 P1 (T2, R1) = **11** core + **V1** → **12** at `SPRINT_MAX_TASKS`; P2 items excluded from mandatory count.
+
+**Deploy order:** TX1→TX2→TX3 (backend) ∥ UI1 shell; UI2–UI4 after TX3; PT1 after UI1; T1/T2 after backend; V1 last.
+
+### Codebase map (US-0021 slice)
+
+| Path | Role | Touch |
+|------|------|-------|
+| `backend/src/subscriptions/repository.rs` | SQL search + filters | TX1 |
+| `backend/src/subscriptions/discovery.rs` | hint pass reuse | TX2 |
+| `backend/src/api/subscriptions.rs` | new routes | TX3 |
+| `backend/src/recurrence/detect.rs` | read-only reuse | — |
+| `backend/src/subscriptions/detection.rs` | unchanged — AC-5 | — |
+| `frontend/src/pages/SubscriptionsPage.tsx` | dual mode + tx explorer | UI1–UI4, PT1 |
+| `frontend/src/lib/api.ts` | search + preview types | TX3 |
+
+### Decisions (US-0021)
+
+| ID | Topic | Contract |
+|----|-------|----------|
+| **DEC-0112** | Transaction search API | GET `/transactions/search`; SQL push-down; 100/page; preview-group POST |
+| **DEC-0113** | Dual-mode UX | Transactions default \| Suggested patterns (DEC-0098 frozen) |
+| **DEC-0114** | Hint pass boundary | Separate pass; min 60; row hints only; no auto-emit; 500 tx scan cap |
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Dual-mode UI complexity | Transactions default; shared account/payee state |
+| Hint pass perf on wide filters | 500 tx cap; account required |
+| AC-3 sub-threshold expectation | Document MVP boundary; GATE-HINT-2 P2 |
+| Regression on detection | No `detection.rs` edits; dedicated AC-5 tests |
+| Geldbereich JOIN on JSON | DEC-0111 proven path; low account count |
+| Sprint over 12 tasks | P2 (amount band, index, weak hints) deferred |
+
+### Next phase
+
+`/sprint-plan` — materialize **S0020** from task table; then `/plan-verify` → `/execute`.
+
+`runtime_proof_id`: `runtime-proof-architecture-20260613-us0021-001`
+
+`triad_hot_surface`: architecture § US-0021 appended; decisions DEC-0112..DEC-0114 formalized; spec-pack US-0021 created; nine gates frozen; state checkpoint; post-write `--check` required.
+
+# BUG-0026 — Forecast monthly Income card vs chart mismatch
+
+**Status:** architecture complete (2026-06-13)  
+**Discovery:** `discovery-20260613-bug0026` in `handoffs/po_to_tl.md`  
+**Research:** [R-0098](research.md#r-0098--bug-0026-forecast-monthly-income-card-vs-chart-mismatch)  
+**Decisions:** extends **US-0002** forecast monthly view + **DEC-0089** card/chart independence; **GATE-DEC-1 closed — no new DEC**  
+**Sprint:** `/quick` recommended (3–4 tasks)  
+**Acceptance:** `docs/product/acceptance.md` rows **BZ**, **CA**  
+**Spec-pack:** `docs/engineering/spec-pack/BUG-0026-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
+**Related:** BUG-0012 DONE / Q0014 (monthly bucket attribution — backend correct); **DEC-0089** (category filter scopes trend chart only)
+
+### Root cause (frozen, R-0098 §1)
+
+| Layer | Finding | Symptom |
+|-------|---------|---------|
+| **Summary cards** | `ForecastPage.tsx` L148–152: `monthlySummary = series[0]` | Income card **0.00** on account **114** repro |
+| **Chart** | `MonthlyChart.tsx` maps **full** `series` to x-axis | Income bars ~**3266** from **2026-07** onward |
+| **API** | `GET /api/v1/forecast/monthly` returns ordered points; no `summary_month` hint | `series[0]` = partial June (salary not due in remaining days) |
+| **Projection** | `project.rs` recurring income per due date — by design | Partial month income **0.00**; July **3266.16** |
+| **Category filter** | **DEC-0089** helper text L278–281 | Cards unchanged by filter — must remain after fix |
+| **BUG-0012** | Backend bucket attribution correct | **RULED OUT** — not a regression |
+
+**Live probe (2026-06-13):** `GET http://localhost:18080/api/v1/forecast/monthly?account_id=114` — 25 points; `series[0]` 2026-06 income **0.00**; `series[1]` 2026-07 income **3266.16**.
+
+`isolation_scope`: artifact + repo source reads; no host `.env` / secrets read.
+
+### Architecture gates (frozen)
+
+| Gate | Decision | Rationale | Alternatives rejected |
+|------|----------|-----------|----------------------|
+| **GATE-MONTH-1** | **Option A** — skip partial zero-income head | When `parseFloat(series[0].income) === 0` and `series.length > 1`, select `series.find(p => parseFloat(p.income) > 0) ?? series[1]`; else `series[0]` | **B** always `series[0]` + footnote (**BZ fails**); **C** chart hover sync (deferred); **D** rolling aggregate (semantic change); **E** backend `summary_month` field (**GATE-SCOPE-1**) |
+| **GATE-LABEL-1** | Shared subtitle above card grid | `Forecast for {Month YYYY}` — one label for all four cards | Per-card micro-label (redundant); inline metric suffix (fallback only) |
+| **GATE-SCOPE-1** | Frontend-only | No `project.rs` / API contract change; **DEC-0089** cards independent of category filter | Backend summary hint; chart selection coupling |
+| **GATE-TEST-1** | Vitest pure helper + partial-month fixture | Pattern: `planSelector.test.ts` / `planSelector.ts` (**BUG-0022** / R-0094) | Playwright E2E (0 spec files; defer operator smoke) |
+| **GATE-DEC-1** | **No new DEC** | UI presentation fix; document forecast summary month contract in architecture only | Canonical DEC for month-selection policy |
+
+### Forecast summary month contract (frozen)
+
+Pure helpers in new module `frontend/src/pages/forecastSummaryMonth.ts` (colocated with page, mirrors **BUG-0022** `planSelector.ts` pattern).
+
+```typescript
+type ForecastMonthlyPoint = ForecastMonthly["series"][number];
+
+function parseIncome(income: string): number {
+  return parseFloat(income); // same as MonthlyChart.tsx
+}
+
+function resolveForecastSummaryPoint(
+  series: ForecastMonthlyPoint[],
+): ForecastMonthlyPoint | null {
+  if (series.length === 0) return null;
+  if (parseIncome(series[0].income) === 0 && series.length > 1) {
+    return series.find((p) => parseIncome(p.income) > 0) ?? series[1];
+  }
+  return series[0];
+}
+
+function formatForecastMonthLabel(monthIso: string): string {
+  // Derive from API `month` date slice — not client clock (R-0098 §2 month-end boundary)
+  const [year, month] = monthIso.slice(0, 7).split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatForecastSummarySubtitle(monthIso: string): string {
+  return `Forecast for ${formatForecastMonthLabel(monthIso)}`;
+}
+```
+
+**Operator mental model:** `/forecast` **Monthly** summary cards answer "what does the next meaningful forecast month look like?" When the current calendar month is partial and salary has not yet fallen in the projection window, defaulting to the **first month with projected income** aligns card Income with the first non-zero Income bar operators see in the chart.
+
+**Edge cases (frozen):**
+
+| Case | `resolveForecastSummaryPoint` | Subtitle |
+|------|------------------------------|----------|
+| `series[0].income > 0` | `series[0]` | That month |
+| All months `income === 0` | `series[0]` | That month — card/chart both zero (**BZ** satisfied) |
+| Single-month series | `series[0]` | That month |
+| Empty series | `null` — hide card grid (unchanged) |
+| Category filter set | Cards use **unfiltered** `monthlyQuery` series | Unchanged per **DEC-0089** |
+
+**Optional P2 (not required for BZ/CA):** Footnote when skip rule fires: *"Current month has no remaining projected income events."*
+
+### Fix slices
+
+```text
+BUG-0026
+├── BZ — summary month selection + Income parity (P0)
+│   └── H1 — forecastSummaryMonth.ts helper module
+│   └── F1 — ForecastPage wire: useMemo + subtitle above card grid
+├── CA — month label (P0)
+│   └── F1 — shared subtitle "Forecast for {Month YYYY}" (GATE-LABEL-1)
+├── T1 — vitest helper + partial-month fixture (P0)
+├── G1 — automated gate (npm test + build) (P0)
+└── V1 — verify-work BZ/CA on /forecast Monthly + OIDC smoke (P0; operator account 114)
+```
+
+**Out of scope:** `project.rs`, `backend/src/api/forecast.rs`, `MonthlyChart.tsx`, category filter wiring, chart hover/selection sync, new DEC.
+
+### H1 — Pure helper module (GATE-MONTH-1)
+
+| Export | Contract |
+|--------|----------|
+| `resolveForecastSummaryPoint(series)` | Returns selected point per frozen algorithm; `null` when empty |
+| `formatForecastMonthLabel(monthIso)` | Locale month-year from API `month` ISO date |
+| `formatForecastSummarySubtitle(monthIso)` | `Forecast for {Month YYYY}` |
+
+**Files:** `frontend/src/pages/forecastSummaryMonth.ts` (new)
+
+**Alternative rejected:** Inline logic in `useMemo` only — harder to unit-test; violates GATE-TEST-1 precedent.
+
+### F1 — ForecastPage integration (GATE-LABEL-1, GATE-SCOPE-1)
+
+| Change | Contract |
+|--------|----------|
+| `monthlySummary` useMemo | `resolveForecastSummaryPoint(monthlyQuery.data?.series ?? [])` |
+| Subtitle | Render `formatForecastSummarySubtitle(monthlySummary.month)` immediately **above** `.grid` card block (L312–330) |
+| Card values | Income / Fixed / Variable / Free cashflow from **same** resolved point |
+| Category filter | **Do not** add `categoryId` to `monthlyQuery` key or card data path |
+| `MonthlyChart` | Unchanged — still plots full `series` |
+
+**Files:** `frontend/src/pages/ForecastPage.tsx` (L148–152 useMemo; L312–330 card grid + new subtitle element)
+
+**Acceptance trace:**
+
+| Row | Mechanism | Verify |
+|-----|-----------|--------|
+| **BZ** | Skip partial June → July point; Income card **3266.16** matches chart July Income bar | Vitest partial-month fixture; V1 account **114** |
+| **CA** | Subtitle **"Forecast for July 2026"** above four cards | Visual on `/forecast` Monthly; vitest label helper |
+
+### T1 — Vitest coverage (GATE-TEST-1)
+
+**Files:** `frontend/src/pages/forecastSummaryMonth.test.ts` (new)
+
+**Fixture (matches live API repro):**
+
+```typescript
+const partialMonthTrap = [
+  { month: "2026-06-01", income: "0.00", fixed_costs: "86.02", variable_costs: "2866.57", free_cashflow: "-2952.59" },
+  { month: "2026-07-01", income: "3266.16", fixed_costs: "86.02", variable_costs: "2866.57", free_cashflow: "313.57" },
+];
+```
+
+| Case | Expected |
+|------|----------|
+| Partial-month trap (`series[0].income=0`, `series[1].income>0`) | Resolve index **1**; income **"3266.16"** |
+| `series[0].income > 0` | Resolve index **0** |
+| All-zero income (multi-month) | Resolve index **0** |
+| Single-month series | Resolve index **0** |
+| Empty series | `null` |
+| `formatForecastMonthLabel("2026-07-01")` | Contains **July** and **2026** |
+| `formatForecastSummarySubtitle("2026-07-01")` | **`Forecast for July 2026`** (locale-stable month name) |
+
+**Regression suite:** `npm test` frontend; no backend test changes.
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Skip rule hides partial-month Fixed/Variable on cards | Acceptable — chart shows full series; subtitle names reference month |
+| Legitimate all-zero-income forecast | No skip; labeled zero matches chart bar |
+| `parseFloat` on decimal strings | Same pattern as `MonthlyChart.tsx` |
+| Category filter accidentally wired to cards | Explicit out-of-scope; do not touch `monthlyQuery` key |
+| Timezone month label drift | Derive label from API `month` string, not `new Date()` on client clock |
+| i18n month names | Browser default locale; consistent with page `toLocaleString` |
+
+### Next phase
+
+`/sprint-plan` — materialize `/quick` from task tree; then `/plan-verify` → `/execute`.
+
+`runtime_proof_id`: `runtime-proof-architecture-20260613-bug0026-001`
+
+`triad_hot_surface`: architecture § BUG-0026 appended; five gates frozen; GATE-DEC-1 no new DEC; spec-pack BUG-0026 created; state checkpoint; post-write `--check` required.
+
+---
+
+# BUG-0024 — Plan delete still disabled (live post-Q0031)
+
+**Status:** architecture complete (2026-06-13)  
+**Discovery:** `discovery-20260613-bug0024` in `handoffs/po_to_tl.md`  
+**Research:** [R-0096 §1–9](research.md#r-0096--bug-0024-plan-delete-still-disabled-live-post-q0031)  
+**Decisions:** extends **DEC-0082** sole-plan UX presentation; **GATE-DEC-1 closed — no new DEC**  
+**Sprint:** `/quick` **Q0033** recommended (5 tasks)  
+**Acceptance:** `docs/product/acceptance.md` rows **BR**, **BS**  
+**Spec-pack:** `docs/engineering/spec-pack/BUG-0024-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
+**Related:** BUG-0022 DONE / **Q0031** (`bug0022-q0031`, selector fix); **US-0022** (deploy version stamp — separate)
+
+### Root cause (frozen, R-0096 §1)
+
+Post-**Q0031** operator report *immer ausgegraut* decomposes into two independent sub-defects — not a selector regression on current bundle.
+
+| Hypothesis | Verdict | Layer | Finding | Symptom |
+|------------|---------|-------|---------|---------|
+| **H1** | **CONFIRMED (BS)** | Sole-plan UX | `isDeleteDisabled` true by design; tooltip *Set another plan active…* assumes another plan exists | Permanent gray with no create→activate→delete path |
+| **H2** | **LIKELY (BR on omniflow)** | Deploy | **FRONTEND_DEPLOY** deferred; omniflow not probed post-Q0031/Q0032 | Stale bundle would reproduce pre-Q0031 **BM** when operator has 2+ plans |
+| **H3** | **RULED OUT (localhost)** | Selector | `resolveDisplayedPlanId` + `isDeleteDisabled` correct; vitest 8/8; 2-plan probe delete enabled | Multi-plan non-active selection works |
+
+**Live probe (2026-06-13):** localhost:18080 — 1 plan → delete disabled; after create second plan + select non-active → `deleteDisabled=false`, title *Delete this plan*; served bundle `assets/index-CJ94Af9n.js` includes Q0031 tooltip string.
+
+**API contract unchanged:** `DELETE /api/v1/plans/:id` returns **409** when `is_active=true` per **DEC-0082** — no backend change.
+
+`isolation_scope`: artifact + repo source reads; no host `.env` / secrets read.
+
+### Architecture gates (frozen)
+
+| Gate | Decision | Rationale | Alternatives rejected |
+|------|----------|-----------|----------------------|
+| **GATE-COPY-1** | **Option A** — inline hint below **Delete plan** row when `plans.length===1 && plans[0].is_active && activePlanIsSelected` | Satisfies **BS**; keyboard/screen-reader discoverable; matches disabled-control UX guidance ([R-0096 §3](research.md#r-0096--bug-0024-plan-delete-still-disabled-live-post-q0031)) | **B** create-plan CTA from disabled row (higher UI churn); **C** delete active sole plan with auto-deactivate (**DEC-0082** violation) |
+| **GATE-DEPLOY-1** | Operator **FRONTEND_DEPLOY** (Q0031/Q0032 bundles) then 2-plan `/planning` smoke on omniflow | **BR** localhost already PASS; omniflow **OPEN** until deploy | Code fix for **BR** on localhost (unnecessary — H3 ruled out) |
+| **GATE-SCOPE-1** | Frontend-only | Extends **DEC-0082** deactivate-first UX with sole-plan guidance; DELETE 409 unchanged | Backend delete policy change; create-plan API |
+| **GATE-TEST-1** | Vitest pure helper `shouldShowSolePlanDeleteHint` | Precedent: `planSelector.test.ts` / **BUG-0022** / **BUG-0026** helper pattern | Playwright E2E (0 spec files; defer operator smoke) |
+| **GATE-DEC-1** | **No new DEC** | Presentation layer on existing guard — architecture documents copy contract only | Canonical DEC for sole-plan copy policy |
+
+### Sole-plan delete hint contract (frozen)
+
+Pure helpers in existing module `frontend/src/pages/planSelector.ts` (mirrors **BUG-0022** / **BUG-0026** colocated-helper pattern).
+
+```typescript
+export const SOLE_PLAN_DELETE_HINT =
+  "To delete this plan, create another scenario, set it active, then delete this one.";
+
+export function shouldShowSolePlanDeleteHint(
+  plans: PlanListItem[] | undefined,
+  activePlanIsSelected: boolean,
+): boolean {
+  if (!plans || plans.length !== 1) {
+    return false;
+  }
+  return plans[0].is_active === true && activePlanIsSelected === true;
+}
+```
+
+**Copy (frozen):** `SOLE_PLAN_DELETE_HINT` — exact string above; English; matches PO Option A intent.
+
+**Placement (GATE-COPY-1):** Block-level `<p>` **immediately below** the plan-selector control row (dropdown + **Set active** + **Delete plan** buttons) inside the plan card — not tooltip-only, not modal. Reuse existing PlanningPage muted helper style (`fontSize: "0.85rem"`, `color: "#64748b"`, `margin: "0.5rem 0 0"` — same pattern as L549, L760).
+
+**Multi-plan behavior unchanged:** When `plans.length >= 2` and globally active plan selected, keep existing disabled button + `title` tooltip *Set another plan active before deleting the active plan* — no inline hint (another plan already exists).
+
+**Optional P2 (not required for BS):** Retain shortened tooltip on disabled button for hover users; inline hint is the **BS** closure artifact.
+
+### Fix slices
+
+```text
+BUG-0024
+├── BS — sole-plan inline guidance (P0)
+│   └── H1 — shouldShowSolePlanDeleteHint + SOLE_PLAN_DELETE_HINT in planSelector.ts
+│   └── F1 — PlanningPage conditional inline hint render
+├── T1 — vitest sole-plan predicate cases (P0)
+├── G1 — automated gate (npm test + build) (P0)
+├── BR — deploy verification (P0; operator gate)
+│   └── V1 — post-FRONTEND_DEPLOY omniflow 2-plan delete + sole-plan hint smoke
+└── (no backend slice)
+```
+
+**Out of scope:** `DELETE /api/v1/plans/:id`, **DEC-0082** 409 contract, create-plan API, selector priority change (**BUG-0022** shipped), Playwright suite, omniflow deploy automation.
+
+### H1 — Pure helper + copy constant (GATE-COPY-1, GATE-SCOPE-1)
+
+| Export | Contract |
+|--------|----------|
+| `SOLE_PLAN_DELETE_HINT` | Frozen English copy string |
+| `shouldShowSolePlanDeleteHint(plans, activePlanIsSelected)` | `true` only when exactly one globally active plan and delete guard active |
+
+**Files:** `frontend/src/pages/planSelector.ts` (extend existing module)
+
+**Alternative rejected:** Inline predicate in JSX only — harder to unit-test; violates GATE-TEST-1 precedent.
+
+### F1 — PlanningPage inline hint wire (GATE-COPY-1)
+
+| Change | Contract |
+|--------|----------|
+| Import | `shouldShowSolePlanDeleteHint`, `SOLE_PLAN_DELETE_HINT` from `./planSelector` |
+| Render | When predicate true, `<p>` with `SOLE_PLAN_DELETE_HINT` below button row inside plan card (L640–687) |
+| Delete guard | **Unchanged** — `activePlanIsSelected = isDeleteDisabled(...)`; button stays `disabled` |
+| Tooltip | **Unchanged** for multi-plan active selection; sole-plan may show both tooltip + inline hint (P2 OK) |
+
+**Files:** `frontend/src/pages/PlanningPage.tsx` (L640–687 plan card; reuse L549 helper-text styling)
+
+**Acceptance trace:**
+
+| Row | Mechanism | Verify |
+|-----|-----------|--------|
+| **BS** | Inline hint visible when sole active plan + delete disabled | Vitest predicate; V1 sole-plan `/planning` visual |
+| **BR** | No selector change — localhost already PASS | Existing vitest 8/8; V1 post-**FRONTEND_DEPLOY** 2-plan omniflow smoke |
+
+### T1 — Vitest coverage (GATE-TEST-1)
+
+**Files:** `frontend/src/pages/planSelector.test.ts` (extend existing suite)
+
+| Case | Expected |
+|------|----------|
+| Sole plan active + `activePlanIsSelected=true` | `shouldShowSolePlanDeleteHint` → **true** |
+| Sole plan active + `activePlanIsSelected=false` | **false** (impossible UI state; guard) |
+| Two plans, active selected + delete disabled | **false** (multi-plan uses tooltip only) |
+| Two plans, non-active selected + delete enabled | **false** (no hint when delete enabled) |
+| Empty / undefined plans | **false** |
+| `SOLE_PLAN_DELETE_HINT` | Non-empty; contains *create another scenario* |
+
+**Regression suite:** `npm test` frontend; existing `resolveDisplayedPlanId` / `isDeleteDisabled` cases must remain green.
+
+### GATE-DEPLOY-1 — Operator verification (V1)
+
+| Surface | **BR** / **BS** expectation | Status |
+|---------|----------------------------|--------|
+| **localhost:18080** | 2+ plans + non-active selected → delete enabled | **PASS** (2026-06-13 probe) |
+| **localhost:18080** | 1 sole active plan → delete disabled + **inline hint** | **OPEN** until execute |
+| **financegnome.omniflow.cc** | Same after **FRONTEND_DEPLOY** (Q0031 + Q0032 bundles) | **OPEN** — operator gate deferred |
+
+**Smoke checklist (post-deploy):**
+
+1. Confirm deployed bundle includes Q0031 selector + BUG-0024 hint string (or **US-0022** version stamp when available).
+2. `/planning` with **2+** plans: select non-active → **Delete plan** enabled → confirm removes plan (**BR**).
+3. `/planning` with **1** sole active plan: delete disabled + **inline hint** visible (**BS**).
+4. OIDC-enabled deploy regression checks per acceptance.
+
+**If BR fails post-deploy:** treat as deploy/process gap first (**H2**); only reopen selector code if bundle is current and **H3** reproduces.
+
+### Task table (sprint-plan input)
+
+| ID | Sub | Task | Files | Priority | Row |
+|----|-----|------|-------|----------|-----|
+| **H1** | BS | `shouldShowSolePlanDeleteHint` + `SOLE_PLAN_DELETE_HINT` | `planSelector.ts` | P0 | **BS** |
+| **F1** | BS | PlanningPage inline hint wire | `PlanningPage.tsx` | P0 | **BS** |
+| **T1** | BS | Vitest sole-plan predicate cases | `planSelector.test.ts` | P0 | **BS** |
+| **G1** | all | Automated gate | `npm test`, `npm run build` | P0 | all |
+| **V1** | BR/BS | verify-work `/planning` smoke + OIDC | `sprints/quick/Q0033/uat.md` | P0 | **BR**, **BS** |
+
+**Count:** 5 mandatory ≤ `SPRINT_MAX_TASKS` (12) → **`/quick` Q0033** recommended.
+
+**Deploy order:** H1 → F1 → T1 → G1 → operator **FRONTEND_DEPLOY** (frontend rebuild only; no migration) → V1.
+
+### Codebase map (BUG-0024 slice)
+
+| Path | Role | Touch |
+|------|------|-------|
+| `frontend/src/pages/planSelector.ts` | Pure helper + copy constant | H1 |
+| `frontend/src/pages/planSelector.test.ts` | Vitest predicate cases | T1 |
+| `frontend/src/pages/PlanningPage.tsx` | Inline hint render | F1 |
+| `frontend/src/pages/planningFeedback.test.ts` | 409 message regression | verify only |
+| `backend/src/api/plans.rs` | Active delete 409 | **no change** |
+| `backend/src/plan/service.rs` | `ActivePlanDeleteForbidden` | **no change** |
+
+### Decisions (BUG-0024)
+
+| Topic | Contract | Existing DEC |
+|-------|----------|--------------|
+| Sole-plan delete guard | UI disabled + API **409** | **DEC-0082** |
+| Selector priority | Operator selection wins (multi-plan delete) | **DEC-0082** §2 frontend (**BUG-0022** / Q0031) |
+| Sole-plan guidance | Inline hint when `plans.length===1` + active selected | extends **DEC-0082** UX — architecture only |
+| New DEC | **None** — GATE-DEC-1 closed | — |
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Hint shown when delete unexpectedly enabled | Predicate requires `activePlanIsSelected === true` (same guard as disabled button) |
+| Copy clutter on multi-plan active selection | Hint gated on `plans.length === 1` only |
+| Omniflow **BR** still fails post-deploy | Verify bundle hash / **US-0022** version stamp; only then hunt selector regression |
+| Tooltip-only **BS** closure | Architecture requires inline `<p>`, not `title` alone |
+| Reopening **BUG-0022** | Explicit out-of-scope — selector logic verified PASS on localhost |
+| i18n | English copy constant; matches page default locale |
+
+### Next phase
+
+`/sprint-plan` (role: tech-lead) — materialize `/quick` **Q0033** from task table; then `/plan-verify` → `/execute`.
+
+`runtime_proof_id`: `runtime-proof-architecture-20260613-bug0024-001`
+
+`triad_hot_surface`: architecture § BUG-0024 appended; five gates frozen; GATE-DEC-1 no new DEC; spec-pack BUG-0024 created; state checkpoint; post-write `--check` required.
+
+---
+
+# BUG-0025 — Firefly category transactions not updating in mirror (Stromkosten)
+
+**Status:** architecture complete (2026-06-13)  
+**Discovery:** `discovery-20260613-bug0025` in `handoffs/po_to_tl.md`  
+**Research:** [R-0097 §1–9](research.md#r-0097--bug-0025-firefly-category-transactions-not-updating-stromkosten)  
+**Decisions:** extends **DEC-0002** with manual-trigger 365-day lookback exception; **GATE-DEC-1 closed — no new DEC**  
+**Sprint:** `/quick` recommended (6–7 tasks)  
+**Acceptance:** `docs/product/acceptance.md` rows **BW**, **BX**, **BY**  
+**Spec-pack:** `docs/engineering/spec-pack/BUG-0025-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
+**Related:** BUG-0006 DONE (category ingest path); **DEC-0088** (Category spending trend); **US-0018**; [R-0089](research.md#r-0089--bug-0019-grafana-cashflow-zeros-account_id-default--sync-entity-counts-per-run-cursor) (overlap semantics)
+
+### Root cause (frozen, R-0097 §1–6)
+
+| Layer | Finding | Symptom |
+|-------|---------|---------|
+| **Ingest** | `sync_transactions` L373–378: `start = watermark − overlap_days` (default **7**); Firefly `start` filters by **transaction date** | Backdated Strom imports outside window **skipped**; sync reports success |
+| **Mirror** | `category_id=146` → **4** rows, all **2026-05-11…13** | `/forecast` Category spending trend shows **one month** with bars |
+| **Watermark** | `sync_cursors.transactions.last_successful_sync_at=2026-06-13 11:53:28Z` | Next incremental `start ≈ 2026-06-06` — months **2025-07…2026-04** never fetched |
+| **Sync Status UX** | `GET /api/v1/sync/status` `last_run.trigger=scheduled_exchanges` (12:53) while last Full `scheduled` (11:53) | Hero **"Last sync"** implies Firefly synced when only exchanges ran (**BY** partial) |
+| **Surface** | `GET /api/v1/categories/expense-series?category_id=146` aggregates mirror by month | **Not** a chart rendering bug (**H3 CONFIRMED**) |
+| **BUG-0006** | category_id binding works for in-window rows | **RULED OUT** |
+
+**Live probe (2026-06-13):** localhost:18080 — expense-series category **146**: **4** txs, **2026-05** only (~€465 outflow); mirror **939** txs span **2025-06-05 … 2026-06-11**.
+
+`isolation_scope`: artifact + repo source reads; no host `.env` / secrets read.
+
+### Architecture gates (frozen)
+
+| Gate | Decision | Rationale | Alternatives rejected |
+|------|----------|-----------|----------------------|
+| **GATE-OVERLAP-1** | **A + B** — document DEC-0002 limits + **manual Full 365d lookback**; scheduled keeps `watermark − overlap_days` | **BW** requires ingest on **Sync now**; **BX** requires transparency; scheduled cost unchanged | **A only** (**BW fails**); **C** global overlap bump (scheduled cost inflation, still misses deep backfill); **D** UX-only (no ingest fix) |
+| **GATE-SYNC-UX-1** | Split **`last_firefly_run`** from exchange-only; hero **"Last Firefly sync"** + trigger badge; secondary exchange line when newer | Fixes **BY** summary confusion; additive API | **B** relabel only (still ambiguous); **C** hide exchange from header (loses exchange signal) |
+| **GATE-REMED-1** | Runbook SQL cursor reset; admin API **deferred** | Safe `upsert` dedupe; covers **>365d** backfill | Silent skip; undocumented SQL only |
+| **GATE-TEST-1** | Rust integration: tx dated before incremental `start` → skip pre-fix, ingest after manual lookback or cursor delete | Deterministic repro per R-0097 §6 | Wiremock-only without mirror assert |
+| **GATE-DEC-1** | **Extend DEC-0002** — manual-trigger lookback exception documented here; no new DEC | Same upsert + watermark contract; trigger-specific window only | New DEC unless contracts diverge |
+
+### Sync start contract (frozen — GATE-OVERLAP-1)
+
+Extends **DEC-0002** / [R-0002](research.md#r-0002--firefly-incremental-sync-strategy) / [R-0089](research.md#r-0089--bug-0019-grafana-cashflow-zeros-account_id-default--sync-entity-counts-per-run-cursor):
+
+```text
+sync_transactions(client, pool, overlap_days, trigger):
+  watermark = sync_cursors.transactions.last_successful_sync_at
+
+  if trigger == "manual":
+    start_date = (Utc::now() - 365 days).date()     // MANUAL_LOOKBACK_DAYS = 365
+  else if watermark present:
+    start_date = (watermark - overlap_days).date()  // scheduled + initial scheduled Full
+  else:
+    start_date = (Utc::now() - 365 days).date()     // existing cold-start path (unchanged)
+
+  fetch GET /api/v1/transactions?start={start_date}
+  upsert by Firefly id; advance watermark on success
+```
+
+**Operator mental model:**
+
+| Action | Window | Expectation |
+|--------|--------|-------------|
+| **Sync now** (`POST /api/v1/sync/trigger` → `trigger=manual`, `RunMode::Full`) | **365 days** by transaction date | Pulls backdated imports ≤1 year — **BW** |
+| **Scheduled Full** (`trigger=scheduled`) | **watermark − 7d** (config `sync.overlap_days`) | Incremental catch-up per **DEC-0002** |
+| **Exchange-only** (`scheduled_exchanges` / `manual_exchanges`) | No Firefly fetch | Must not update **Last Firefly sync** hero |
+
+**>365d backfill:** runbook cursor reset → next Full uses cold-start **365d** path; document limitation in Sync Status callout (**BX**).
+
+**Sizing (939-tx profile):** manual 365d ≈ **2** Firefly pages @ 500 — +1–3s per manual sync; acceptable (**R-0097 §6**).
+
+**Alternative considered:** `min(watermark − overlap, today − 365)` on manual — **rejected**; full 365d on manual is simpler and matches operator “Sync now = refresh my year” expectation.
+
+### B1 — Manual lookback wiring (GATE-OVERLAP-1)
+
+| Change | Contract |
+|--------|----------|
+| `firefly/mod.rs` `sync_transactions` | Add `trigger: &str` param; apply frozen start contract |
+| `sync/mod.rs` `execute_run` | Pass `_trigger` (rename to `trigger`) into `sync_transactions` |
+| `scheduled` / cold-start | Unchanged overlap path |
+| `manual` | **365d** lookback constant `MANUAL_LOOKBACK_DAYS: i64 = 365` (module-local; not TOML in v1) |
+
+**Files:** `backend/src/firefly/mod.rs` L368–415; `backend/src/sync/mod.rs` L196–230; callers in tests (`firefly_readonly_test.rs` — pass `"scheduled"` or test trigger).
+
+**Risks:** Large ledgers (>10k txs/year) slow manual sync — monitor `records_synced`; pagination already capped; operator-scale OK.
+
+### B2 — Sync status API split (GATE-SYNC-UX-1)
+
+Extend `SyncStatusResponse` (**additive** — no breaking removal):
+
+```rust
+pub struct SyncStatusResponse {
+    pub state: String,
+    pub phase: Option<String>,
+    pub active_run_id: Option<Uuid>,
+    pub last_run: Option<SyncRunRow>,           // latest run of any kind (unchanged)
+    pub last_firefly_run: Option<SyncRunRow>,   // NEW — latest trigger IN ('manual', 'scheduled')
+}
+```
+
+| Query | SQL filter |
+|-------|------------|
+| `latest_run()` | `ORDER BY started_at DESC LIMIT 1` (existing) |
+| `latest_firefly_run()` | `WHERE trigger IN ('manual', 'scheduled') ORDER BY started_at DESC LIMIT 1` |
+
+**Files:** `backend/src/sync/mod.rs` (`SyncStatusResponse`, `status()`, new helper); OpenAPI/regenerate if project uses openapi derive on this type (verify at execute).
+
+**Frontend types:** `frontend/src/lib/api.ts` — add `last_firefly_run: SyncRun | null`.
+
+### F1 — Sync Status UI (GATE-SYNC-UX-1, GATE-OVERLAP-1 doc tier)
+
+| Element | Contract |
+|---------|------------|
+| Hero primary | **"Last Firefly sync:"** ← `last_firefly_run?.finished_at` or **"Never"** |
+| Trigger badge | Pill/chip on hero: `manual` → **Manual**; `scheduled` → **Scheduled** (raw enum fallback for unknown) |
+| Secondary line | When `last_run` exists **and** `last_run.trigger ∈ {scheduled_exchanges, manual_exchanges}` **and** (`last_firefly_run` absent **or** `last_run.started_at > last_firefly_run.started_at`): show **"Last exchange sync:"** + timestamp |
+| Info callout | Below hero card — explain **DEC-0002**: scheduled sync uses 7-day overlap by **transaction date**; backdated bulk imports need **Sync now** (365d) or runbook cursor reset; link `docs/engineering/runbook.md` anchor |
+| **Sync now** button | Unchanged — `POST /api/v1/sync/trigger` → Full + manual lookback post-fix |
+| History table | Keep raw `trigger` column (**BY** already partial) |
+
+**Files:** `frontend/src/pages/SyncStatusPage.tsx` L88–92 hero block + new callout.
+
+**Optional P1 — F3:** `HomePage.tsx` L45–50 dashboard stat — prefer `last_firefly_run` over `last_run` for **"Last sync"** card label **"Last Firefly sync"** when field present; secondary not required on home.
+
+### D1 — Runbook remediation (GATE-REMED-1, GATE-OVERLAP-1 doc tier)
+
+Add section to `docs/engineering/runbook.md`:
+
+| Topic | Content |
+|-------|---------|
+| Symptom | Category trend / expense-series missing months after Firefly backdated import |
+| Cause | **DEC-0002** — Firefly `start` filters by transaction date; scheduled overlap **7d** |
+| Fix ≤365d | **Sync now** on `/sync` (manual Full — 365d lookback post-fix) |
+| Fix >365d | `DELETE FROM sync_cursors WHERE entity_type = 'transactions';` then manual Full |
+| Safety | Upsert by Firefly `id` — no duplicate rows |
+
+### T1 — Integration repro (GATE-TEST-1)
+
+**Pattern:** extend backend integration test harness (wiremock Firefly or test DB seed).
+
+| Step | Assert |
+|------|--------|
+| Seed watermark + mirror tx **outside** `watermark − 7d` window | Not ingested on `trigger=scheduled` sync |
+| Same fixture + `trigger=manual` sync (post-fix) | Row present in `transactions` mirror |
+| Optional | Cursor delete + scheduled Full ingests via 365d cold-start |
+
+**Files:** new or extend `backend/tests/` sync transaction window test.
+
+### Acceptance trace
+
+| Row | Mechanism | Tasks | Verify |
+|-----|-----------|-------|--------|
+| **BW** | Manual Full **365d** lookback ingests multi-month Stromkosten | B1, T1, G1, V1 | expense-series category **146** shows bars per month with mirror data; operator manual **Sync now** |
+| **BX** | Ingest path + Sync Status callout + runbook cursor reset | B1, D1, F1, V1 | No silent skip without explanation; remediation documented |
+| **BY** | `last_firefly_run` hero + history `trigger` column; manual = Full | B2, F1, G1, V1 | Hero not exchange-only timestamp; **Sync now** → `manual` in history; OIDC smoke |
+
+### Fix slices
+
+```text
+BUG-0025
+├── BW — manual 365d ingest (P0)
+│   └── B1 — sync_transactions trigger + MANUAL_LOOKBACK_DAYS
+├── BX — transparency + remediation docs (P0)
+│   └── D1 — runbook § backdated Firefly imports
+│   └── F1 — SyncStatusPage DEC-0002 callout + hero UX (partial)
+├── BY — status API + UI split (P0)
+│   └── B2 — SyncStatusResponse.last_firefly_run
+│   └── F1 — SyncStatusPage hero, badge, exchange secondary line
+│   └── F3 — HomePage last_firefly_run (P1 optional)
+├── T1 — integration backdated-window repro (P0)
+├── G1 — cargo test + npm test + build (P0)
+└── V1 — verify-work BW/BX/BY + OIDC smoke (P0)
+```
+
+**Out of scope:** Global `overlap_days` config change; Firefly Search API; admin cursor-reset API; expense-series SQL changes; CategoryTrendChart frontend; new DEC record.
+
+### Decisions (BUG-0025)
+
+| Topic | Contract | Existing DEC |
+|-------|----------|--------------|
+| Scheduled incremental window | `watermark − overlap_days` | **DEC-0002** |
+| Manual Full window | **365d** by transaction date | extends **DEC-0002** § manual exception (architecture) |
+| Upsert + watermark | Unchanged | **DEC-0002** |
+| Status semantics | `last_firefly_run` vs `last_run` | architecture only |
+| New DEC | **None** — GATE-DEC-1 closed | — |
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Manual 365d slow on very large ledgers | Pagination + upsert dedupe; log `records_synced`; operator-scale ~2 pages OK |
+| >365d backfill still skipped after manual | Runbook cursor reset + callout (**BX**) |
+| Duplicate rows on cursor reset | **DEC-0002** upsert by Firefly `id` |
+| API additive field ignored by old frontend | Co-deploy; field optional in TS |
+| Exchange-only run shown as Firefly sync | **GATE-SYNC-UX-1** hero uses `last_firefly_run` only |
+| Scheduled cost regression | Manual-only widened window — scheduled path unchanged |
+| OIDC deploy regression | **V1** smoke on `/sync` |
+
+### Next phase
+
+`/sprint-plan` (role: tech-lead) — materialize `/quick` from task tree (6–7 tasks, under `SPRINT_MAX_TASKS=12`); then `/plan-verify` → `/execute`.
+
+`runtime_proof_id`: `runtime-proof-architecture-20260613-bug0025-001`
+
+`triad_hot_surface`: architecture § BUG-0025 appended; five gates frozen; GATE-DEC-1 extends DEC-0002 (no new DEC); spec-pack BUG-0025 created; state checkpoint; post-write `--check` required.
+
+---
+
+# US-0022 — Deploy version stamp & stale-frontend detection
+
+**Status:** Architecture complete (2026-06-14)
+**Discovery:** `discovery-20260614-us0022` in `handoffs/po_to_tl.md`
+**Research:** [R-0095](research.md#r-0095--us-0022-deploy-version-stamp--stale-frontend-detection) §6–§12
+**Decisions:** No new DEC (GATE-DEC-1 closed; all gates are implementation-level)
+**Depends on:** BUG-0023 Q0030 operator deploy confusion (motivation); existing `AppLayout.tsx`, `health/mod.rs`, `backend/Dockerfile`, `frontend/vite.config.ts`
+**Sprint:** Single sprint recommended — ~8-10 tasks under `SPRINT_MAX_TASKS=12`; no split needed
+**Acceptance:** `docs/product/acceptance.md` § US-0022 (AC-1..AC-6)
+**Spec-pack:** `docs/engineering/spec-pack/US-0022-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)
+**User guide:** `docs/user-guides/US-0022.md` (`USER_GUIDE_MODE=1`; execute publishes content)
+
+### Problem
+
+Post-BUG-0023 deploy confusion: operators cannot confirm which release is running without `docker inspect` or behavioral guesswork. SPA has no embedded build id; cached `index.html`/chunks may lag backend after partial deploy. `/health` returns `{status: ok}` only — no build provenance.
+
+| Gap | Impact |
+|-----|--------|
+| `/health` returns `status: ok` only | Operator cannot distinguish pre/post deploy from browser |
+| SPA has no embedded build id | Cached chunks may lag backend after partial deploy |
+| Release tags live in `handoffs/releases/*` only | Requires shell/`docker inspect` to verify production |
+
+### System context
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Browser — AppLayout.tsx sidebar-footer                                     │
+│    Subtle version stamp (short label)                                       │
+│    Hover tooltip: release tag + build id + build timestamp (UTC)            │
+│    Stale banner: non-blocking, dismissible, reload CTA                      │
+└───────────────────────────────┬─────────────────────────────────────────────┘
+                                │ GET /api/v1/meta/build-info (on mount)
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Backend — meta/mod.rs                                                      │
+│    GET /api/v1/meta/build-info → {build_id, release_tag, build_timestamp}   │
+│    option_env!("BUILD_ID").unwrap_or("dev") — compile-time                  │
+│    Public route (no auth); allowlist fields only                            │
+└───────────────────────────────┬─────────────────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Docker — backend/Dockerfile (3-stage)                                      │
+│    ARG BUILD_ID / RELEASE_TAG / BUILD_TIMESTAMP (global)                    │
+│    Builder: ENV → cargo build (Rust env!())                                 │
+│    Frontend: RUN BUILD_ID=$BUILD_ID npm run build (Vite define)             │
+│    Runtime: LABEL org.opencontainers.image.*                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Architecture approach
+
+#### Backend: `meta` module (B1)
+
+New `backend/src/meta/mod.rs` with `BuildInfoResponse` struct and `build_info()` handler. Uses `option_env!()` with fallback to `"dev"` / `"unknown"` — never breaks local dev build. Public route (no auth) — metadata is non-sensitive. Registered in `backend/src/api/mod.rs` via `.merge(meta::routes())`.
+
+**Security:** Allowlist fields only (`build_id`, `release_tag`, `build_timestamp`). `option_env!()` never echoes `.env` or PAT. No secrets exposure per AC-6.
+
+**Alternative rejected:** Extend `/health` with `build` field. Rejected per GATE-META-1 — Kubernetes liveness probe should remain minimal (`{status: ok}`). Dedicated `/api/v1/meta/build-info` is cleaner separation.
+
+#### Docker: ARG chain (B2)
+
+Three global `ARG` declarations before first `FROM`: `BUILD_ID`, `RELEASE_TAG`, `BUILD_TIMESTAMP`. Each stage re-declares `ARG` to access values. Builder stage converts `ARG` → `ENV` for Rust `env!()` compile-time injection. Frontend stage passes env vars to `npm run build` for Vite `define`. Runtime stage adds OCI `LABEL` instructions for `docker inspect`.
+
+**CI invocation:** `docker build --build-arg BUILD_ID=$(git rev-parse --short HEAD) --build-arg RELEASE_TAG=... --build-arg BUILD_TIMESTAMP=... -f backend/Dockerfile .`
+
+**Cache behavior:** `ARG` values affect build cache — expected. Each build produces fresh binary with new metadata. Place `ARG` declarations late in each stage (after dependency `COPY`) to minimize cache invalidation.
+
+#### Frontend: Vite define injection (F1, F2)
+
+`frontend/vite.config.ts` adds `define` block with `__BUILD_ID__` and `__RELEASE_TAG__` as `JSON.stringify(process.env.BUILD_ID || 'dev')`. TypeScript declarations in `frontend/src/vite-env.d.ts`: `declare const __BUILD_ID__: string;` and `declare const __RELEASE_TAG__: string;`.
+
+**Alternative rejected:** `import.meta.env.VITE_BUILD_ID` with `envPrefix`. Rejected because `VITE_*` vars load from `.env` files at dev time — not suitable for Docker build-time injection. `define` is canonical for CI/Docker.
+
+#### Stale detection: on-mount hook (F4)
+
+`frontend/src/hooks/useStaleDetection.ts` — `useEffect` on mount fetches `/api/v1/meta/build-info` with `cache: 'no-store'`. Compares `__BUILD_ID__` to server `build_id`. Mismatch → `stale=true`. Skips when `__BUILD_ID__ === 'dev'` (local dev). Silent fail on network error (`.catch(() => {})`) — non-blocking.
+
+**Alternative rejected:** Periodic poll (every 60s). Rejected per GATE-STALE-1 — on-mount only. Operator tool (not public-facing); long-lived tabs rare; on-mount sufficient for operator pain (post-deploy confusion). Matches Sentry PR #98031 pattern.
+
+#### UI: AppLayout stamp + stale banner (F3, F5)
+
+| Element | Placement | Behavior |
+|---------|-----------|----------|
+| Version stamp | `AppLayout` sidebar-footer (lines 78-91) | Short build id or release tag fragment; always visible; subtle |
+| Tooltip | On hover/focus of stamp | Release tag + build id + build timestamp (UTC) |
+| Stale banner | Top of app (above content) | Non-blocking; "New version available — reload"; dismissible; hidden when `!stale` |
+
+**Placement rationale:** Sidebar footer already has OIDC user name + logout — natural location for operator-only stamp. Subtle by default (low visual noise); hover/focus for details per AC-1/AC-2.
+
+### Acceptance trace
+
+| Row | Mechanism | Tasks | Verify |
+|-----|-----------|-------|--------|
+| **AC-1** | `AppLayout` sidebar-footer stamp | F3, G1, V1 | Subtle label visible; does not dominate primary UX |
+| **AC-2** | Tooltip on hover/focus | F3, V1 | Release tag + build id + build timestamp (UTC) visible |
+| **AC-3** | `GET /api/v1/meta/build-info` | B1, T1, G1, V1 | Returns `{build_id, release_tag, build_timestamp}`; no secrets |
+| **AC-4** | Vite `define` + Dockerfile `ARG` | F1, F2, B2, G1 | Frontend bundle embeds build id at compile time |
+| **AC-5** | `useStaleDetection()` + `StaleBanner` | F4, F5, V1 | Mismatch → banner + reload CTA; match → no banner |
+| **AC-6** | `/health` unchanged; OIDC smoke | B1, G1, V1 | Liveness `{status: ok}` unchanged; OIDC deploy pass; no secrets |
+
+### Fix slices
+
+```text
+US-0022
+├── AC-3 — backend metadata endpoint (P0)
+│   └── B1 — meta/mod.rs + api/mod.rs registration
+├── AC-4 — Docker build-arg chain (P0)
+│   └── B2 — Dockerfile ARG/ENV/LABEL
+├── AC-4 — Vite define injection (P0)
+│   └── F1 — vite.config.ts define block
+│   └── F2 — vite-env.d.ts declarations
+├── AC-1/AC-2 — UI stamp (P0)
+│   └── F3 — AppLayout sidebar-footer + tooltip
+├── AC-5 — stale detection (P0)
+│   └── F4 — useStaleDetection hook
+│   └── F5 — StaleBanner component
+├── T1 — integration test (P0)
+├── G1 — cargo test + npm test + build (P0)
+└── V1 — verify-work AC-1..AC-6 + OIDC smoke (P0)
+```
+
+**Out of scope:** Periodic polling; Service Worker; `/health` changes; release-management UI; Grafana metadata panel.
+
+### Decisions (US-0022)
+
+| Topic | Contract | DEC |
+|-------|----------|-----|
+| Metadata route | Dedicated `/api/v1/meta/build-info` | GATE-META-1 (architecture) |
+| Build id format | Git short sha + release tag + UTC timestamp | GATE-BUILD-1 (architecture) |
+| Stale detection | On-mount fetch only | GATE-STALE-1 (architecture) |
+| UI placement | `AppLayout` sidebar-footer | GATE-UI-1 (architecture) |
+| Value source | `option_env!()` compile-time | architecture |
+| Vite injection | `define` block (not `import.meta.env`) | architecture |
+| New DEC | **None** — GATE-DEC-1 closed | — |
+
+### Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Secrets in metadata response | Allowlist fields only; `option_env!()` never echoes `.env` |
+| Backend-only deploy (no frontend rebuild) | Stale banner explains "New version available — reload"; expected behavior |
+| Traefik/browser cache on meta endpoint | `cache: 'no-store'` header; operator hard refresh hint in tooltip |
+| Docker `ARG` scope confusion (not re-declared) | Document pattern; test in CI; `option_env!()` fallback to `"dev"` |
+| Local dev without `--build-arg` | `option_env!()` returns `"dev"`; stale detection skips dev mode |
+| Compile-time `env!()` breaks local dev | Use `option_env!().unwrap_or("dev")` — never breaks build |
+| OIDC deploy regression | **V1** smoke on `/sync` or `/` |
+
+**Overall risk:** Low. All risks have clear mitigations. No blocking risks.
+
+### Next phase
+
+`/sprint-plan` (role: tech-lead) — materialize sprint from task tree (~8-10 tasks, under `SPRINT_MAX_TASKS=12`); then `/plan-verify` → `/execute`.
+
+`runtime_proof_id`: `runtime-proof-architecture-20260614-us0022-001`
+
+`triad_hot_surface`: architecture § US-0022 appended (H1 heading per policy); four gates frozen; GATE-DEC-1 closed (no new DEC); spec-pack US-0022 created; state checkpoint; post-write `--check` required.
 

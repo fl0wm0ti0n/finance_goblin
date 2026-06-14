@@ -43,6 +43,7 @@ export interface SyncStatus {
   phase: string | null;
   active_run_id: string | null;
   last_run: SyncRun | null;
+  last_firefly_run: SyncRun | null;
 }
 
 export interface SyncRun {
@@ -222,6 +223,77 @@ export function confirmDiscoverCandidate(body: {
   return apiFetch<DiscoverConfirmResponse>("/api/v1/subscriptions/discover/confirm", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export interface RecurringHint {
+  interval_days: number;
+  confidence_pct: number;
+  payee_key: string;
+  group_transaction_ids: string[];
+}
+
+export interface TransactionSearchItem {
+  firefly_id: string;
+  account_id: string;
+  account_role?: string | null;
+  date: string;
+  amount: number;
+  description?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
+  recurring_hint?: RecurringHint | null;
+}
+
+export interface TransactionSearchResponse {
+  transactions: TransactionSearchItem[];
+  meta: {
+    page: number;
+    limit: number;
+    total_count: number;
+    has_more: boolean;
+    truncated: boolean;
+    truncated_hint_scan: boolean;
+    window_days: number;
+  };
+}
+
+export interface PreviewGroupResponse {
+  payee_key: string;
+  interval_days: number;
+  median_amount: number;
+  transaction_ids: string[];
+}
+
+export function fetchTransactionSearch(params: {
+  account_id: string;
+  payee?: string;
+  category_id?: string;
+  account_role?: string;
+  date_from?: string;
+  date_to?: string;
+  recurring_hint?: boolean;
+  page?: number;
+  limit?: number;
+}): Promise<TransactionSearchResponse> {
+  const qs = new URLSearchParams({ account_id: params.account_id });
+  if (params.payee) qs.set("payee", params.payee);
+  if (params.category_id) qs.set("category_id", params.category_id);
+  if (params.account_role) qs.set("account_role", params.account_role);
+  if (params.date_from) qs.set("date_from", params.date_from);
+  if (params.date_to) qs.set("date_to", params.date_to);
+  if (params.recurring_hint != null) qs.set("recurring_hint", String(params.recurring_hint));
+  if (params.page != null) qs.set("page", String(params.page));
+  if (params.limit != null) qs.set("limit", String(params.limit));
+  return apiFetch<TransactionSearchResponse>(
+    `/api/v1/subscriptions/transactions/search?${qs}`,
+  );
+}
+
+export function previewTransactionGroup(transactionIds: string[]): Promise<PreviewGroupResponse> {
+  return apiFetch<PreviewGroupResponse>("/api/v1/subscriptions/transactions/preview-group", {
+    method: "POST",
+    body: JSON.stringify({ transaction_ids: transactionIds }),
   });
 }
 

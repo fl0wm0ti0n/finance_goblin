@@ -365,17 +365,23 @@ pub mod sync {
         Ok(())
     }
 
+    const MANUAL_LOOKBACK_DAYS: i64 = 365;
+
     pub async fn sync_transactions(
         client: &FireflyClient,
         pool: &sqlx::PgPool,
         overlap_days: i64,
+        trigger: &str,
     ) -> Result<i64, super::FireflyError> {
         let watermark = last_watermark(pool).await;
-        let start_date = watermark
-            .map(|w| w - Duration::days(overlap_days))
-            .unwrap_or_else(|| Utc::now() - Duration::days(365))
-            .format("%Y-%m-%d")
-            .to_string();
+        let start = if trigger == "manual" {
+            Utc::now() - Duration::days(MANUAL_LOOKBACK_DAYS)
+        } else if let Some(w) = watermark {
+            w - Duration::days(overlap_days)
+        } else {
+            Utc::now() - Duration::days(MANUAL_LOOKBACK_DAYS)
+        };
+        let start_date = start.format("%Y-%m-%d").to_string();
 
         let items = client
             .get_paginated("/api/v1/transactions", &[("start", start_date)])

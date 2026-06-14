@@ -42,6 +42,7 @@ pub struct SyncStatusResponse {
     pub phase: Option<String>,
     pub active_run_id: Option<Uuid>,
     pub last_run: Option<SyncRunRow>,
+    pub last_firefly_run: Option<SyncRunRow>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -196,7 +197,7 @@ impl SyncService {
     async fn execute_run(
         &self,
         run_id: Uuid,
-        _trigger: &str,
+        trigger: &str,
         mode: RunMode,
     ) -> Result<(), FireflyError> {
         info!(%run_id, ?mode, "sync run started");
@@ -226,6 +227,7 @@ impl SyncService {
                     &client,
                     self.db.pool(),
                     self.config.sync.overlap_days,
+                    trigger,
                 )
                 .await?;
                 Ok::<(), FireflyError>(())
@@ -458,6 +460,7 @@ impl SyncService {
         let active_run_id = *self.active_run.lock().await;
         let phase = self.phase.lock().await.clone();
         let last_run = self.latest_run().await.ok().flatten();
+        let last_firefly_run = self.latest_firefly_run().await.ok().flatten();
 
         let state = if active_run_id.is_some() {
             "running".to_string()
@@ -473,6 +476,7 @@ impl SyncService {
             phase,
             active_run_id,
             last_run,
+            last_firefly_run,
         }
     }
 
@@ -528,6 +532,19 @@ impl SyncService {
             r#"
             SELECT id, started_at, finished_at, status, trigger, error_message
             FROM sync_runs ORDER BY started_at DESC LIMIT 1
+            "#,
+        )
+        .fetch_optional(self.db.pool())
+        .await
+    }
+
+    async fn latest_firefly_run(&self) -> Result<Option<SyncRunRow>, sqlx::Error> {
+        sqlx::query_as::<_, SyncRunRow>(
+            r#"
+            SELECT id, started_at, finished_at, status, trigger, error_message
+            FROM sync_runs
+            WHERE trigger IN ('manual', 'scheduled')
+            ORDER BY started_at DESC LIMIT 1
             "#,
         )
         .fetch_optional(self.db.pool())

@@ -1,0 +1,156 @@
+{
+  "id": "Q0031",
+  "title": "BUG-0022 Plan delete selector regression",
+  "status": "EXECUTE_COMPLETE",
+  "bug_id": "BUG-0022",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0022",
+  "spec_pack_ref": "docs/engineering/spec-pack/BUG-0022-technical-specification.md",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["BM", "BN"],
+  "acceptance_mapping": {
+    "BM": {
+      "tasks": ["BM1", "T1", "G1", "V1"],
+      "primary_verify": "2+ plans with global active; select non-active → Delete plan enabled; confirm removes plan; list refreshes — not permanently disabled"
+    },
+    "BN": {
+      "tasks": ["BM1", "T1", "G1", "V1"],
+      "primary_verify": "Select active plan → delete disabled + DEC-0082 tooltip; DELETE active → 409 active_plan_delete_forbidden; OIDC regression pass"
+    }
+  },
+  "task_count": 4,
+  "mandatory_task_count": 4,
+  "optional_task_ids": ["L1"],
+  "estimate_total_hours": 5,
+  "user_guide_mode": {
+    "enabled": true,
+    "waived": true,
+    "reason": "bug regression fix; no new operator workflow"
+  },
+  "tasks": [
+    {
+      "id": "BM1",
+      "title": "Invert selector useMemo priority",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0022 (BM) — DEC-0082 §2 frontend selector",
+      "files": ["frontend/src/pages/PlanningPage.tsx"],
+      "decisions": ["DEC-0082", "DEC-0024"],
+      "research": ["R-0094"],
+      "tests": [
+        "useMemo priority selectedPlanId ?? globalActive ?? firstPlan",
+        "dropdown controlled value + onChange setSelectedPlanId",
+        "activePlanIsSelected reflects displayed plan not global active override",
+        "set-active banner visible when viewing non-active plan"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "Vitest resolveDisplayedPlanId + delete enablement",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["BM1"],
+      "acceptance_hook": "BUG-0022 (BM)(BN) — GATE-TEST-1",
+      "files": [
+        "frontend/src/pages/planSelector.ts",
+        "frontend/src/pages/planSelector.test.ts"
+      ],
+      "decisions": ["DEC-0082"],
+      "research": ["R-0094"],
+      "tests": [
+        "selected non-active + global active → displayed=selected delete enabled",
+        "selected null + global active → displayed=global delete disabled",
+        "selected null + no global active → displayed=first plan",
+        "empty plans → displayed=null delete disabled",
+        "displayed is_active true → isDeleteDisabled true"
+      ]
+    },
+    {
+      "id": "G1",
+      "title": "Automated gate (npm test + build + blast-radius)",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": ["T1"],
+      "acceptance_hook": "BUG-0022 (BM)(BN) — automated verification",
+      "files": ["sprints/quick/Q0031/progress.md"],
+      "decisions": ["DEC-0082"],
+      "tests": [
+        "npm test PASS (planSelector + planningFeedback)",
+        "npm run build PASS",
+        "git diff --stat matches frozen frontend file list"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work /planning BM/BN + OIDC smoke",
+      "status": "deferred",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "depends_on": ["G1"],
+      "operator_gate": "FRONTEND_DEPLOY",
+      "acceptance_hook": "BUG-0022 (BM)(BN) — operator smoke matrix",
+      "files": [
+        "sprints/quick/Q0031/uat.md",
+        "sprints/quick/Q0031/uat.json"
+      ],
+      "tests": [
+        "BM-UI: select non-active delete enabled confirm removes plan",
+        "BM-API: DELETE non-active 204",
+        "BN-UI: select active delete disabled + tooltip",
+        "BN-API: DELETE active 409 active_plan_delete_forbidden",
+        "OIDC: /planning /api/v1/plans omniflow smoke"
+      ]
+    },
+    {
+      "id": "L1",
+      "title": "Dropdown label Active plan → Plan",
+      "status": "skipped",
+      "priority": "P2",
+      "optional": true,
+      "estimate_hours": 0.5,
+      "depends_on": ["V1"],
+      "acceptance_hook": "GATE-LABEL-1 — UX clarity",
+      "files": ["frontend/src/pages/PlanningPage.tsx"],
+      "decisions": [],
+      "tests": [
+        "label text Plan not Active plan",
+        "no functional regression"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "BM1 invert useMemo priority",
+    "T1 planSelector vitest",
+    "G1 automated gate",
+    "FRONTEND_DEPLOY",
+    "V1 verify-work smoke",
+    "L1 optional label rename"
+  ],
+  "execute_order": ["BM1", "T1", "G1", "V1", "L1"],
+  "operator_gates": [
+    {
+      "id": "FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "rebuild frontend only — no migration",
+      "rationale": "BM/BN runtime gates require selector fix live on target environment"
+    }
+  ],
+  "frozen_boundaries": [
+    "DEC-0082: active DELETE 409 + UI disabled + tooltip — backend unchanged",
+    "DEC-0024: Set active on displayed plan; single global active",
+    "DEC-0074: PVA tab uses /api/v1/plans/active/plan-vs-actual — not dropdown id",
+    "Forbidden: backend/src/api/plans.rs or plan/service.rs changes",
+    "Forbidden: new DEC — GATE-DEC-1 closed",
+    "Forbidden: PVA endpoint or sole-plan delete policy change",
+    "deletePlanMutation: invalidate plans, plan-detail, plan-vs-actual; clear selectedPlanId on deleted id"
+  ],
+  "decisions": ["DEC-0082", "DEC-0024", "DEC-0074"],
+  "research": ["R-0094"],
+  "operator_next": "After BM1 + T1 + G1: FRONTEND_DEPLOY; then V1 on localhost:18080 and optional financegnome.omniflow.cc OIDC",
+  "next_phase": "qa",
+  "sprint_plan_ref": "sprint-plan-20260613-bug0022-q0031",
+  "orchestrator_run_id": "auto-20260613-bug0022"
+}

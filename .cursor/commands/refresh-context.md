@@ -12,6 +12,10 @@ description: "its-magic refresh context: compact state and decisions."
 - After writing outputs, stop. Next phase starts in a new subagent/chat.
 
 ## Inputs
+
+- **Narrow-read (US-0053 / US-0096 Tranche A)**: Start at docs/engineering/phase-context.md
+  and the story section anchor in vision/architecture/decisions when a heading exists; forbid
+  full-file reads when a section heading exists.
 - Current sprint artifacts
 - Decisions and handoffs
 

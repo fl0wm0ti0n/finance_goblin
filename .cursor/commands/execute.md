@@ -28,6 +28,10 @@ In an execute↔QA implementation loop (`AUTO_IMPLEMENTATION_LOOP=1`), each new
 as stale isolation evidence).
 
 ## Inputs
+
+- **Narrow-read (US-0053 / US-0096 Tranche A)**: Start at docs/engineering/phase-context.md
+  and the story section anchor in vision/architecture/decisions when a heading exists; forbid
+  full-file reads when a section heading exists.
 - `sprints/S0001/tasks.md`
 - `handoffs/tl_to_dev.md`
 - Optional: `handoffs/qa_to_dev.md` when fixing QA findings
@@ -47,6 +51,32 @@ as stale isolation evidence).
 - Missing task definition or unclear scope
 
 Release gate semantics (US-0039): mandatory gates (check-in test, QA, UAT) and no-bypass/override contract are enforced at `/release`; see `.cursor/commands/release.md` and `.cursor/commands/qa.md`.
+
+### Browser UAT self-test (US-0093)
+
+When **`UAT_BROWSER_PROBE_MODE=cursor`** (default) and acceptance steps classify as **`browser_smoke`**
+(or automatable **`manual_operator`** re-routed per **DEC-0079** §4), execute the **Cursor browser MCP**
+sequence during `/execute` when web UI verification applies (**BUG-0006**: **`scripts/uat_probe_lib.py`**
+never invokes MCP — subagent only):
+
+1. **Resolve target URL** — `docs/engineering/runtime-connectivity.md` first `http(s)://`; else
+   `package.json` dev/start + **`DEV_SERVER_PORT`** scratchpad override.
+2. **`browser_navigate`** — load URL; respect enterprise origin allowlist.
+3. **Step plan** — map automatable verbs to **`browser_click`** / **`browser_type`** / **`browser_scroll`**;
+   **never** fill password/credential fields; **never** read **`.env`** paths.
+4. **`browser_screenshot`** — write to **`sprints/Sxxxx/evidence/browser/<probe_id>-<seq>.png`** (max **5**).
+5. **Console + network evidence** — counts + summary path refs only (no inline secrets).
+6. **Verdict** — set **`passed`**, **`reason_code`**, **`browser_evidence_refs`** on the matching
+   **`probe_results[]`** row in **`uat.json`**. **`passed=true`** in **`cursor`** mode requires
+   non-empty **`navigation_url`** + at least one screenshot or console/network summary path — else
+   downgrade to **`UAT_BROWSER_PROBE_FAILED`**.
+7. **Fallback trigger** — MCP unavailable → record **`UAT_BROWSER_UNAVAILABLE`**; when
+   **`UAT_BROWSER_FALLBACK_CHAIN=1`**, stdlib HTTP/Playwright fallback runs via **`uat_probe_lib.py`**.
+   Both fail → **`UAT_BROWSER_PROBE_FAILED`** (no silent PASS).
+
+Optional validation: **`python scripts/uat_probe_lib.py --merge-result <fragment.json>`** —
+evidence-required-on-PASS in **`cursor`** mode. No auto-read **`.env`**, no credential auto-fill,
+no intake evidence mutation.
 
 ## Intake evidence tooling reference (US-0078 / DEC-0060)
 
@@ -76,6 +106,29 @@ parity for listed paths: **`python scripts/check_token_cost_parity.py --repo .`*
   must not be treated as canonical readiness sources when contradictory.
 - `/execute` must not start/continue implementation solely based on
   non-canonical status evidence.
+
+## Browser UAT self-test (US-0093)
+
+When acceptance steps classify as **`browser_smoke`** (or automatable **`manual_operator`**
+reclassified per **DEC-0079** §4) and **`UAT_BROWSER_PROBE_MODE=cursor`**, execute the **Cursor
+browser MCP** sequence during execute-phase verification — **lib never calls MCP directly**
+(**BUG-0006**):
+
+1. **Resolve target URL** — `docs/engineering/runtime-connectivity.md` first `http(s)://`; else
+   dev-server port from `package.json` + scratchpad **`DEV_SERVER_PORT`**.
+2. **`browser_navigate`** — respect origin allowlist.
+3. **Step plan** — **`browser_click`** / **`browser_type`** / **`browser_scroll`** when
+   automatable; **never** fill password/credential fields or read **`.env`**.
+4. **`browser_screenshot`** → **`sprints/Sxxxx/evidence/browser/<probe_id>-<seq>.png`** (max **5**).
+5. Console + network summary path refs only (no inline secrets).
+6. Write **`browser_evidence_refs`** to **`uat.json`** `probe_results[]`; mirror
+   **Runtime browser evidence** in **`qa-findings.md`**.
+7. MCP unavailable → **`UAT_BROWSER_UNAVAILABLE`** + stdlib fallback when
+   **`UAT_BROWSER_FALLBACK_CHAIN=1`**; validate with
+   **`python scripts/uat_probe_lib.py --merge-result <fragment.json>`**.
+
+Reason codes: **`UAT_BROWSER_UNAVAILABLE`**, **`UAT_BROWSER_PROBE_FAILED`**,
+**`UAT_BROWSER_PROBE_TIMEOUT`**. **No silent PASS** without agent evidence in **`cursor`** mode.
 
 ## Steps
 1. Implement one task at a time.
@@ -239,4 +292,52 @@ parity for listed paths: **`python scripts/check_token_cost_parity.py --repo .`*
      `handoffs/po_to_tl.md`, `docs/engineering/architecture.md`), ensure rollover
      evidence (`boundary`, `moved`, `retained`, `pack_ref`) is recorded in the
      execute checkpoint when packs were written.
+23. Project README bootstrap + per-story catalog delta (US-0097 / DEC-0083):
+   - **23 preamble**: Read merged scratchpad `FRAMEWORK_KIT_REPO` (default `0`).
+     When `1` (its-magic kit repo only), skip **23a** and **23b** — consumer repos
+     never set `FRAMEWORK_KIT_REPO=1`. Read `PROJECT_README_ENFORCE` for delta context.
+   - **23a Bootstrap**: When root `README.md` is missing or matches placeholder
+     sentinels **S1–S4** (framework H1, `<!-- readme-feature-coverage-catalog -->`,
+     `Feature coverage catalog (US-0091)` heading, or byte-match to `template/README.md`),
+     materialize the project scaffold from `docs/product/vision.md` (H1 + 1–3 sentence
+     purpose, `## For users`, `## For developers`, `## Features`,
+     `<!-- project-readme-feature-catalog -->`, pointer to `its_magic/README.md`).
+     Operator-authored roots (**S5**) are never overwritten. Fail closed →
+     `PROJECT_README_BOOTSTRAP_SKIPPED` when bootstrap required but not performed.
+   - **23b Per-story delta (mandatory)**: Before `/execute` PASS for a shipped story,
+     add or update ≥1 user-facing catalog bullet under
+     `<!-- project-readme-feature-catalog -->` containing `\bUS-xxxx\b` for each
+     `user_visible: true` story in scope. Fail closed → `PROJECT_README_DELTA_SKIPPED`.
+     Hybrid/ambiguous roots → `PROJECT_README_MIGRATION_AMBIGUOUS` or
+     `PROJECT_README_SENTINEL_CONFLICT` (see runbook migration §). Inconclusive
+     classifier → `PROJECT_README_PLACEHOLDER_UNRESOLVED`.
+   - **23c Hygiene compose**: Prose edits in root `README.md` are subject to step **20**
+     (**US-0071**) — do not run duplicate hygiene when README is unchanged this phase.
+   - Active + `template/.cursor/commands/execute.md` byte-identical step **23** block.
+
+24. Dev environment auto-launch profile (US-0098 / DEC-0084):
+   - **24 preamble**: Read merged scratchpad `DEV_AUTO_LAUNCH_PROFILE` (default `off`) and
+     optional `DEV_ENVIRONMENT_CONFIG` (default `.cursor/dev-environment.json`). When `off`,
+     skip **24a–24d** with zero overhead — manual workflows unchanged.
+   - **24a Gate + profile load**: Validate profile path via `scripts/dev_environment_lib.py`
+     `load_profile`; names-only schema check. Fail closed → `DEV_ENV_PROFILE_INVALID` or
+     `DEV_ENV_PROFILE_MISSING`. Never read `.env`.
+   - **24b Detect + persist**: Run `detect_mode(repo, profile, scratchpad)` per detection
+     precedence (**US-0086** remote wins over **docker-host-local**). Merge fields idempotently
+     into profile file.
+   - **24c Relaunch (bounded)**: When touched files match Tier A/B/C via `classify_touched_files`
+     or explicit operator refresh (**exact literal** `refresh dev environment` — case-sensitive
+     whole phrase): run `build_relaunch_plan` recipe; bounded retries (`retry_count` max **2**;
+     delays **5s** then **15s**). Bind-mount skip default: source-only docker changes emit
+     `DEV_ENV_RELAUNCH_SKIPPED_NO_SURFACE` unless `rebuild_recipe.restart_on_source_change=true`
+     or explicit refresh.
+   - **24d Connect + handoff**: Append **Dev environment relaunch** + **Connect** sections to
+     `handoffs/dev_to_qa.md` with evidence tuple fields: `dev_auto_launch_profile`,
+     `runtime_mode`, `relaunch_tier`, `relaunch_command`, `relaunch_outcome`, `retry_count`,
+     `reason_code`. Use `format_connect_block` — mandatory fields: `runtime_mode`,
+     `connect_endpoint`, `health_path`, `service_id`/`container_id`, `target_id`, `env_refs`,
+     `relaunch_outcome`. Names-only — no secret values.
+   - Orthogonal to step **18** (**US-0065**) runtime QA autopilot and step **17** (**US-0084**)
+     remote cues (compose when both fire).
+   - Active + `template/.cursor/commands/execute.md` byte-identical step **24** block.
 

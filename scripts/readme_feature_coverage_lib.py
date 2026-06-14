@@ -396,7 +396,7 @@ def has_dev_coverage(section_text: str, item: WorkItem) -> bool:
 def check_template_parity(repo_root: str) -> List[str]:
     errors: List[str] = []
     pairs = (
-        ("README.md", "template/README.md"),
+        ("its_magic/README.md", "template/its_magic/README.md"),
         (
             "scripts/readme_feature_coverage_lib.py",
             "template/scripts/readme_feature_coverage_lib.py",
@@ -444,7 +444,7 @@ def build_report(
     backlog_text = read_utf8(backlog_path)
     items = parse_backlog(backlog_text)
     manifest = load_affinity_manifest(repo_root)
-    root_readme = read_utf8(os.path.join(repo_root, "README.md"))
+    root_readme = read_utf8(os.path.join(repo_root, "its_magic", "README.md"))
     dev_readme = read_utf8(os.path.join(repo_root, "docs", "developer", "README.md"))
 
     if not skip_parity:

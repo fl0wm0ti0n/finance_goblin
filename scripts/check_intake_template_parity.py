@@ -7,6 +7,12 @@ Scoped modes (DEC-0073 §10 / US-0090):
   --scope=readme-feature-coverage DEC-0074 README feature-coverage pair table.
   --scope=downstream-ci-guard   DEC-0075 downstream CI guard script pair table.
   --scope=us-0092               DEC-0078 full-autonomy outer driver + probe surfaces.
+  --scope=us-0093               DEC-0079 browser UAT probe surfaces.
+  --scope=us-0095               DEC-0080 native in-chat auto-chain surfaces.
+  --scope=bug-0012              DEC-0081 native-chain compliance surfaces (BUG-0012).
+  --scope=us-0096               DEC-0082 delivery modes surfaces (US-0096).
+  --scope=project-readme        DEC-0083 project README bootstrap surfaces (US-0097).
+  --scope=dev-environment       DEC-0084 dev auto-launch profile surfaces (US-0098).
   --scope=all              union of all tables.
 """
 
@@ -78,6 +84,150 @@ US0092_PAIRS: tuple[tuple[str, str], ...] = (
     ("docs/engineering/runbook.md", "template/docs/engineering/runbook.md"),
 )
 
+US0093_PAIRS: tuple[tuple[str, str], ...] = (
+    ("scripts/uat_probe_lib.py", "template/scripts/uat_probe_lib.py"),
+    (".cursor/commands/verify-work.md", "template/.cursor/commands/verify-work.md"),
+    (".cursor/commands/qa.md", "template/.cursor/commands/qa.md"),
+    (".cursor/commands/execute.md", "template/.cursor/commands/execute.md"),
+    (
+        ".cursor/scratchpad.local.example.md",
+        "template/.cursor/scratchpad.local.example.md",
+    ),
+    ("docs/engineering/runbook.md", "template/docs/engineering/runbook.md"),
+    (
+        "docs/engineering/auto-orchestration-reference.md",
+        "template/docs/engineering/auto-orchestration-reference.md",
+    ),
+    (
+        "docs/engineering/context/installer-owned-paths.manifest",
+        "template/docs/engineering/context/installer-owned-paths.manifest",
+    ),
+)
+
+US0095_PAIRS: tuple[tuple[str, str], ...] = (
+    (".cursor/commands/auto.md", "template/.cursor/commands/auto.md"),
+    (
+        "docs/engineering/auto-orchestration-reference.md",
+        "template/docs/engineering/auto-orchestration-reference.md",
+    ),
+    ("docs/engineering/runbook.md", "template/docs/engineering/runbook.md"),
+    ("README.md", "template/README.md"),
+    (
+        "scripts/check_intake_template_parity.py",
+        "template/scripts/check_intake_template_parity.py",
+    ),
+)
+
+BUG0012_PAIRS: tuple[tuple[str, str], ...] = (
+    (".cursor/commands/auto.md", "template/.cursor/commands/auto.md"),
+    (
+        "docs/engineering/auto-orchestration-reference.md",
+        "template/docs/engineering/auto-orchestration-reference.md",
+    ),
+    ("docs/engineering/runbook.md", "template/docs/engineering/runbook.md"),
+    (
+        "scripts/check_intake_template_parity.py",
+        "template/scripts/check_intake_template_parity.py",
+    ),
+)
+
+US0096_PAIRS: tuple[tuple[str, str], ...] = (
+    (
+        ".cursor/scratchpad.local.example.md",
+        "template/.cursor/scratchpad.local.example.md",
+    ),
+    (".cursor/commands/auto.md", "template/.cursor/commands/auto.md"),
+    (
+        "docs/engineering/auto-orchestration-reference.md",
+        "template/docs/engineering/auto-orchestration-reference.md",
+    ),
+    ("docs/engineering/runbook.md", "template/docs/engineering/runbook.md"),
+    (".cursor/commands/quick.md", "template/.cursor/commands/quick.md"),
+    (
+        "scripts/check_intake_template_parity.py",
+        "template/scripts/check_intake_template_parity.py",
+    ),
+    ("scripts/pack_json_validate.py", "template/scripts/pack_json_validate.py"),
+)
+
+PROJECT_README_PAIRS: tuple[tuple[str, str], ...] = (
+    (
+        "scripts/validate_project_readme_coverage.py",
+        "template/scripts/validate_project_readme_coverage.py",
+    ),
+    (
+        "scripts/project_readme_coverage_lib.py",
+        "template/scripts/project_readme_coverage_lib.py",
+    ),
+    (".cursor/commands/execute.md", "template/.cursor/commands/execute.md"),
+    (".cursor/commands/release.md", "template/.cursor/commands/release.md"),
+    ("docs/engineering/runbook.md", "template/docs/engineering/runbook.md"),
+    (
+        "docs/engineering/context/installer-owned-paths.manifest",
+        "template/docs/engineering/context/installer-owned-paths.manifest",
+    ),
+    (
+        ".cursor/scratchpad.local.example.md",
+        "template/.cursor/scratchpad.local.example.md",
+    ),
+    (
+        "scripts/check_intake_template_parity.py",
+        "template/scripts/check_intake_template_parity.py",
+    ),
+)
+
+DEV_ENVIRONMENT_PAIRS: tuple[tuple[str, str], ...] = (
+    (".cursor/commands/execute.md", "template/.cursor/commands/execute.md"),
+    (".cursor/scratchpad.md", "template/.cursor/scratchpad.md"),
+    (
+        ".cursor/scratchpad.local.example.md",
+        "template/.cursor/scratchpad.local.example.md",
+    ),
+    (
+        "template/.cursor/dev-environment.json.example",
+        "template/.cursor/dev-environment.json.example",
+    ),
+    (
+        "scripts/dev_environment_lib.py",
+        "template/scripts/dev_environment_lib.py",
+    ),
+    ("docs/engineering/runbook.md", "template/docs/engineering/runbook.md"),
+    (
+        "docs/engineering/auto-orchestration-reference.md",
+        "template/docs/engineering/auto-orchestration-reference.md",
+    ),
+    (
+        "scripts/check_intake_template_parity.py",
+        "template/scripts/check_intake_template_parity.py",
+    ),
+)
+
+RELEASE_CHANGELOG_PAIRS: tuple[tuple[str, str], ...] = (
+    (
+        "scripts/release_changelog_lib.py",
+        "template/scripts/release_changelog_lib.py",
+    ),
+    (
+        "scripts/release_changelog_validate.py",
+        "template/scripts/release_changelog_validate.py",
+    ),
+    (
+        "scripts/release_changelog_backfill.py",
+        "template/scripts/release_changelog_backfill.py",
+    ),
+    ("CHANGELOG.md", "template/CHANGELOG.md"),
+    (".cursor/commands/release.md", "template/.cursor/commands/release.md"),
+    ("scripts/release-all.sh", "template/scripts/release-all.sh"),
+    (
+        "template/handoffs/releases/vX.Y.Z-release-notes.md.example",
+        "template/handoffs/releases/vX.Y.Z-release-notes.md.example",
+    ),
+    (
+        "scripts/check_intake_template_parity.py",
+        "template/scripts/check_intake_template_parity.py",
+    ),
+)
+
 DOWNSTREAM_CI_GUARD_PAIRS: tuple[tuple[str, str], ...] = (
     (
         "scripts/check_downstream_ci_guard.py",
@@ -95,12 +245,26 @@ SCOPES: dict[str, tuple[tuple[str, str], ...]] = {
     "readme-feature-coverage": README_FEATURE_COVERAGE_PAIRS,
     "downstream-ci-guard": DOWNSTREAM_CI_GUARD_PAIRS,
     "us-0092": US0092_PAIRS,
+    "us-0093": US0093_PAIRS,
+    "us-0095": US0095_PAIRS,
+    "bug-0012": BUG0012_PAIRS,
+    "us-0096": US0096_PAIRS,
+    "project-readme": PROJECT_README_PAIRS,
+    "dev-environment": DEV_ENVIRONMENT_PAIRS,
+    "release-changelog": RELEASE_CHANGELOG_PAIRS,
     "all": (
         INTAKE_TEMPLATE_PAIRS
         + CAVEMAN_COMPRESS_PAIRS
         + README_FEATURE_COVERAGE_PAIRS
         + DOWNSTREAM_CI_GUARD_PAIRS
         + US0092_PAIRS
+        + US0093_PAIRS
+        + US0095_PAIRS
+        + BUG0012_PAIRS
+        + US0096_PAIRS
+        + PROJECT_README_PAIRS
+        + DEV_ENVIRONMENT_PAIRS
+        + RELEASE_CHANGELOG_PAIRS
     ),
 }
 

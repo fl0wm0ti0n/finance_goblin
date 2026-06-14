@@ -1,0 +1,154 @@
+{
+  "id": "Q0033",
+  "title": "BUG-0024 Plan delete sole-plan copy gap",
+  "status": "IN_PROGRESS",
+  "bug_id": "BUG-0024",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0024",
+  "spec_pack_ref": "docs/engineering/spec-pack/BUG-0024-technical-specification.md",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["BR", "BS"],
+  "acceptance_mapping": {
+    "BS": {
+      "tasks": ["H1", "F1", "T1", "G1", "V1"],
+      "primary_verify": "Sole active plan: delete disabled per DEC-0082 + inline hint To delete this plan, create another scenario, set it active, then delete this one — not silent gray button with tooltip-only guidance"
+    },
+    "BR": {
+      "tasks": ["G1", "V1"],
+      "primary_verify": "2+ plans on /planning: non-active selected → Delete enabled → confirm removes plan — not permanently disabled after Q0031 deploy; omniflow after FRONTEND_DEPLOY"
+    }
+  },
+  "task_count": 5,
+  "mandatory_task_count": 5,
+  "optional_task_ids": [],
+  "estimate_total_hours": 4.5,
+  "user_guide_mode": {
+    "enabled": true,
+    "waived": true,
+    "reason": "UX copy fix; no new operator workflow"
+  },
+  "tasks": [
+    {
+      "id": "H1",
+      "title": "Pure helper shouldShowSolePlanDeleteHint + copy constant",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0024 (BS) — GATE-COPY-1 predicate + SOLE_PLAN_DELETE_HINT",
+      "files": ["frontend/src/pages/planSelector.ts"],
+      "decisions": ["DEC-0082"],
+      "research": ["R-0096"],
+      "tests": [
+        "shouldShowSolePlanDeleteHint: plans.length===1 && sole.is_active && activePlanIsSelected",
+        "SOLE_PLAN_DELETE_HINT frozen copy constant exported"
+      ]
+    },
+    {
+      "id": "F1",
+      "title": "PlanningPage inline hint wire below Delete plan row",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": ["H1"],
+      "acceptance_hook": "BUG-0024 (BS) — GATE-COPY-1 inline placement; keyboard discoverable",
+      "files": ["frontend/src/pages/PlanningPage.tsx"],
+      "decisions": ["DEC-0082"],
+      "research": ["R-0096"],
+      "tests": [
+        "Conditional render when shouldShowSolePlanDeleteHint true",
+        "Hint immediately below Delete plan button in plan-selector row",
+        "Multi-plan active selection: no inline hint; existing tooltip unchanged",
+        "Delete disabled state unchanged — DEC-0082 guard intact"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "Vitest sole-plan predicate table-driven cases",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "depends_on": ["H1"],
+      "acceptance_hook": "BUG-0024 (BS) — GATE-TEST-1 vitest helper precedent",
+      "files": ["frontend/src/pages/planSelector.test.ts"],
+      "decisions": [],
+      "research": ["R-0096", "R-0094"],
+      "tests": [
+        "sole plan active + activePlanIsSelected true → true",
+        "sole plan active + activePlanIsSelected false → false",
+        "two plans active selected → false",
+        "two plans non-active selected → false",
+        "empty plans → false",
+        "existing resolveDisplayedPlanId / isDeleteDisabled cases remain green"
+      ]
+    },
+    {
+      "id": "G1",
+      "title": "Automated gate (npm test + build + blast-radius)",
+      "status": "done",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "depends_on": ["F1", "T1"],
+      "acceptance_hook": "BUG-0024 (BR)(BS) — automated verification",
+      "files": ["sprints/quick/Q0033/progress.md"],
+      "decisions": [],
+      "tests": [
+        "npm test PASS (planSelector + existing suites)",
+        "npm run build PASS",
+        "git diff --stat matches frozen frontend file list only"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work /planning BR/BS + OIDC smoke",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "depends_on": ["G1"],
+      "operator_gate": "FRONTEND_DEPLOY",
+      "acceptance_hook": "BUG-0024 (BR)(BS) — operator smoke matrix GATE-DEPLOY-1",
+      "files": [
+        "sprints/quick/Q0033/uat.md",
+        "sprints/quick/Q0033/uat.json"
+      ],
+      "tests": [
+        "BS-UI: sole active plan — inline hint visible, delete disabled",
+        "BR-UI: 2+ plans non-active selected — delete enabled, confirm removes",
+        "BR-API: DELETE active plan → 409 active_plan_delete_forbidden",
+        "BN-regression: active plan selected — delete disabled + tooltip",
+        "OIDC: /planning /api/v1/plans smoke"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "H1 planSelector helper + copy constant",
+    "F1 PlanningPage inline hint wire",
+    "T1 vitest sole-plan cases",
+    "G1 automated gate",
+    "FRONTEND_DEPLOY",
+    "V1 verify-work smoke"
+  ],
+  "execute_order": ["H1", "F1", "T1", "G1", "V1"],
+  "operator_gates": [
+    {
+      "id": "FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "rebuild frontend only — no migration",
+      "rationale": "BR/BS runtime gates require Q0031 selector + sole-plan hint live on target environment"
+    }
+  ],
+  "frozen_boundaries": [
+    "GATE-SCOPE-1: frontend-only — no DELETE /api/v1/plans/:id or DEC-0082 backend changes",
+    "Forbidden: sole-plan auto-deactivate delete (Option C rejected)",
+    "Forbidden: create-plan API changes",
+    "Forbidden: Playwright E2E suite addition",
+    "Forbidden: new DEC — GATE-DEC-1 closed",
+    "Multi-plan: existing tooltip on active plan selection unchanged",
+    "Selector logic: resolveDisplayedPlanId / isDeleteDisabled unchanged — BUG-0022/Q0031 not reopened"
+  ],
+  "decisions": ["DEC-0082"],
+  "research": ["R-0096"],
+  "operator_next": "After H1+F1+T1+G1: FRONTEND_DEPLOY; then V1 on localhost:18080 and optional financegnome.omniflow.cc OIDC",
+  "next_phase": "qa",
+  "sprint_plan_ref": "sprint-plan-20260613-bug0024-q0033",
+  "orchestrator_run_id": "auto-20260613-bug0024"
+}

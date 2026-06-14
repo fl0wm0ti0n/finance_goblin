@@ -1,0 +1,218 @@
+{
+  "id": "Q0034",
+  "title": "BUG-0025 Firefly Stromkosten mirror lag",
+  "status": "PLANNED",
+  "bug_id": "BUG-0025",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0025",
+  "spec_pack_ref": "docs/engineering/spec-pack/BUG-0025-technical-specification.md",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["BW", "BX", "BY"],
+  "acceptance_mapping": {
+    "BW": {
+      "tasks": ["B1", "T1", "G1", "V1"],
+      "primary_verify": "Manual Sync now (365d) ingests multi-month Stromkosten; GET /api/v1/categories/expense-series?category_id=146 shows bars per month — not 2026-05 only"
+    },
+    "BX": {
+      "tasks": ["B1", "D1", "F1", "G1", "V1"],
+      "primary_verify": "Backdated imports ingest on manual Full or Sync Status callout + runbook explain DEC-0002 overlap + cursor reset — not silent skip"
+    },
+    "BY": {
+      "tasks": ["B2", "F1", "G1", "V1"],
+      "primary_verify": "Hero Last Firefly sync from last_firefly_run; exchange secondary when newer; Sync now → manual in history; trigger column distinguishes run kinds"
+    }
+  },
+  "task_count": 7,
+  "mandatory_task_count": 7,
+  "optional_task_ids": [],
+  "estimate_total_hours": 12.5,
+  "user_guide_mode": {
+    "enabled": true,
+    "waived": true,
+    "reason": "Operator guidance in runbook (D1) + Sync Status callout (F1); no new US-xxxx workflow"
+  },
+  "tasks": [
+    {
+      "id": "B1",
+      "title": "Manual 365d lookback wiring in sync_transactions",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0025 (BW)(BX) — GATE-OVERLAP-1 frozen start contract",
+      "files": [
+        "backend/src/firefly/mod.rs",
+        "backend/src/sync/mod.rs"
+      ],
+      "decisions": ["DEC-0002"],
+      "research": ["R-0097"],
+      "tests": [
+        "sync_transactions accepts trigger param",
+        "trigger=manual → start_date = Utc::now() - 365 days",
+        "trigger=scheduled → watermark - overlap_days unchanged",
+        "execute_run passes trigger into sync_transactions",
+        "firefly_readonly_test callers pass scheduled or test trigger"
+      ]
+    },
+    {
+      "id": "B2",
+      "title": "SyncStatusResponse.last_firefly_run API split",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "depends_on": [],
+      "acceptance_hook": "BUG-0025 (BY) — GATE-SYNC-UX-1 additive API field",
+      "files": [
+        "backend/src/sync/mod.rs",
+        "frontend/src/lib/api.ts"
+      ],
+      "decisions": [],
+      "research": ["R-0097"],
+      "tests": [
+        "SyncStatusResponse adds last_firefly_run: Option<SyncRunRow>",
+        "latest_firefly_run() filters trigger IN (manual, scheduled)",
+        "last_run unchanged — latest run of any kind",
+        "frontend api.ts adds last_firefly_run: SyncRun | null"
+      ]
+    },
+    {
+      "id": "F1",
+      "title": "SyncStatusPage hero, badge, exchange secondary, DEC-0002 callout",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["B2"],
+      "acceptance_hook": "BUG-0025 (BX)(BY) — GATE-SYNC-UX-1 + GATE-OVERLAP-1 doc tier",
+      "files": ["frontend/src/pages/SyncStatusPage.tsx"],
+      "decisions": ["DEC-0002"],
+      "research": ["R-0097"],
+      "tests": [
+        "Hero primary: Last Firefly sync from last_firefly_run?.finished_at or Never",
+        "Trigger badge: manual → Manual; scheduled → Scheduled",
+        "Secondary Last exchange sync when last_run is exchange-only and newer",
+        "Info callout explains DEC-0002 overlap + Sync now 365d + runbook link",
+        "Sync now button unchanged — POST /api/v1/sync/trigger",
+        "History table keeps raw trigger column"
+      ]
+    },
+    {
+      "id": "D1",
+      "title": "Runbook § backdated Firefly imports + cursor reset",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": ["B1"],
+      "acceptance_hook": "BUG-0025 (BX) — GATE-REMED-1 operator remediation",
+      "files": ["docs/engineering/runbook.md"],
+      "decisions": ["DEC-0002"],
+      "research": ["R-0097"],
+      "tests": [
+        "Symptom: category trend missing months after backdated import",
+        "Cause: DEC-0002 transaction-date start filter",
+        "Fix ≤365d: Sync now on /sync (manual Full)",
+        "Fix >365d: DELETE FROM sync_cursors WHERE entity_type = transactions",
+        "Safety: upsert by Firefly id — no duplicate rows"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "Integration backdated-window repro",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 3,
+      "depends_on": ["B1"],
+      "acceptance_hook": "BUG-0025 (BW) — GATE-TEST-1 deterministic repro",
+      "files": ["backend/tests/"],
+      "decisions": ["DEC-0002"],
+      "research": ["R-0097"],
+      "tests": [
+        "Seed watermark + tx outside watermark-7d — not ingested on trigger=scheduled",
+        "Same fixture + trigger=manual post-fix — row in transactions mirror",
+        "Optional: cursor delete + scheduled Full ingests via 365d cold-start"
+      ]
+    },
+    {
+      "id": "G1",
+      "title": "Automated gate (cargo test + npm test + build)",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 1,
+      "depends_on": ["B1", "B2", "F1", "D1", "T1"],
+      "acceptance_hook": "BUG-0025 (BW)(BX)(BY) — automated verification",
+      "files": ["sprints/quick/Q0034/progress.md"],
+      "decisions": [],
+      "tests": [
+        "cargo test PASS (includes T1 integration)",
+        "npm test PASS",
+        "npm run build PASS",
+        "git diff --stat matches frozen file list"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "verify-work BW/BX/BY + OIDC smoke",
+      "status": "open",
+      "priority": "P0",
+      "estimate_hours": 2,
+      "depends_on": ["G1"],
+      "operator_gate": "BACKEND_REBUILD, FRONTEND_DEPLOY",
+      "acceptance_hook": "BUG-0025 (BW)(BX)(BY) — operator smoke matrix",
+      "files": [
+        "sprints/quick/Q0034/uat.md",
+        "sprints/quick/Q0034/uat.json"
+      ],
+      "tests": [
+        "BW-API: expense-series category 146 multi-month after manual Sync now",
+        "BW-UI: /forecast Category spending trend Wohnen - Stromkosten multi-month bars",
+        "BX-UI: /sync DEC-0002 callout + runbook link",
+        "BX-DOC: runbook backdated import section present",
+        "BY-API: GET /api/v1/sync/status last_firefly_run vs exchange last_run",
+        "BY-UI: Hero Last Firefly sync + trigger badge + exchange secondary",
+        "BY-HIST: sync history trigger column manual vs scheduled_exchanges",
+        "OIDC-1: /sync /forecast sync trigger smoke"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "B1 sync_transactions manual 365d lookback",
+    "B2 SyncStatusResponse.last_firefly_run",
+    "F1 SyncStatusPage hero + callout",
+    "D1 runbook remediation section",
+    "T1 integration backdated-window test",
+    "G1 automated gate",
+    "BACKEND_REBUILD",
+    "FRONTEND_DEPLOY",
+    "V1 verify-work smoke"
+  ],
+  "execute_order": ["B1", "B2", "F1", "D1", "T1", "G1", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_REBUILD",
+      "before_tasks": ["V1"],
+      "action": "rebuild/restart backend — B1 + B2 live",
+      "rationale": "Manual 365d ingest + last_firefly_run API required for BW/BY smoke"
+    },
+    {
+      "id": "FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "rebuild frontend — F1 Sync Status UX live",
+      "rationale": "BX callout + BY hero/badge required for operator smoke"
+    }
+  ],
+  "frozen_boundaries": [
+    "GATE-OVERLAP-1: manual 365d lookback only — scheduled keeps watermark − overlap_days",
+    "GATE-SYNC-UX-1: last_firefly_run hero — exchange-only must not update Firefly hero",
+    "GATE-REMED-1: runbook SQL cursor reset — no admin API in v1",
+    "GATE-TEST-1: integration repro with mirror assert — not wiremock-only",
+    "GATE-DEC-1: extends DEC-0002 — no new DEC",
+    "Forbidden: global overlap_days TOML change",
+    "Forbidden: expense-series SQL / CategoryTrendChart frontend changes",
+    "Forbidden: Firefly Search API",
+    "Optional P1 F3 HomePage last_firefly_run — out of mandatory sprint"
+  ],
+  "decisions": ["DEC-0002"],
+  "research": ["R-0097"],
+  "operator_next": "After B1+B2+F1+D1+T1+G1: BACKEND_REBUILD + FRONTEND_DEPLOY; then V1 on localhost:18080 category 146 + /sync status",
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260614-bug0025-q0034",
+  "orchestrator_run_id": "auto-20260613-bug0025"
+}

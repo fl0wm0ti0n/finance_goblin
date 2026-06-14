@@ -1,0 +1,71 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260613-forecast-income-card-mismatch",
+  "intake_work_item_kind": "bug",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Income steht 0.00 in der Karte, aber im Chart passt es — da ist eine Summe abgebildet (/forecast Monthly)",
+      "intake_run_id": "intake-20260613-forecast-income-card-mismatch",
+      "turn_index": 0,
+      "ref": "ie:intake-20260613-forecast-income-card-mismatch:0:7c8512581f59a62c"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "ForecastPage.tsx monthlySummary = series[0] ohne Monatslabel; MonthlyChart rendert gesamte series; live API series[0]=2026-06 income 0.00, series[1+]=3266.16",
+      "intake_run_id": "intake-20260613-forecast-income-card-mismatch",
+      "turn_index": 1,
+      "delegation_scope": "frontend/src/pages/ForecastPage.tsx L148-152 monthlySummary; frontend/src/components/forecast/MonthlyChart.tsx; GET /api/v1/forecast/monthly",
+      "delegation_rationale": "Cards zeigen ersten Forecast-Monat (oft laufender/teilmonat mit 0 Income), Chart zeigt alle Monate mit projiziertem Gehalt — kein Backend-Bucket-Bug (BUG-0012 DONE)",
+      "delegation_confidence": "high",
+      "ref": "ie:intake-20260613-forecast-income-card-mismatch:1:a91d250977274f29"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "DEC-0089 category filter darf Forecast-Karten nicht beeinflussen; Fix muss Karten-Monat vs Chart-Semantik klären ohne Projection-Engine zu ändern",
+      "intake_run_id": "intake-20260613-forecast-income-card-mismatch",
+      "turn_index": 2,
+      "ref": "ie:intake-20260613-forecast-income-card-mismatch:2:1709a24b0c92779f"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Browser/API: wenn monthly series Monat N income>0 und series[0] income=0, Karten dürfen nicht unbeschriftet 0.00 zeigen; vitest oder Playwright Forecast Monthly smoke",
+      "intake_run_id": "intake-20260613-forecast-income-card-mismatch",
+      "turn_index": 3,
+      "ref": "ie:intake-20260613-forecast-income-card-mismatch:3:ad5dcae9f30e1dd2"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator sieht konsistente Income-Zahl zwischen beschrifteter Summary-Karte und Chart für denselben Referenzmonat — nicht 0.00 Karte bei ~3000 Chart-Balken",
+      "intake_run_id": "intake-20260613-forecast-income-card-mismatch",
+      "turn_index": 4,
+      "ref": "ie:intake-20260613-forecast-income-card-mismatch:4:f0eac26674f1dc4a"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug",
+    "work_items": [
+      "BUG-0026"
+    ],
+    "rationale": "Frontend summary cards use unlabeled series[0] while chart plots full monthly series — distinct from BUG-0012 backend bucket fix (DONE Q0014).",
+    "split_axis": "none",
+    "alternatives_considered": [
+      "Reopen BUG-0012 — rejected (API has non-zero income from month 2; categorization works)",
+      "Merge BUG-0025 — rejected (Firefly sync vs forecast UI slice)"
+    ]
+  }
+}

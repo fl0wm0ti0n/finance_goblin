@@ -38,8 +38,9 @@ scripts/check_downstream_ci_guard.py
 scripts/downstream_ci_guard_lib.py
 scripts/auto_outer_driver.py
 scripts/uat_probe_lib.py
+scripts/project_readme_coverage_lib.py
+scripts/validate_project_readme_coverage.py
 .github/workflows
-README.md
 its_magic
 
 [clean_paths]
@@ -71,6 +72,8 @@ scripts/check_downstream_ci_guard.py
 scripts/downstream_ci_guard_lib.py
 scripts/auto_outer_driver.py
 scripts/uat_probe_lib.py
+scripts/project_readme_coverage_lib.py
+scripts/validate_project_readme_coverage.py
 .github/workflows/ci.yml
 .github/workflows/deploy.yml
 its_magic

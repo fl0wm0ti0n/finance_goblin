@@ -1,0 +1,51 @@
+{
+  "id": "S0020",
+  "title": "US-0021 Subscription transaction explorer",
+  "status": "EXECUTE_COMPLETE",
+  "story_id": "US-0021",
+  "architecture_ref": "docs/engineering/architecture.md § US-0021",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["AC-1", "AC-2", "AC-3", "AC-4", "AC-5", "AC-6"],
+  "task_count": 12,
+  "mandatory_task_count": 10,
+  "optional_task_ids": ["T2", "R1"],
+  "tasks_completed": 11,
+  "tasks_deferred": ["V1"],
+  "orchestrator_run_id": "auto-20260613-us0021",
+  "decisions": ["DEC-0112", "DEC-0113", "DEC-0114"],
+  "extends_decisions": ["DEC-0098", "DEC-0099", "DEC-0111"],
+  "test_counts": {
+    "cargo_lib": "221/221",
+    "cargo_us0021_integration": "6/6",
+    "npm_test": "17/17",
+    "npm_build": "PASS"
+  },
+  "tasks": [
+    { "id": "TX1", "status": "done", "priority": "P0" },
+    { "id": "TX2", "status": "done", "priority": "P0" },
+    { "id": "TX3", "status": "done", "priority": "P0" },
+    { "id": "UI1", "status": "done", "priority": "P0" },
+    { "id": "UI2", "status": "done", "priority": "P0" },
+    { "id": "UI3", "status": "done", "priority": "P0" },
+    { "id": "UI4", "status": "done", "priority": "P0" },
+    { "id": "PT1", "status": "done", "priority": "P0" },
+    { "id": "T1", "status": "done", "priority": "P0" },
+    { "id": "T2", "status": "done", "priority": "P1" },
+    { "id": "R1", "status": "done", "priority": "P1" },
+    {
+      "id": "V1",
+      "status": "deferred",
+      "priority": "P0",
+      "operator_gate": "BACKEND_FRONTEND_DEPLOY",
+      "reason": "Operator deploy deferred per execute scope"
+    }
+  ],
+  "operator_gates": [
+    {
+      "id": "BACKEND_FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "rebuild backend + frontend — no migration"
+    }
+  ],
+  "next_phase": "qa"
+}

@@ -164,7 +164,7 @@ impl WealthService {
                     asset: h.asset.clone(),
                     quantity: h.quantity,
                     product_type: h.product_type.clone(),
-                    value_eur: h.market_value_eur,
+                    value_eur: h.market_value_eur.or(h.exposure_eur),
                     unrealized_pnl_eur: h.unrealized_pnl_eur,
                     native_unit: native_unit_for_holding(h),
                 })

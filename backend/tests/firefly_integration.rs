@@ -122,7 +122,7 @@ async fn sync_issues_only_get_requests_to_firefly() {
     firefly_sync::sync_reference_entities(&client, &pool)
         .await
         .expect("reference sync");
-    firefly_sync::sync_transactions(&client, &pool, 7)
+    firefly_sync::sync_transactions(&client, &pool, 7, "scheduled")
         .await
         .expect("transaction sync");
 

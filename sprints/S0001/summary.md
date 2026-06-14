@@ -1,5 +1,43 @@
 # Summary — Sprint S0001
 
+## Context pack (refresh 2026-06-13 — BUG-0024 released)
+
+- **Active bug:** none (BUG-0024 segment closed)
+- **Active sprint:** none (Q0033 released `bug0024-q0033`)
+- **Latest release:** BUG-0024 / Q0033 (`bug0024-q0033`, 2026-06-13) — sole-plan inline delete guidance (DEC-0082 intact)
+- **Segment bug queue:** (empty)
+- **Backlog OPEN bugs:** BUG-0025 (1)
+- **Open stories:** US-0022 (1)
+- **Orchestrator:** `auto-20260613-bug0024`
+- **S0001 status:** CLOSED / released (`0.1.0-us0001`) — foundation segment complete
+
+## Context pack (refresh 2026-06-13 — BUG-0026 released)
+
+- **Active bug:** none (BUG-0026 segment closed)
+- **Active sprint:** none (Q0032 released `bug0026-q0032`)
+- **Latest release:** BUG-0026 / Q0032 (`bug0026-q0032`, 2026-06-13) — forecast Income card month resolution + subtitle (DEC-0089 intact)
+- **Segment bug queue:** (empty)
+- **Backlog OPEN bugs:** BUG-0024, BUG-0025 (2)
+- **Open stories:** US-0022 (1)
+- **Orchestrator:** `auto-20260613-bug0026`
+- **S0001 status:** CLOSED / released (`0.1.0-us0001`) — foundation segment complete
+
+## Context pack (refresh 2026-06-13 — BUG-0022 execute complete)
+
+- **Active bug:** BUG-0022 — Plan delete selector regression (OPEN; qa phase next)
+- **Active sprint:** Q0031 (EXECUTE COMPLETE — selector priority fix + planSelector vitest)
+- **Execute evidence:** `handoffs/dev_to_qa.md` Q0031 section; `sprints/quick/Q0031/progress.md`
+- **Runtime proof:** `runtime-proof-execute-20260613-bug0022-001`
+- **Orchestrator:** `auto-20260613-bug0022`
+
+## Context pack (refresh 2026-06-12 — BUG-0023 execute complete)
+
+- **Active bug:** BUG-0023 — Crypto Wealth EUR values missing (OPEN; qa phase next)
+- **Active sprint:** Q0030 (EXECUTE COMPLETE — wallet ingest + exposure_eur display + baseline return fix)
+- **Execute evidence:** `handoffs/dev_to_qa.md` Q0030 section; `sprints/quick/Q0030/progress.md`
+- **Runtime proof:** `runtime-proof-execute-20260612-bug0023-001`
+- **Orchestrator:** `auto-20260612-bug0023`
+
 ## Context pack (refresh 2026-06-11 — BUG-0021 released; intake bundle drain complete)
 
 - **Active bug:** none (intake bundle bug queue drain complete)

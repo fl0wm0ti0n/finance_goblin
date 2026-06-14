@@ -6705,3 +6705,1545 @@ Downstream: latest `net_worth_snapshots.payload.accounts[]` has **null** `accoun
 **Status:** fulfilled (Q0029 released via DEC-0110/0111; `bug0021-q0029`, 2026-06-11)
 
 ---
+
+## R-0092 — US-0021 subscription transaction explorer vs recurrence-only Discover
+
+**Date:** 2026-06-12  
+**Work item:** US-0021 (acceptance **AC-1**..**AC-6**)  
+**Phase:** intake (PO)  
+**Orchestrator:** `intake-20260612-subscription-tx-explorer`  
+**Probe environment:** code audit `backend/src/subscriptions/discovery.rs`, `frontend/src/pages/SubscriptionsPage.tsx`, `decisions/DEC-0098.md`, `decisions/DEC-0099.md`; operator conversation 2026-06-12 (German); PFM UX references [Truebill recurring search](https://www.truebill.com/), [YNAB scheduled transactions](https://www.ynab.com/features/scheduled-transactions) — browse ledger then mark recurring.
+
+**Findings:**
+
+### 1. Scope gap — US-0020 met contract, operator expects transaction-first explorer
+
+| Dimension | US-0020 shipped (DEC-0098) | Operator expectation (intake) |
+|-----------|---------------------------|-------------------------------|
+| Result unit | Pre-grouped `DiscoverCandidate` rows | Individual expense **transactions** |
+| Engine | `detect_recurrence_groups` only | Ledger SQL search + optional recurrence hint |
+| Filters | account, payee, interval | + category, Geldbereich, date, amount, recurring toggle |
+| Missed auto-detection | Same algorithm — likely still missed | Find txs algorithm did not group |
+| Activate | `POST /discover/confirm` on candidate | Confirm selected tx group / hinted pattern |
+
+**Interpretation:** Not a US-0020 defect under canonical AC-1; additive story extending subscription-ops.
+
+### 2. Reusable building blocks
+
+| Component | Reuse for US-0021 |
+|-----------|-------------------|
+| `SubscriptionRepository::load_expense_transactions` | Base load + SQL push-down filters |
+| `detect_recurrence_groups` | **Hint engine** on filtered subset — not sole result source |
+| `POST /discover/confirm` + DEC-0085 merge | Manual activate path with explicit `transaction_ids` |
+| US-0018 `CategoryFilter` / `GET /api/v1/categories` | Category filter on Discover |
+| DEC-0111 `formatAccountRole` + `account_role` SQL | Geldbereich filter + column display |
+| Mirror `transactions` + `categories` + `accounts.payload` | Filter dimensions |
+
+### 3. Architecture questions (carry to `/discovery` → `/architecture`)
+
+| # | Question | Options |
+|---|----------|---------|
+| 1 | Discover tab layout | **Dual mode** (Transactions \| Suggested patterns) vs replace recurrence table |
+| 2 | Transaction search API | New `GET /api/v1/subscriptions/transactions/search` vs extend `/discover` with `mode=transactions` |
+| 3 | Recurring hint threshold | Run `detect_recurrence_groups` on filtered txs with `min_emit_confidence` lowered for hints only — do not auto-emit alerts |
+| 4 | Manual tx selection | Multi-select rows → confirm modal computes median amount + interval from selection |
+| 5 | Geldbereich filter | Join `accounts` on `account_id`; filter `COALESCE(payload->'attributes'->>'account_role', …)` per DEC-0111 |
+| 6 | Pagination | Cap 100 txs per page; document in empty-state |
+
+### 4. Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Full-window scan without account filter | Keep account filter recommended default; architecture may allow optional all-accounts with stricter cap |
+| Duplicate confirm with auto-detection | Reuse confirmed fingerprint + payee-interval skip maps (DEC-0098 § exclude) |
+| Performance on 922+ txs | SQL-indexed filters on `account_id`, `date`, `category_id`; avoid client-side full scan |
+| UX complexity (two Discover modes) | Default to transaction search; collapse recurrence-only view or move to secondary tab |
+
+**Linked:** US-0020, US-0003, US-0018, DEC-0098, DEC-0099, DEC-0111, R-0085  
+**Confidence:** high — gap confirmed by code audit + operator intake  
+**Status:** open (intake complete; next `/discovery`)
+
+### 5. Discovery phase (2026-06-13 — `discovery-20260613-us0021`)
+
+**Phase:** discovery (PO)  
+**Orchestrator:** `auto-20260613-us0021`  
+**Probe environment:** code audit `discovery.rs` L18–108, `repository.rs` L62–96, `api/subscriptions.rs` L205–270, `SubscriptionsPage.tsx` L396–685; live `GET http://localhost:18080/api/v1/subscriptions/discover?account_id=114&limit=2` (2026-06-13); intake evidence read-only.
+
+#### 5.1 AC audit (confirmed gaps)
+
+| AC | Verdict | Key evidence |
+|----|---------|--------------|
+| **AC-1** | **CONFIRMED GAP** | `run_discover` emits `DiscoverCandidate` only; UI columns Name/Interval/Median/Confidence/Tx count — no per-tx ledger; no tx pagination |
+| **AC-2** | **CONFIRMED GAP** (partial) | **Done:** account (required), payee substring, interval bucket. **Missing:** category, Geldbereich (`account_role`), date range, amount band, recurring/pattern-hint toggle; no `CategoryFilter` / `formatAccountRole` on Discover |
+| **AC-3** | **CONFIRMED GAP** | `min_emit_confidence: 60` hard-coded L33; groups below threshold never surface; no hint-only pass on filtered subset; no inline interval suggestion on tx rows |
+| **AC-4** | **PARTIAL GAP** | `POST /discover/confirm` accepts `transaction_ids` + DEC-0085 merge — but UI confirm is candidate-row only (`DiscoverCandidate` modal L654–685); no multi-select tx group from ledger |
+| **AC-5** | **BASELINE OK** | US-0020 tags, majority category, Pending/auto-detection paths untouched; regression proof deferred to execute/qa |
+| **AC-6** | **DEFERRED** | External profile smoke not run — carry to qa |
+
+#### 5.2 Root-cause chain (code + live)
+
+| Layer | Finding |
+|-------|---------|
+| **Backend discover** | `run_discover` loads txs then **only** `detect_recurrence_groups`; filters apply to groups not raw txs |
+| **API contract** | `DiscoverResponse.candidates[]` = grouped patterns; no `transactions[]` endpoint or `mode=transactions` |
+| **Repository** | `load_expense_transactions` supports account scoping only — no SQL push-down for category, date, Geldbereich |
+| **Frontend Discover** | Heading "Discover recurring **candidates**"; results table candidate-centric; account required default |
+| **Reusable** | `confirm_from_discover`, DEC-0085 merge, US-0018 categories, DEC-0111 `account_role` labels — ready for extension |
+
+#### 5.3 Open questions from intake — discovery resolution
+
+| # | Question | Discovery verdict |
+|---|----------|-------------------|
+| 1 | Dual-mode tab UX vs single merged table? | **Dual mode** recommended — Transactions (default) \| Suggested patterns (current DEC-0098) |
+| 2 | SQL filter push-down vs in-memory? | **SQL push-down** for account, date, category, payee, amount; Geldbereich via accounts JOIN |
+| 3 | Hint engine approach? | Separate hint pass on filtered subset — **do not** lower global `detection.rs` min_emit |
+| 4 | Operator repro fixture? | Live probe account **114** — SEPA-Lastschrift 11 txs @ 31d / 95% candidate; document for qa |
+| 5 | Performance / indexes? | `idx_transactions_date` only today; composite `(account_id, date DESC, firefly_id)` recommended P2 |
+
+### 6. Research phase (2026-06-13 — `research-20260613-us0021`)
+
+**Phase:** research (tech-lead)  
+**Orchestrator:** `auto-20260613-us0021`  
+**Probe environment:** discovery verdicts 2026-06-13; code audit paths above; `recurrence/detect.rs` scoring; `001_initial.sql` indexes; EARLY_RESEARCH=1 pagination refs ([mirio.dev 2024](https://mirio.dev/2024/08/03/pagination-in-postgresql/), [Sequin keyset cursors](https://blog.sequinstream.com/keyset-cursors-not-offsets-for-postgres-pagination/)); no host `.env` / secrets read.
+
+#### 6.1 Dual-mode UX contract (GATE-UX-1)
+
+| Mode | Default | Content | Filters |
+|------|---------|---------|---------|
+| **Transactions** | **Yes** | Paginated individual expense txs with optional hint badges | account, payee, category, Geldbereich, date range, amount band (optional), recurring-hint toggle |
+| **Suggested patterns** | No | Existing DEC-0098 `DiscoverCandidate` table (unchanged contract) | account, payee, interval bucket |
+
+**Rationale:** Operator intake is transaction-first ("selbst nach transactionen suchen"); US-0020 recurrence-candidate mode remains valuable for proactive pattern review. Replacing the patterns table entirely would regress US-0020 AC-1 narrow contract and operator workflows already trained on candidate confirm.
+
+**Alternative rejected:** Single merged table with hint badges only — conflates row-level ledger browse with group-level confirm; harder to multi-select arbitrary txs (AC-4).
+
+**Risks:** Two sub-tabs increase UI surface; mitigate with Transactions default + shared filter bar where dimensions overlap (account, payee).
+
+#### 6.2 Transaction search API contract (GATE-API-1)
+
+**Recommendation:** New route — **not** `GET /discover?mode=transactions` (would break DEC-0098 frozen response shape).
+
+```
+GET /api/v1/subscriptions/transactions/search
+  ?account_id=          (required — same guard as DEC-0098)
+  &payee=               (optional ILIKE on description)
+  &category_id=         (optional; US-0018 catalog id)
+  &account_role=        (optional Geldbereich enum per DEC-0111)
+  &date_from=           (optional ISO date)
+  &date_to=             (optional ISO date)
+  &amount_min=          (optional P2 stretch)
+  &amount_max=          (optional P2 stretch)
+  &recurring_hint=      (optional bool — include hint metadata pass)
+  &page=                (optional, default 1)
+  &limit=               (optional, default 100, max 100)
+```
+
+**Response draft:**
+
+```json
+{
+  "transactions": [
+    {
+      "firefly_id": "...",
+      "account_id": "...",
+      "account_role": "defaultAsset",
+      "date": "2026-01-15",
+      "amount": -9.99,
+      "description": "...",
+      "category_id": "...",
+      "category_name": "...",
+      "recurring_hint": {
+        "interval_days": 30,
+        "confidence_pct": 60,
+        "payee_key": "...",
+        "group_transaction_ids": ["..."]
+      }
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 100,
+    "total_count": 247,
+    "truncated": true,
+    "window_days": 730,
+    "has_more": true
+  }
+}
+```
+
+`recurring_hint` is **null** when no hint applies; populated only when `recurring_hint=true` or architecture defaults hints on always (gate decision).
+
+**SQL push-down (GATE-FILTER-1):**
+
+| Filter | Mechanism |
+|--------|-----------|
+| account_id | `WHERE t.account_id = $n` (required) |
+| date range | `t.date >= $from AND t.date <= $to` within `detection_window_days` (730) |
+| category_id | `t.category_id = $n` |
+| payee | `t.description ILIKE '%' || $n || '%'` |
+| amount band | `t.amount BETWEEN $min AND $max` (negative expenses) |
+| Geldbereich | `JOIN accounts a ON t.account_id = a.firefly_id` + `COALESCE(a.payload->'attributes'->>'account_role', a.payload->>'account_role') = $role` per DEC-0111 |
+
+**Alternative rejected:** In-memory filter after full `load_expense_transactions` — 730d × all accounts can exceed memory/latency budget; account required mitigates but push-down still needed for category/date/role.
+
+**Risks:** JOIN on `accounts.payload` JSON path — acceptable at household scale; mirror `accounts` row count low.
+
+#### 6.3 Hint threshold contract (GATE-HINT-1)
+
+**Scoring reality (code audit `recurrence/detect.rs`):**
+
+| `score_confidence` output | Meaning | Passes `min_emit_confidence: 60`? |
+|---------------------------|---------|-----------------------------------|
+| 95 | Strong recurring | Yes |
+| 80 | Medium recurring | Yes |
+| 60 | Weak recurring | Yes (borderline) |
+| 0 | Not a group | No — filtered at L100–102 |
+
+**Implication:** Lowering `min_emit_confidence` alone does **not** surface new groups today — non-qualifying payee buckets score **0**, not 30–59. AC-3 "below auto-detection threshold" therefore means:
+
+1. **Primary:** Attach hint metadata to tx rows for groups that **would** score ≥60 on the **filtered subset** but were never shown in candidate-only discover (operator couldn't find individual txs).
+2. **Secondary (P2 stretch):** Relax `txs.len() < 3` guard to `>= 2` for hint-only pass with synthetic low confidence — architecture gate if AC-3 strict reading demands sub-threshold patterns.
+
+**Frozen recommendation:**
+
+| Pass | `min_emit_confidence` | Scope | Side effects |
+|------|----------------------|-------|--------------|
+| Auto-detection (`detection.rs`) | **60** (unchanged) | Full sync window | AC-5 regression guard |
+| Discover candidates (`discovery.rs`) | **60** (unchanged) | DEC-0098 patterns tab | US-0020 contract preserved |
+| Tx-search hint pass | **60** on filtered subset | Search result rows only | Hints on matching `transaction_ids`; **no** auto-emit, **no** pending pattern creation |
+
+Hint pass runs **after** SQL-filtered tx load (same page window or full filter result capped at hint scan budget — architecture to cap hint input at 500 txs max).
+
+**Alternative rejected:** Client-side interval calc on selection — diverges from R-0009 cadence scoring; DEC-0084/0086 drift risk.
+
+**Risks:** Hint scan on 500 txs is O(payees) in-memory — acceptable post SQL cap; monitor if all-accounts search opened later.
+
+#### 6.4 Pagination contract (GATE-PAGE-1)
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| Default `limit` | **100** | Intake R-0092 §3; 2× DEC-0098 candidate cap (50) — operator browses txs not groups |
+| Max `limit` | **100** | Hard server cap |
+| Default `page` | 1 | Offset pagination |
+| `meta.total_count` | Returned when affordable | `COUNT(*)` with same filters — acceptable for account-scoped queries |
+| `meta.has_more` | `page * limit < total_count` | Standard |
+| UI copy | "Showing up to 100 transactions per page — refine filters or use account to narrow." | Empty-state + truncated banner |
+
+**EARLY_RESEARCH pagination note:** Keyset cursor pagination ([mirio.dev 2024](https://mirio.dev/2024/08/03/pagination-in-postgresql/), [Sequin 2024](https://blog.sequinstream.com/keyset-cursors-not-offsets-for-postgres-pagination/)) superior at deep offsets — **defer** for MVP; account-scoped 730d windows typically &lt;500 txs; offset at 100/page sufficient.
+
+**Index recommendation (GATE-IDX-1, P2):**
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_transactions_account_date
+  ON transactions (account_id, date DESC, firefly_id);
+```
+
+Existing `idx_transactions_date` alone insufficient for account+date sort.
+
+#### 6.5 Manual activate contract (GATE-CONFIRM-1)
+
+**Recommendation:** Reuse `POST /api/v1/subscriptions/discover/confirm` — no new confirm payload.
+
+| Step | Contract |
+|------|----------|
+| UI | Multi-select checkboxes on Transactions table rows |
+| Pre-confirm | Client or lightweight `POST .../transactions/preview-group` computes `payee_key`, `median_amount`, `interval_days` from selection (≥2 txs) — **architecture gate:** client-side compute vs server preview endpoint |
+| Confirm body | Existing `DiscoverConfirmBody`: `payee_key`, `interval_days`, `median_amount`, `transaction_ids[]`, `kind` |
+| Merge | DEC-0085 payee+interval merge unchanged |
+| Reject | DEC-0099 rejection rules unchanged |
+
+**Default (GATE-CONFIRM-1):** Server-side preview helper — `POST /api/v1/subscriptions/transactions/preview-group` with `{ transaction_ids: [] }` returns computed fields; avoids client divergence from `median_amount` / `interval_days` Rust helpers.
+
+**Alternative rejected:** New confirm payload shape — unnecessary; `confirm_from_discover` already accepts explicit `transaction_ids`.
+
+#### 6.6 QA operator repro fixture
+
+| Field | Value |
+|-------|-------|
+| Environment | `localhost:18080` |
+| Account | **114** |
+| Live discover | SEPA-Lastschrift grouped candidate — 11 txs, 31d interval, 95% confidence |
+| Expected tx-search | Same payee txs appear as individual rows; hint badge when `recurring_hint=true` |
+| Missed-auto scenario | Operator filters category/Geldbereich to surface txs not in top-50 candidates |
+
+### 7. Architecture gates (for `/architecture`)
+
+| Gate | Question | Default recommendation |
+|------|----------|------------------------|
+| **GATE-UX-1** | Discover layout | **Dual mode** — Transactions (default) \| Suggested patterns (DEC-0098 unchanged) |
+| **GATE-API-1** | Transaction search route | New `GET /api/v1/subscriptions/transactions/search` — do not extend `/discover` |
+| **GATE-FILTER-1** | Filter execution | SQL push-down + accounts JOIN for Geldbereich (DEC-0111 COALESCE path) |
+| **GATE-HINT-1** | Hint engine | Separate in-memory pass on SQL-filtered txs; `min_emit_confidence: 60`; hint metadata on rows only; global detection unchanged |
+| **GATE-HINT-2** | Sub-threshold patterns (P2) | Defer 2-tx weak hints unless AC-3 qa demands — current scorer returns 0 below 60 |
+| **GATE-PAGE-1** | Pagination | Offset, **100/page** hard cap; document in UI; `total_count` + `has_more` |
+| **GATE-IDX-1** | DB index | P2 composite `idx_transactions_account_date` — not blocking MVP |
+| **GATE-CONFIRM-1** | Multi-select activate | Reuse `POST /discover/confirm`; add `POST .../transactions/preview-group` for server-side median/interval |
+| **GATE-DEC-1** | New DEC records? | **Yes** — freeze tx-search API (extends DEC-0098/0099, does not amend); dual-mode UX; hint pass boundary |
+
+### 8. Sprint sizing preview
+
+| Slice | Est. tasks | Notes |
+|-------|------------|-------|
+| Backend search API + repository SQL | 3–4 | search route, filters, pagination, hint pass |
+| Backend preview-group | 1 | confirm helper |
+| Frontend Transactions tab | 3–4 | filters, table, multi-select, hint badges |
+| Frontend confirm modal extension | 1 | wire preview-group → existing confirm |
+| Patterns tab extraction | 1 | move current discover UI to sub-tab |
+| Tests + regression | 2–3 | AC-5 guard; integration search |
+| **Total** | **11–13** | At `SPRINT_MAX_TASKS=12` — `/sprint-plan` may split optional P2 (amount band, weak hints, index) to optional tasks |
+
+**Linked:** US-0021, US-0020, US-0018, DEC-0098, DEC-0099, DEC-0111, R-0085, discovery-20260613-us0021  
+**Confidence:** high — discovery audit + code scoring analysis + pagination refs  
+**Status:** fulfilled — released S0020 via **DEC-0112**..**DEC-0114** (`0.21.0-us0021`, 2026-06-13); retain for traceability
+
+---
+
+## R-0093 — BUG-0023 crypto Wealth EUR values live regression
+
+**Date:** 2026-06-12  
+**Work item:** BUG-0023 (acceptance **BO**, **BP**, **BQ**)  
+**Phase:** intake (PO)  
+**Orchestrator:** `intake-20260612-crypto-eur-values`  
+**Probe environment:** operator screenshot 2026-06-12 (Wealth Crypto tab, Bitunix connected, last sync 12.6.2023 22:48:29); code audit `wealth/service.rs`, `portfolio/pnl.rs`, `bitunix.rs`, `WealthPage.tsx`; prior art **BUG-0014** AP/AQ (**R-0079**), **DEC-0064**, **DEC-0080**, **DEC-0081**.
+
+**Findings:**
+
+### 1. Live symptom vs BUG-0014 closure
+
+| Surface | Operator observation (2026-06-12) | BUG-0014 AP/AQ status |
+|---------|-------------------------------------|------------------------|
+| Bitunix card | **€ -0,00** | AP code PASS; live **deferred** |
+| Holdings count | **11** linear positions | Was **7** in 2026-06-07 probe |
+| Native qty | Correct per symbol | AQ1 `holdings_all` shipped |
+| Value EUR | All **—** | AQ2 native+EUR **not met** for linear |
+| Unrealized | **€378,02** aggregate | PnL USDT→EUR path works |
+| Total return | **—** | `crypto_value_eur` likely **0** → no baseline % |
+| Bitunix app | ~**€2000** portfolio | Not reflected in subtotal |
+
+### 2. Root-cause hypotheses (discovery must verify)
+
+| ID | Hypothesis | Evidence |
+|----|------------|----------|
+| **H1** | **Futures wallet row missing** — `parse_futures_wallet` array-shape mismatch; no `product_type=futures` row with `market_value_eur` | R-0079 § wallet parse; subtotal = `sum(market_value_eur)` only |
+| **H2** | **Linear `market_value_eur` intentionally NULL** per DEC-0064 — UI shows **—** but operator expects mark-to-market EUR per position | `pnl.rs` L30–54 sets `market_value_eur: None` for linear |
+| **H3** | **No mark-price / notional pricing** — Bitunix position payload lacks priced `entryValue`/`markPrice` → EUR column cannot populate | `bitunix.rs` `parse_futures_positions` stores payload only |
+| **H4** | **Deploy/ops gap** — host not on Q0022 image or PnL recompute not run post-sync | BACKEND_FRONTEND_DEPLOY gate from prior bugs |
+| **H5** | **Total return baseline zero** — `total_return_pct` None when `crypto_value_eur` or baseline **0** | `portfolio/service.rs` L60–64 |
+
+### 3. Product contract questions (architecture)
+
+| # | Question | Options |
+|---|----------|---------|
+| 1 | Portfolio headline (~€2000) | **Wallet equity** in subtotal (DEC-0080) vs sum of position notionals |
+| 2 | Per-position Value EUR | **Mark price × qty** display field separate from subtotal (DEC-0064 amend?) vs wallet-only headline |
+| 3 | Linear in subtotal | Keep excluded (DEC-0064) + show wallet equity card vs include exposure with double-count guard |
+| 4 | Total return | Baseline from first priced wallet snapshot; show **—** only when truly no history |
+
+### 4. Fix surface (provisional)
+
+| Layer | Files |
+|-------|-------|
+| Wallet ingest | `backend/src/exchanges/bitunix.rs` — `parse_futures_wallet` array path |
+| Valuation | `backend/src/portfolio/pnl.rs` — optional `exposure_eur` / mark-price for display |
+| Aggregation | `backend/src/wealth/service.rs` — subtotal + `holdings_all.value_eur` |
+| UI | `frontend/src/pages/WealthPage.tsx` — Value EUR column, exchange card copy |
+
+**Linked:** BUG-0023, BO, BP, BQ, BUG-0014, AP, AQ, DEC-0064, DEC-0080, DEC-0081, R-0079  
+**Confidence:** high — screenshot + code path alignment with prior AP/AQ residual  
+**Status:** open (intake complete; next `/discovery`)
+
+### 5. Research phase (2026-06-12 — `research-20260612-bug0023`)
+
+**Phase:** research (tech-lead)  
+**Orchestrator:** `auto-20260612-bug0023`  
+**Probe environment:** discovery verdicts 2026-06-12 (`localhost:18080`); code audit `bitunix.rs`, `pnl.rs`, `portfolio/service.rs`, `wealth/service.rs`, `WealthPage.tsx`; Bitunix OpenAPI (EARLY_RESEARCH=1); no host `.env` / secrets read.
+
+#### 5.1 Wallet ingest — why no `futures` row persisted (H1)
+
+| Layer | Finding |
+|-------|---------|
+| **Sync path** | `sync_balances` → `futures_signed_get("/api/v1/futures/account", "marginCoin=USDT")` → `parse_futures_wallet`; on `Err` only `warn!` — sync continues; `sync_positions` uses separate endpoint and **succeeds** (11 linear rows) |
+| **Persist path** | `upsert_holdings` keyed `(exchange_id, asset, product_type)` — no prune; missing wallet = never parsed or parse returned `None` |
+| **DEC-0080 code** | `resolve_futures_account` handles array shape; unit tests `sync_balances_futures_wallet_array_shape` PASS — regression is **not** pre-DEC-0080 array bug on deployed code |
+| **Bitunix OpenAPI** ([Get Single Account](https://www.bitunix.com/api-docs/futures/account/get_single_account.html)) | `data: [{ marginCoin, available, frozen, margin, crossUnrealizedPNL, isolationUnrealizedPNL, … }]` — **no** `accountEquity` field; equity must be derived |
+| **Parse equity formula** | `parse_futures_wallet` L120–134: `accountEquity` keys first, else `available + frozen + margin` — **omits** `crossUnrealizedPNL` / `isolationUnrealizedPNL` from equity sum |
+| **Silent failure** | `parse_futures_wallet` returns `None` with **no log** when equity missing or `qty <= 0`; HTTP client does **not** validate JSON `code: 0` — HTTP 200 + `code != 0` or empty `data: []` yields silent skip |
+| **Field key gap** | Wallet unrealized keys include `crossUnPnl` but official field is `crossUnrealizedPNL` — affects wallet `unrealized_pnl` only, not row creation |
+
+**Root-cause ranking (research):**
+
+1. **Silent parse skip (most likely)** — live `/api/v1/futures/account` response shape or zero derived equity → `parse_futures_wallet` returns `None`; positions endpoint unaffected.
+2. **Futures wallet HTTP/API error** — warn-only path; positions sync still succeeds (discovery: recent sync + 11 linear rows).
+3. **Equity formula under-count** — cross-margin account where headline ~€2000 includes unrealized but `available+frozen+margin` parses to 0 (less likely alone; would still need parse observability).
+
+**Architecture implication:** BO fix is **wallet-ingest + valuation**, not wealth aggregation rewrite. Mandate live payload capture (redacted) or `AP1_SQL_PROBE` before execute.
+
+#### 5.2 Mark-price / notional options for Value EUR (BP, H3)
+
+| Option | Mechanism | Subtotal impact | Fits DEC-0064 | Risks |
+|--------|-----------|-----------------|---------------|-------|
+| **D1 — `entryValue` display** | Parse `entryValue` from position `payload` (Bitunix pending-positions API); `fx.to_eur(entryValue, "USDT")` → `exposure_eur` or linear `value_eur` **display only** | None | **Yes** — separate from subtotal | `entryValue` is position notional in USDT; may differ from operator mark-to-market |
+| **D2 — `margin` per position** | Use position `margin` field as locked collateral EUR display | None | **Yes** | Under-represents full exposure; confusing vs headline |
+| **C — mark price × qty** | Extra ticker/mark API per symbol | None if display-only | **Yes** if display-only | Contract-size ambiguity (R-0076 §6 option C rejected for subtotal); tier-2 scope |
+| **E — notional in `market_value_eur`** | `entryValue` or mark notional into wealth subtotal | Inflates subtotal | **No** — double-count with wallet | Violates DEC-0064 / DEC-0080 |
+
+**Bitunix position API** ([Get Pending Positions](https://www.bitunix.com/api-docs/futures/position/get_pending_positions.html)): provides `entryValue`, `avgOpenPrice`, `unrealizedPNL`, `margin` in payload already stored by `parse_futures_positions`.
+
+**Provisional recommendation:** **D1** for BP — populate linear `value_eur` (or `exposure_eur`) from `entryValue` at recompute for **display only**; keep `market_value_eur` NULL for subtotal per DEC-0064. Acceptance copy: "EUR equivalent at valuation time" satisfied by exchange-reported notional + FX, not external mark feed.
+
+#### 5.3 Crypto subtotal aggregation contract (BO)
+
+| Surface | Current contract | Research verdict |
+|---------|------------------|------------------|
+| `wealth/service.rs` L127–131, L159 | `subtotal_eur = sum(market_value_eur)` across all holdings | Correct per DEC-0064 when wallet priced |
+| Exchange card `holdings_count` | Count **all** rows (wallet + linear) | Shows **11** = linear only today → confirms no wallet row |
+| `holdings_top` | Top-5 priced rows only | Empty when all `market_value_eur` NULL |
+| `holdings_all` (DEC-0081) | All rows; `value_eur` from `market_value_eur` | Linear rows show unrealized but `value_eur` NULL — expected per DEC-0064 until display field added |
+
+**Aggregation contract (frozen for architecture unless GATE-2 opened):**
+
+- **Headline / subtotal:** futures wallet `market_value_eur` only (USDT equity via DEC-0080).
+- **Linear positions:** unrealized PnL + optional display notional; **excluded** from subtotal.
+- **Double-count guard:** never sum wallet equity + position `entryValue` into subtotal.
+
+**Alternative rejected:** sum linear notionals into subtotal without wallet (violates DEC-0064; BUG-0014 architecture explicitly rejected).
+
+#### 5.4 Total return % path (BQ, H5)
+
+| Step | Code | Live state |
+|------|------|------------|
+| `compute_hybrid_pnl` | `crypto_value_eur` = sum priced `market_value_eur` (futures/spot only; linear skipped L30–54) | **0** — no futures row priced |
+| `recompute_pnl` L60–64 | `total_return_pct = (crypto_value_eur - baseline) / baseline` when `baseline > 0` | **null** — numerator 0 |
+| Baseline capture L66–78 | `capture_if_missing` when per-exchange `sum(market_value_eur) > 0` | Never captured while wallet NULL |
+| Unrealized | Linear USDT→EUR path active | **376.83** — independent of `crypto_value_eur` |
+
+**Architecture implication:** BQ resolves when BO wallet row is priced **and** at least one baseline snapshot exists. Unrealized alone must **not** drive `total_return_pct` (DEC-0038 PnL boundary). Optional hardening (AP2 from R-0079): defensive subtotal from `portfolio.latest().crypto_value_eur` — **decision gate**; default reject to preserve DEC-0064.
+
+#### 5.5 Hypothesis resolution (post-research)
+
+| ID | Verdict | Notes |
+|----|---------|-------|
+| **H1** | **CONFIRMED** | No `futures` row; parse silent-fail + equity formula gaps are leading code causes |
+| **H2** | **CONFIRMED** | Linear `market_value_eur: None` by design |
+| **H3** | **CONFIRMED (fixable)** | `entryValue` in payload; no mark-price API required for MVP BP |
+| **H4** | **RULED OUT** | Recent sync + unrealized EUR on Q0022+ code path |
+| **H5** | **CONFIRMED** | `crypto_value_eur=0` blocks `total_return_pct`; downstream of H1 |
+
+#### 5.6 Architecture gates (for `/architecture`)
+
+| Gate | Question | Default recommendation |
+|------|----------|------------------------|
+| **GATE-BO-1** | Wallet parse hardening scope | Extend equity keys (`crossUnrealizedPNL`, `isolationUnrealizedPNL`); validate `code==0`; log parse skip with shape diagnostic; wiremock regression for official OpenAPI sample |
+| **GATE-BP-1** | Per-position Value EUR source | **D1** `entryValue` → display `value_eur` (no DEC-0064 amend) vs tier-2 mark-price |
+| **GATE-AGG-1** | Subtotal source when wallet priced | Keep `sum(market_value_eur)` — no linear merge |
+| **GATE-BQ-1** | Total return denominator | Keep wallet-priced `crypto_value_eur`; baseline on first priced exchange sync |
+| **GATE-DEC-1** | New DEC required? | **No** if GATE-BO-1 + GATE-BP-1 (display-only); **Yes** (narrow amend) only if notional merged into subtotal |
+
+**Provisional fix stack (architecture):**
+
+1. **P0 BO:** `bitunix.rs` wallet parse + sync observability; ensure `recompute_pnl` prices `futures` row.
+2. **P1 BP:** `pnl.rs` linear display valuation from `entryValue`; `wealth/service.rs` / types expose in `holdings_all.value_eur`.
+3. **P1 BQ:** Automatic once BO priced + baseline capture runs on next sync.
+4. **P2 UX:** Exchange card `holdings_count` split or footnote (wallet vs positions) — optional.
+
+**SQL probe (operator, no secrets):**
+
+```sql
+SELECT product_type, asset, quantity, market_value_eur, unrealized_pnl_eur
+FROM exchange_holdings WHERE exchange_id = 'bitunix' ORDER BY product_type, asset;
+```
+
+**Web references (EARLY_RESEARCH):** [Bitunix Get Single Account](https://www.bitunix.com/api-docs/futures/account/get_single_account.html); [Bitunix Get Pending Positions](https://www.bitunix.com/api-docs/futures/position/get_pending_positions.html).
+
+**Linked:** BUG-0023, BO, BP, BQ, DEC-0064, DEC-0080, DEC-0081, DEC-0038, R-0076 §6, R-0079 §6  
+**Confidence:** high — discovery + code audit + OpenAPI cross-check  
+**Status:** fulfilled (BUG-0023/Q0030 released `bug0023-q0030`, 2026-06-12 — wallet parse hardening BO1–BO3, exposure_eur display BP1–BP2, baseline return BQ1; extends DEC-0064/0080/0081/0038; no new DEC)
+
+---
+
+## R-0094 — BUG-0022 plan delete selector regression (activePlanId ignores dropdown)
+
+**Date:** 2026-06-13  
+**Work item:** BUG-0022 (acceptance **BM**, **BN**)  
+**Phase:** research (tech-lead)  
+**Orchestrator:** `auto-20260613-bug0022`  
+**Probe environment:** discovery verdicts 2026-06-13; code audit `PlanningPage.tsx`, `plans.rs`, `plan/service.rs`, `planningFeedback.test.ts`; prior art **BUG-0014** AS1 / **Q0022** (**R-0079** §AS, **DEC-0082**); live API probe `localhost:18080` (DELETE non-active **204**, active **409**); EARLY_RESEARCH=1 React selector patterns (web refs below); no host `.env` / secrets read.
+
+**Findings:**
+
+### 1. Root cause — conflated selector semantics (BM)
+
+| Layer | Finding |
+|-------|---------|
+| **State** | `selectedPlanId` (L81) updated on dropdown `onChange` (L644–646) |
+| **Derived id** | `activePlanId` useMemo (L110–113): `active?.id ?? selectedPlanId ?? first` — **global `is_active` wins over operator selection** |
+| **Dropdown** | Controlled `value={activePlanId}` (L643) — reverts to global active whenever `is_active` plan exists |
+| **Delete guard** | `activePlanIsSelected = plan(activePlanId)?.is_active` (L489) — always **true** when any global active plan exists |
+| **Delete control** | `disabled={activePlanIsSelected}` (L669) — permanently disabled under BM repro |
+| **Mutation path** | `deletePlanMutation` (L371–390) + confirm modal wired correctly; blocked before click |
+
+**Verdict:** Post-**Q0022** AS1 regression — backend **DEC-0082** guard shipped correctly; frontend selector priority inverted relative to operator intent.
+
+### 2. BN — backend + guard intact; UI masked by BM
+
+| Surface | Status |
+|---------|--------|
+| `DELETE /api/v1/plans/:id` active | **409** `{ "error": "active_plan_delete_forbidden", … }` (`plans.rs` L234–239; `service.rs` L268–274) |
+| `DELETE` non-active | **204** (live probe 2026-06-13) |
+| Frontend tooltip + disabled | Logic correct **if** `activePlanId` reflected dropdown selection |
+| `planningFeedback.test.ts` | 409 message extraction path present |
+| `active_plan_delete_returns_409_with_code` | Backend unit test present |
+
+**Architecture implication:** **No backend change.** BN preserved by fixing selector only.
+
+### 3. Selector contract options (architecture gate **GATE-SEL-1**)
+
+The page uses one id (`activePlanId`) for **viewing/editing** (detail, versions, compare, adjustments, delete, Set active) and incorrectly also for **global active identity**. PVA tab is already decoupled — uses `/api/v1/plans/active/plan-vs-actual` (L160–167), not `activePlanId`.
+
+| Option | Mechanism | Pros | Cons | Verdict |
+|--------|-----------|------|------|---------|
+| **A — invert priority (recommended)** | `displayedPlanId = selectedPlanId ?? globalActiveId ?? first`; delete guard = `plan(displayedPlanId)?.is_active` | Minimal diff (~1 useMemo + rename optional); single source of truth per React derived-state guidance | Name `activePlanId` misleading until rename | **Default for architecture** |
+| **B — split variables** | `globalActivePlanId` derived once; `displayedPlanId` from selection + fallback | Clearest semantics for Set-active banner vs dropdown | Two derived values; more rename churn across ~20 call sites | Acceptable if architecture prefers explicit naming |
+| **C — useEffect sync** | On plans load, `setSelectedPlanId(active.id)` | — | Dual source of truth; drift on list refresh (anti-pattern per web refs) | **Rejected** |
+| **D — uncontrolled dropdown** | `defaultValue` + ref | — | Breaks controlled select; React warns | **Rejected** |
+
+**Frozen provisional contract (pending architecture):**
+
+```text
+displayedPlanId = selectedPlanId ?? plans.find(is_active)?.id ?? plans[0]?.id ?? null
+deleteDisabled = plans.find(p => p.id === displayedPlanId)?.is_active === true
+```
+
+**Web references (EARLY_RESEARCH):** [React derived state anti-pattern](https://frontendatlas.com/react/trivia/react-derived-state-anti-pattern) — store minimal id (`selectedPlanId`), derive display id during render; [controlled dropdown patterns](https://thelinuxcode.com/dropdown-onchange-event-in-react-from-basics-to-production-patterns/) — `value` must track state updated in `onChange`; [derived vs stored state](https://stevekinney.com/courses/react-performance/derived-vs-stored-state) — avoid storing computable values.
+
+### 4. Dropdown label (architecture gate **GATE-LABEL-1**)
+
+| Current | Issue | Options |
+|---------|-------|---------|
+| Label **"Active plan"** (L641) | Implies dropdown shows global active; operator selects non-active for delete | **(a)** Rename **"Plan"** or **"Selected plan"**; keep `(active)` suffix on option — **recommended**; **(b)** keep label; fix behavior only |
+
+**Risk if unchanged:** Operator confusion persists after BM fix (cosmetic P2).
+
+### 5. Test gap (architecture gate **GATE-TEST-1**)
+
+| Coverage today | Gap |
+|----------------|-----|
+| `planningFeedback.test.ts` — 409 message | No selector / delete-enablement test |
+| `plans.rs` — active delete 409 | No frontend PlanningPage test |
+| `product_routes_regression.rs` — file existence | No behavioral assertion |
+
+**Recommended execute coverage:**
+
+1. Extract pure helper `resolveDisplayedPlanId(plans, selectedPlanId)` (or test useMemo logic inline via exported helper) — vitest cases: (i) selected non-active wins over global active; (ii) null selection falls back to active; (iii) empty list → null; (iv) delete enabled iff displayed plan not `is_active`.
+2. Optional RTL smoke — lower priority; helper tests satisfy BM/BN guard logic.
+
+**Regression suite:** `npm test` frontend + `cargo test` plan delete paths; OIDC deploy smoke per acceptance BN.
+
+### 6. Must-not-break boundaries (confirmed)
+
+| Contract | Research verdict |
+|----------|------------------|
+| **DEC-0082** | Active delete **409** + UI disabled — unchanged |
+| **DEC-0024** | Single global active; Set active mutation on displayed plan — unchanged |
+| **DEC-0074** | PVA `no_active_plan` — uses active endpoint, unaffected |
+| **deletePlanMutation** | Invalidate `plans` / `plan-detail` / `plan-vs-actual`; clear `selectedPlanId` on deleted id — already correct |
+| **Single-plan edge** | Only one active plan → delete disabled — acceptable per DEC-0082 §Risks; no sole-plan policy change |
+
+### 7. Fix scope and `/quick` sizing (architecture gate **GATE-SCOPE-1**)
+
+| Layer | Scope |
+|-------|-------|
+| **Primary** | `frontend/src/pages/PlanningPage.tsx` — useMemo priority (+ optional rename `activePlanId` → `displayedPlanId`) |
+| **Optional** | Small pure helper + `PlanningPage.test.ts` or `planSelector.test.ts` |
+| **Out of scope** | Backend, Grafana, PVA endpoint, sole-plan delete policy, new DEC |
+
+**Task estimate:** 2–4 atomic tasks (BM fix, BN guard verify, vitest, V1 smoke) — well under `SPRINT_MAX_TASKS=12`. **Recommend `/quick`** (same track as **Q0022** / BUG-0014 AS1).
+
+### 8. Architecture gates (mandatory decisions)
+
+| Gate | Question | Research default |
+|------|----------|------------------|
+| **GATE-SEL-1** | Selector contract | Option **A** — `selectedPlanId ?? globalActiveId ?? first`; delete guard on displayed plan `is_active` |
+| **GATE-DEC82-1** | Backend change? | **No** — frontend-only; preserve 409 + tooltip |
+| **GATE-TEST-1** | Test coverage | Vitest helper for selector + delete enablement; existing 409 tests unchanged |
+| **GATE-SCOPE-1** | Sprint shape | `/quick` — single file + optional test; no sprint split |
+| **GATE-LABEL-1** | Dropdown copy | Rename to **"Plan"** or **"Selected plan"** (P2 acceptable defer) |
+| **GATE-DEC-1** | New DEC? | **No** — extends **DEC-0082** frontend contract; clarifies selector semantics only |
+
+### 9. Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Mechanical rename across ~20 `activePlanId` refs | Keep name, change useMemo only — or rename in one pass at execute |
+| Stale `selectedPlanId` after external delete | Existing delete success handler clears id; plans refetch handles list shrink |
+| Set-active banner false positive | Banner uses `!activePlanIsSelected` — correct after fix when viewing non-active |
+| Operator expects delete on sole plan | Document in tooltip/copy; out of scope per DEC-0082 |
+| Browser automation empty SPA (discovery) | BM/BN code + API sufficient; operator visual deferred to verify-work |
+
+**Linked:** BUG-0022, BM, BN, BUG-0014, AS1, Q0022, DEC-0024, DEC-0074, DEC-0082, R-0079 §AS  
+**Confidence:** high — discovery confirmed + code path audit + live API + React pattern cross-check  
+**Status:** fulfilled (BUG-0022/Q0031 released `bug0022-q0031`, 2026-06-13 — BM1 `resolveDisplayedPlanId` selectedPlanId-first; T1 planSelector 8/8; extends DEC-0082/0024/0074; no new DEC; operator FRONTEND_DEPLOY deferred)
+
+---
+
+## R-0095 — US-0022 deploy version stamp & stale-frontend detection
+
+**Date:** 2026-06-13  
+**Work item:** US-0022 (acceptance **AC-1**..**AC-6**)  
+**Phase:** intake (PO)  
+**Orchestrator:** `intake-20260613-deploy-version-stamp`  
+**Probe environment:** Operator request post-BUG-0023 deploy confusion; code audit `backend/src/health/mod.rs` (liveness `{status: ok}` only), `frontend/src/components/AppLayout.tsx` (no stamp), `Dockerfile` multi-stage build, Vite config (no build id define); EARLY_RESEARCH=1 SPA version patterns.
+
+**Findings:**
+
+### 1. Problem — no deploy oracle in product UI
+
+| Gap | Impact |
+|-----|--------|
+| `/health` returns `status: ok` only | Operator cannot distinguish pre/post deploy from browser |
+| SPA has no embedded build id | Cached `index.html`/chunks may lag backend after partial deploy |
+| Release tags live in `handoffs/releases/*` only | Requires shell/`docker inspect` to verify production |
+
+### 2. Recommended architecture (intake default)
+
+| Layer | Proposal |
+|-------|----------|
+| **Build pipeline** | Docker `ARG GIT_SHA` + `ARG RELEASE_TAG` → Rust `env!` or runtime env; mirror to Vite `define` as `import.meta.env.VITE_BUILD_ID` |
+| **Backend** | Extend `/health` with optional `build` object **or** dedicated `GET /api/v1/meta/build-info` (preferred — keeps liveness minimal) |
+| **Frontend** | Subtle stamp in `AppLayout` sidebar footer; tooltip on hover |
+| **Stale detect** | On mount: fetch meta, compare to `VITE_BUILD_ID`; if mismatch → dismissible banner + reload CTA |
+
+### 3. Patterns (web refs)
+
+- **Kubernetes /health vs /ready** — keep liveness thin; metadata on separate path
+- **Vite `define` + CI git sha** — standard SPA build provenance
+- **Stale chunk reload** — compare bundle hash vs server (Create React App / Vite community pattern)
+
+### 4. Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Secrets in metadata | Allowlist fields only; never echo env |
+| Backend-only deploy | Expected id mismatch until frontend rebuild — banner explains |
+| Traefik cache | Stale banner + tooltip “hard refresh” hint |
+
+**Architecture gates:** GATE-META-1 (health extend vs meta route), GATE-BUILD-1 (id format), GATE-STALE-1 (poll policy), GATE-UI-1 (placement)
+
+**Linked:** US-0022, AC-1..AC-6, BUG-0023, Q0030, AppLayout, health/mod.rs  
+**Confidence:** high — operator pain validated; codebase gap confirmed  
+**Status:** discovery complete (2026-06-14 — hypotheses validated; next `/research`)
+
+### 5. Discovery findings (2026-06-14, role=po, isolated context)
+
+**Isolation evidence:** Fresh PO subagent context; no prior chat history; inputs limited to intake evidence, R-0095, backlog § US-0022, acceptance § US-0022, live probe localhost:18080.
+
+**DEC-0038 proof (phase boundary):** Discovery phase collects design/UX inspiration and validates scope; does NOT run research (tech-lead), architecture, or other phases. Stop after discovery; hand off to `/research` in new subagent/chat.
+
+#### 5.1 Hypothesis verdicts
+
+| Hypothesis | Verdict | Evidence |
+|------------|---------|----------|
+| **H1:** Single-story decomposition valid (backend meta + frontend stamp + stale detect = one vertical slice) | **CONFIRMED** | Intake rationale: splitting leaves operator without visible value. Operator pain from BUG-0023 deploy confusion requires both backend oracle and UI stamp. Alternatives (Settings-only, backend-frontend split) rejected in intake. |
+| **H2:** Recommended architecture feasible (dedicated `/api/v1/meta/build-info`, Vite `define`, Dockerfile `ARG`) | **CONFIRMED** | Code audit: `backend/src/api/mod.rs` has clean route registration (no `meta` module yet — easy add); `backend/src/health/mod.rs` liveness returns `{status: ok}` only (no build info — keep thin per Kubernetes pattern); `frontend/vite.config.ts` has no `define` block (easy add); `backend/Dockerfile` multi-stage build (Rust builder + Node frontend + Debian runtime) — `ARG GIT_SHA` + `ARG RELEASE_TAG` injectable at builder stage. |
+| **H3:** Stale detection is primary mitigation for cache issues | **CONFIRMED** | Live probe: `GET /api/v1/meta/build-info` returns SPA HTML fallback (404) — endpoint does not exist yet; no cache-busting headers on SPA `index.html` (meta tags show `no-cache, no-store, must-revalidate` but Traefik/browser may still serve old chunks). Stale banner + reload CTA is standard Vite/Create React App pattern (R-0095 §3). |
+
+#### 5.2 Acceptance verdicts
+
+| AC | Verdict | Notes |
+|----|---------|-------|
+| **AC-1** (subtle stamp) | **CONCRETE** | Placement: `AppLayout.tsx` `sidebar-footer` (lines 78-91) — natural location below OIDC user name + logout. Default minimal (short label or icon). |
+| **AC-2** (hover details) | **CONCRETE** | Tooltip on hover/focus: release tag (e.g. `bug0025-q0034`, `0.22.0-us0022`), build id (git short sha or docker image id fragment), build timestamp (UTC). |
+| **AC-3** (backend metadata) | **CONCRETE** | Dedicated `GET /api/v1/meta/build-info` (preferred over extending `/health` per R-0095 §2). Returns `{build_id, release_tag, build_timestamp}`. No secrets. |
+| **AC-4** (SPA embed) | **CONCRETE** | Vite `define` block: `import.meta.env.VITE_BUILD_ID`, `import.meta.env.VITE_RELEASE_TAG`. Dockerfile `ARG GIT_SHA` + `ARG RELEASE_TAG` → `npm run build -- --define:VITE_BUILD_ID=$GIT_SHA`. |
+| **AC-5** (stale detection) | **CONCRETE** | On app mount: fetch `/api/v1/meta/build-info`, compare `build_id` to `import.meta.env.VITE_BUILD_ID`. Mismatch → non-blocking banner + reload CTA. No false positive when ids match. |
+| **AC-6** (regression) | **CONCRETE** | `/health` liveness unchanged (`{status: ok}`); OIDC external profile smoke pass; metadata responses contain no env secrets (allowlist fields only). |
+
+**Acceptance gaps:** None. AC-1 through AC-6 are concrete, testable, and aligned with operator pain (BUG-0023 deploy confusion).
+
+#### 5.3 Architecture gates (from R-0095 §4, validated in discovery)
+
+| Gate | Decision | Rationale |
+|------|----------|-----------|
+| **GATE-META-1** (health extend vs meta route) | **Dedicated `/api/v1/meta/build-info`** | Kubernetes /health vs /ready pattern: keep liveness thin (`{status: ok}`), metadata on separate path. Avoids coupling build info to liveness probe. |
+| **GATE-BUILD-1** (id format) | **Git short sha (7 chars) + release tag** | `GIT_SHA` from `docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD)`. Release tag from `handoffs/releases/*` or CI tag. Build timestamp from `date -u +%Y-%m-%dT%H:%M:%SZ`. |
+| **GATE-STALE-1** (poll policy) | **On mount only (no periodic poll)** | Operator pain: post-deploy stale bundle. On-mount comparison sufficient; periodic poll adds complexity without value (operator reloads on banner). |
+| **GATE-UI-1** (placement) | **`AppLayout` sidebar footer** | Subtle by default (low visual noise); hover/focus for details. Sidebar footer already has OIDC user name + logout — natural location for operator-only stamp. |
+
+#### 5.4 Live system probe (localhost:18080, 2026-06-14T18:25:00Z)
+
+| Endpoint | Response | Status |
+|----------|----------|--------|
+| `GET /health` | `{"status":"ok"}` | 200 (liveness only — no build info) |
+| `GET /health/ready` | `{"status":"ready","database":"connected","firefly_pat_configured":true}` | 200 (readiness only) |
+| `GET /api/v1/meta/build-info` | SPA HTML fallback | 404 (endpoint does not exist) |
+
+**Codebase gaps confirmed:**
+- `backend/src/api/mod.rs`: no `meta` module registered
+- `backend/src/health/mod.rs`: `HealthResponse` struct has `status` field only
+- `frontend/vite.config.ts`: no `define` block for build-time env vars
+- `backend/Dockerfile`: no `ARG GIT_SHA` or `ARG RELEASE_TAG`
+- `frontend/src/components/AppLayout.tsx`: no version stamp in `sidebar-footer` (lines 78-91)
+- `frontend/src/`: no `VITE_BUILD_ID` or `build_id` references
+
+#### 5.5 Risks and mitigations (from R-0095 §4, validated)
+
+| Risk | Mitigation | Verdict |
+|------|------------|---------|
+| Secrets in metadata | Allowlist fields only (`build_id`, `release_tag`, `build_timestamp`); never echo `.env` or PAT | **CONFIRMED** — intake constraint: "Must not expose secrets or .env values" |
+| Backend-only deploy (no frontend rebuild) | Expected id mismatch until frontend rebuild — banner explains "New version available — reload" | **CONFIRMED** — stale detection handles partial deploy |
+| Traefik/browser cache | Stale banner + tooltip "hard refresh" hint | **CONFIRMED** — primary mitigation per intake |
+
+#### 5.6 Decomposition validation
+
+**Intake decomposition:** Single story (US-0022) — operator-observability vertical slice.
+
+**Alternatives considered (intake):**
+- Settings page only — rejected (operator wants always-available hidden stamp)
+- Split backend meta vs frontend UI — rejected (no user value without both)
+
+**Discovery verdict:** Decomposition valid. Single story captures full operator value (backend oracle + UI stamp + stale detection). Splitting would leave operator with backend-only metadata (no visible value) or UI-only stamp (no authoritative source).
+
+#### 5.7 Discovery stop conditions
+
+- **Missing references:** None (intake evidence, R-0095, backlog, acceptance all present)
+- **Decision gate triggered:** None (all architecture gates validated; no new DEC required)
+- **Phase boundary:** Discovery complete; stop; hand off to `/research` in new subagent/chat per DEC-0038
+
+**Next phase:** `/research` (tech-lead role) — frozen gates GATE-META-1, GATE-BUILD-1, GATE-STALE-1, GATE-UI-1 ready for architecture.
+
+### 6. Backend metadata endpoint design — Rust/Axum patterns (2026-06-14, role=tech-lead)
+
+**Isolation evidence:** Fresh tech-lead subagent context; no prior chat history; inputs limited to R-0095 §1-5, discovery findings, backlog § US-0022, acceptance § US-0022, codebase audit.
+
+**DEC-0038 proof (phase boundary):** Research phase gathers technical references and validates feasibility; does NOT run architecture, sprint-plan, or other phases. Stop after research; hand off to `/architecture` in new subagent/chat.
+
+#### 6.1 Axum handler pattern for metadata endpoint
+
+**Codebase audit:** `backend/src/api/mod.rs` registers routes via `Router::new().route(...)` with `get()`/`post()` extractors. `backend/src/health/mod.rs` demonstrates the minimal handler pattern — `liveness()` returns `Json<HealthResponse>` with `#[derive(Serialize)]`. No `meta` module exists yet.
+
+**Recommended pattern (per Axum 0.7+ docs, web refs 2026):**
+
+```rust
+// backend/src/meta/mod.rs
+use axum::{routing::get, Json, Router};
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub struct BuildInfoResponse {
+    pub build_id: &'static str,
+    pub release_tag: &'static str,
+    pub build_timestamp: &'static str,
+}
+
+pub fn routes() -> Router {
+    Router::new()
+        .route("/api/v1/meta/build-info", get(build_info))
+}
+
+async fn build_info() -> Json<BuildInfoResponse> {
+    Json(BuildInfoResponse {
+        build_id: env!("BUILD_ID"),
+        release_tag: env!("RELEASE_TAG"),
+        build_timestamp: env!("BUILD_TIMESTAMP"),
+    })
+}
+```
+
+**Key design choices:**
+
+| Choice | Option A | Option B | Recommendation |
+|--------|----------|----------|----------------|
+| **Value source** | `env!()` compile-time | `std::env::var()` runtime | **A** — compile-time `env!()` is zero-cost, no runtime env leak, matches Vite `define` pattern |
+| **Route location** | New `meta` module | Extend `health` module | **A** — per GATE-META-1 (Kubernetes /health vs /ready pattern); keep liveness thin |
+| **Auth** | Public (no auth) | Bearer JWT required | **Public** — metadata is non-sensitive; simplifies stale detection (no auth token needed for comparison) |
+| **Response shape** | Flat JSON | Nested `build: { ... }` | **Flat** — simpler for frontend comparison; three fields only |
+
+**`env!()` fallback:** When `BUILD_ID` not set at compile time (local dev without Docker), `env!()` causes compile error. Use `option_env!()` with fallback:
+
+```rust
+build_id: option_env!("BUILD_ID").unwrap_or("dev"),
+release_tag: option_env!("RELEASE_TAG").unwrap_or("dev"),
+build_timestamp: option_env!("BUILD_TIMESTAMP").unwrap_or("unknown"),
+```
+
+**Registration:** Add `mod meta;` to `backend/src/api/mod.rs` and `.merge(meta::routes())` to the router chain.
+
+#### 6.2 Security considerations
+
+| Risk | Mitigation |
+|------|------------|
+| Secrets in `env!()` | Only allowlist fields (`BUILD_ID`, `RELEASE_TAG`, `BUILD_TIMESTAMP`); never echo `.env` or PAT |
+| Information disclosure | Build id (git sha) is non-sensitive; release tag is public; timestamp is public |
+| Route auth bypass | Public route is acceptable — metadata is non-sensitive per AC-6 ("no env secrets") |
+
+**Verdict:** `option_env!()` with allowlist fields is safe. No auth required. No secrets exposure.
+
+#### 6.3 Alternative: extend `/health` (rejected)
+
+**Option B (rejected):** Add `build` field to `HealthResponse`. Rejected per GATE-META-1 — Kubernetes liveness probe should remain minimal (`{status: ok}`). Coupling build info to liveness creates unnecessary dependency. Dedicated `/api/v1/meta/build-info` is cleaner separation.
+
+#### 6.4 References
+
+- Axum `Json` extractor/response: `docs.rs/axum/latest/axum/struct.Json.html`
+- Axum handler patterns: `rustfinity.com/blog/axum-rust-tutorial`
+- Kubernetes /health vs /ready: standard pattern (liveness thin, readiness detailed)
+
+### 7. Vite build-time injection patterns (2026-06-14, role=tech-lead)
+
+#### 7.1 Vite `define` configuration
+
+**Codebase audit:** `frontend/vite.config.ts` has no `define` block. Standard Vite pattern for build-time constants:
+
+```typescript
+// frontend/vite.config.ts
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  define: {
+    __BUILD_ID__: JSON.stringify(process.env.BUILD_ID || 'dev'),
+    __RELEASE_TAG__: JSON.stringify(process.env.RELEASE_TAG || 'dev'),
+  },
+  // ... existing config
+});
+```
+
+**Key constraints (per Vite docs):**
+- `define` values are **static text replacements** — must use `JSON.stringify()` for string literals
+- Values are interpreted as raw expressions — without `JSON.stringify()`, build breaks
+- TypeScript requires `declare const __BUILD_ID__: string;` in `env.d.ts` or `vite-env.d.ts`
+
+#### 7.2 Alternative: `import.meta.env.VITE_*` (rejected)
+
+**Option B (rejected):** Use `VITE_BUILD_ID` env var with `envPrefix`. Rejected because:
+- `VITE_*` vars are loaded from `.env` files at dev time — not suitable for Docker build-time injection
+- `define` is the canonical pattern for CI/Docker build-time injection (per web refs)
+- `define` works in both dev and production; `.env` vars only work when `.env` file present
+
+#### 7.3 Docker → Vite injection chain
+
+```dockerfile
+# In frontend stage of backend/Dockerfile:
+FROM node:20-bookworm AS frontend
+ARG BUILD_ID
+ARG RELEASE_TAG
+ARG BUILD_TIMESTAMP
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci --ignore-scripts 2>/dev/null || npm install
+COPY frontend/ ./
+RUN BUILD_ID=$BUILD_ID RELEASE_TAG=$RELEASE_TAG BUILD_TIMESTAMP=$BUILD_TIMESTAMP npm run build
+```
+
+The `npm run build` invokes `vite build`, which reads `process.env.BUILD_ID` in `vite.config.ts` and injects via `define`.
+
+#### 7.4 TypeScript declarations
+
+```typescript
+// frontend/src/vite-env.d.ts (or env.d.ts)
+declare const __BUILD_ID__: string;
+declare const __RELEASE_TAG__: string;
+```
+
+#### 7.5 References
+
+- Vite `define` config: `v2.vitejs.dev/config/`
+- SO: commit hash in Vite: `stackoverflow.com/questions/70436753`
+- vite-plugin-build-info: `github.com/mgcrea/vite-plugin-build-info` (env fallback for Docker)
+- Praveen Puglia guide: `praveenpuglia.com/posts/secret-page-dev-info-vite-react/`
+
+### 8. SPA stale detection strategies (2026-06-14, role=tech-lead)
+
+#### 8.1 Industry patterns (web refs 2026)
+
+| Pattern | Mechanism | Pros | Cons |
+|---------|-----------|------|------|
+| **A: On-mount fetch** (Sentry PR #98031) | Fetch `/frontend-version/` on app mount; compare to baked build id | Simple; no polling overhead | Only detects on initial load; long-lived tabs stay stale |
+| **B: Periodic poll** (brickos #586, sentinel-js) | Poll `/health` or `version.json` every 60s | Detects stale during long sessions | Adds server load; complexity |
+| **C: Navigation intercept** (Codemzy, Sameer Thite 2026) | Check on route change; reload if stale | Seamless; no user interruption | Requires route change; may miss single-page sessions |
+| **D: Service Worker controllerchange** (brickos #588) | Listen for SW activation | Native browser signal | Requires SW setup; not applicable (no SW in this project) |
+
+#### 8.2 Recommended strategy for US-0022
+
+**Primary: Option A (on-mount fetch)** per GATE-STALE-1.
+
+**Rationale:**
+- Operator pain: post-deploy stale bundle on **initial page load** (BUG-0023 deploy confusion)
+- On-mount comparison sufficient — operator reloads on banner (per discovery §5.3)
+- No periodic poll needed — adds complexity without value for operator-only tool
+- Matches Sentry pattern (PR #98031): subtle footer indicator + hover detail
+
+**Implementation sketch:**
+
+```typescript
+// frontend/src/hooks/useStaleDetection.ts
+import { useEffect, useState } from 'react';
+
+interface BuildInfo {
+  build_id: string;
+  release_tag: string;
+  build_timestamp: string;
+}
+
+export function useStaleDetection() {
+  const [stale, setStale] = useState(false);
+  const [serverInfo, setServerInfo] = useState<BuildInfo | null>(null);
+
+  useEffect(() => {
+    const clientBuildId = __BUILD_ID__;
+    if (clientBuildId === 'dev') return; // skip in dev mode
+
+    fetch('/api/v1/meta/build-info', { cache: 'no-store' })
+      .then(r => r.json())
+      .then((info: BuildInfo) => {
+        setServerInfo(info);
+        if (info.build_id !== clientBuildId) {
+          setStale(true);
+        }
+      })
+      .catch(() => {/* silent fail — non-blocking */});
+  }, []);
+
+  return { stale, serverInfo };
+}
+```
+
+**UI integration (per GATE-UI-1):**
+- `AppLayout.tsx` sidebar-footer: subtle version stamp (short label)
+- Tooltip on hover: release tag + build id + build timestamp
+- Stale banner: non-blocking, dismissible, reload CTA
+
+#### 8.3 Stale detection edge cases
+
+| Scenario | Behavior | Mitigation |
+|----------|----------|------------|
+| Backend-only deploy (no frontend rebuild) | `build_id` mismatch → stale banner | Banner explains "New version available — reload" |
+| Dev mode (`BUILD_ID=dev`) | Skip detection | `if (clientBuildId === 'dev') return;` |
+| Network error on fetch | Silent fail | `.catch(() => {})` — non-blocking |
+| Traefik/browser cache on `/api/v1/meta/build-info` | Stale response | `cache: 'no-store'` header; operator hard refresh hint |
+| Backend returns 404 (old backend) | Stale banner | Fetch fails → no stale signal (acceptable — old backend has no meta endpoint) |
+
+#### 8.4 Alternative: periodic poll (rejected)
+
+**Option B (rejected):** Poll every 60s. Rejected per GATE-STALE-1 — on-mount only. Operator tool (not public-facing); long-lived tabs are rare; on-mount detection sufficient for operator pain (post-deploy confusion).
+
+#### 8.5 References
+
+- Sentry PR #98031: `github.com/getsentry/sentry/pull/98031` (FrontendVersionProvider, 5-min poll, footer indicator)
+- brickos #586: `github.com/sovereignbrick/brickos/commit/bb155f0` (build-ID poll + SW controllerchange)
+- Sameer Thite 2026: `sameerthite.medium.com/did-you-deploy-i-still-see-the-old-version` (sentinel-js, silent mode)
+- Franklyn Edekobi: `medium.com/@edekobifrank/a-cache-invalidation-strategy` (version.json, toast pattern)
+- Codemzy: `codemzy.com/blog/clients-reload-single-page-application-update` (route-change reload)
+
+### 9. Docker multi-stage build metadata propagation (2026-06-14, role=tech-lead)
+
+#### 9.1 Current Dockerfile structure
+
+**Codebase audit:** `backend/Dockerfile` is a 3-stage build:
+1. `FROM rust:1.88-bookworm AS builder` — Rust backend build
+2. `FROM node:20-bookworm AS frontend` — Vite frontend build
+3. `FROM debian:bookworm-slim` — Runtime (copies binary + static assets)
+
+No `ARG` declarations exist. No `LABEL` instructions. No build metadata propagation.
+
+#### 9.2 ARG scoping in multi-stage builds (per Docker docs 2026)
+
+**Key constraint:** `ARG` declared before `FROM` is global (visible to `FROM` lines). `ARG` declared inside a stage is **stage-local** — must re-declare after each `FROM` to access in that stage.
+
+**Recommended pattern:**
+
+```dockerfile
+# syntax=docker/dockerfile:1
+
+# Global ARGs (visible to all stages that re-declare)
+ARG BUILD_ID=unknown
+ARG RELEASE_TAG=unknown
+ARG BUILD_TIMESTAMP=unknown
+
+FROM rust:1.88-bookworm AS builder
+ARG BUILD_ID
+ARG RELEASE_TAG
+ARG BUILD_TIMESTAMP
+WORKDIR /app
+# ... existing build steps ...
+# Inject build metadata into Rust binary via env vars
+ENV BUILD_ID=$BUILD_ID
+ENV RELEASE_TAG=$RELEASE_TAG
+ENV BUILD_TIMESTAMP=$BUILD_TIMESTAMP
+RUN cargo build --release
+
+FROM node:20-bookworm AS frontend
+ARG BUILD_ID
+ARG RELEASE_TAG
+ARG BUILD_TIMESTAMP
+WORKDIR /frontend
+# ... existing build steps ...
+# Pass to Vite build
+RUN BUILD_ID=$BUILD_ID RELEASE_TAG=$RELEASE_TAG BUILD_TIMESTAMP=$BUILD_TIMESTAMP npm run build
+
+FROM debian:bookworm-slim
+ARG BUILD_ID
+ARG RELEASE_TAG
+ARG BUILD_TIMESTAMP
+# ... existing runtime setup ...
+# OCI labels (optional, for docker inspect)
+LABEL org.opencontainers.image.revision="${BUILD_ID}"
+LABEL org.opencontainers.image.version="${RELEASE_TAG}"
+LABEL org.opencontainers.image.created="${BUILD_TIMESTAMP}"
+```
+
+#### 9.3 Rust compile-time env injection
+
+**Key insight:** Rust `env!()` macro reads env vars **at compile time**. To inject build metadata into the binary, set `ENV` before `cargo build --release`:
+
+```dockerfile
+# In builder stage:
+ENV BUILD_ID=$BUILD_ID
+ENV RELEASE_TAG=$RELEASE_TAG
+ENV BUILD_TIMESTAMP=$BUILD_TIMESTAMP
+RUN cargo build --release
+```
+
+Then in `backend/src/meta/mod.rs`:
+
+```rust
+build_id: option_env!("BUILD_ID").unwrap_or("dev"),
+```
+
+**Alternative: `--build-arg` → `ARG` → `ENV` chain.** Docker `ARG` is build-time only (not available at runtime). To make available to `cargo build`, must convert `ARG` → `ENV` in the same stage.
+
+#### 9.4 CI/CD build invocation
+
+```bash
+# In CI/CD pipeline or operator build script:
+docker build \
+  --build-arg BUILD_ID=$(git rev-parse --short HEAD) \
+  --build-arg RELEASE_TAG=$(cat handoffs/releases/latest-tag 2>/dev/null || echo "dev") \
+  --build-arg BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+  -t flow-finance-ai:latest \
+  -f backend/Dockerfile \
+  .
+```
+
+#### 9.5 Cache invalidation considerations
+
+**Docker cache behavior:** `ARG` values affect build cache. If `BUILD_ID` changes, all instructions after `ARG BUILD_ID` have cache invalidated. This is **expected** — each build should produce a fresh binary with new metadata.
+
+**Mitigation:** Place `ARG` declarations **late** in each stage (after `COPY` of dependencies, before `RUN cargo build`) to minimize cache invalidation. Dependencies (`Cargo.toml`, `package.json`) are copied first and cached; only the final build step is invalidated.
+
+#### 9.6 Alternative: runtime env (rejected)
+
+**Option B (rejected):** Use `std::env::var("BUILD_ID")` at runtime. Rejected because:
+- Requires `ENV` in runtime stage (not just builder) — leaks build metadata into running container env
+- `env!()` compile-time is zero-cost; runtime lookup has overhead
+- Compile-time matches Vite `define` pattern (consistent across backend/frontend)
+
+#### 9.7 Risk analysis
+
+| Risk | Impact | Likelihood | Mitigation |
+|------|--------|------------|------------|
+| `ARG` not re-declared in stage | Build fails or metadata is `unknown` | Medium | Document pattern; test in CI |
+| Local dev without `--build-arg` | `option_env!()` returns `"dev"` | High | Acceptable — dev mode skips stale detection |
+| Docker cache stale binary | Old `BUILD_ID` in new image | Low | `--no-cache` or touch source file |
+| Multi-stage `COPY --from` loses metadata | Runtime has no metadata | None | `env!()` bakes into binary at compile time; no runtime dependency |
+
+#### 9.8 References
+
+- Docker multi-stage builds: `docs.docker.com/build/building/multi-stage/`
+- ARG instruction: `oneuptime.com/blog/post/2026-02-08-how-to-use-the-arg-instruction-for-build-time-variables`
+- Docker ARG scope: `systeminternals.dev/docker/multi-stage-builds/`
+- Reproducible builds: `secure-pipelines.com/ci-cd-security/lab-reproducible-container-builds-pinning-verifying-diffing/`
+
+### 10. Architecture gates — research validation (2026-06-14, role=tech-lead)
+
+| Gate | Discovery decision | Research validation | Verdict |
+|------|--------------------|--------------------| --------|
+| **GATE-META-1** (health extend vs meta route) | Dedicated `/api/v1/meta/build-info` | Axum pattern confirmed; `env!()` compile-time; public route safe | **FROZEN** — dedicated route |
+| **GATE-BUILD-1** (id format) | Git short sha (7 chars) + release tag + build timestamp | Docker `ARG` + `ENV` chain confirmed; `git rev-parse --short HEAD` standard | **FROZEN** — `BUILD_ID` (git short sha) + `RELEASE_TAG` + `BUILD_TIMESTAMP` (UTC ISO 8601) |
+| **GATE-STALE-1** (poll policy) | On mount only (no periodic poll) | Sentry pattern (on-mount + navigation intercept); brickos (poll + SW); on-mount sufficient for operator tool | **FROZEN** — on-mount fetch with `cache: 'no-store'` |
+| **GATE-UI-1** (placement) | `AppLayout` sidebar footer | Codebase audit: `sidebar-footer` (lines 78-91) has OIDC user name + logout; natural location | **FROZEN** — `AppLayout.tsx` `sidebar-footer` |
+
+### 11. Risk analysis summary (2026-06-14, role=tech-lead)
+
+| Risk | Impact | Likelihood | Mitigation | Residual |
+|------|--------|------------|------------|----------|
+| Secrets in metadata response | High | Low | Allowlist fields only (`build_id`, `release_tag`, `build_timestamp`); `option_env!()` never echoes `.env` | Low |
+| Backend-only deploy (no frontend rebuild) | Medium | Medium | Stale banner explains "New version available — reload"; expected behavior | Low |
+| Traefik/browser cache on meta endpoint | Medium | Low | `cache: 'no-store'` header; operator hard refresh hint in tooltip | Low |
+| Docker `ARG` scope confusion (not re-declared) | High | Medium | Document pattern; test in CI; `option_env!()` fallback to `"dev"` | Low |
+| Local dev without `--build-arg` | Low | High | `option_env!()` returns `"dev"`; stale detection skips dev mode | Low |
+| Compile-time `env!()` breaks local dev | Medium | Low | Use `option_env!().unwrap_or("dev")` — never breaks build | Low |
+
+**Overall risk:** Low. All risks have clear mitigations. No blocking risks for architecture.
+
+### 12. Research stop conditions (2026-06-14, role=tech-lead)
+
+- **Missing references:** None (web refs for Axum, Vite, stale detection, Docker ARG all validated)
+- **Decision gate triggered:** None (all gates frozen; no new DEC required at research phase)
+- **Phase boundary:** Research complete; stop; hand off to `/architecture` in new subagent/chat per DEC-0038
+
+**Next phase:** `/architecture` (tech-lead role) — frozen gates GATE-META-1, GATE-BUILD-1, GATE-STALE-1, GATE-UI-1 ready for implementation contract.
+
+**Sprint sizing hint:** ~8-10 tasks (backend meta module, Dockerfile ARG chain, Vite define, TypeScript declarations, AppLayout stamp, stale detection hook, stale banner component, integration test, UAT). Under `SPRINT_MAX_TASKS=12`; no split needed.
+
+---
+
+## R-0096 — BUG-0024 plan delete still disabled live (post-Q0031)
+
+**Date:** 2026-06-13  
+**Work item:** BUG-0024 (acceptance **BR**, **BS**)  
+**Phase:** research (tech-lead)  
+**Orchestrator:** `auto-20260613-bug0024`  
+**Probe environment:** discovery verdicts 2026-06-13; operator report; live `GET /api/v1/plans` + browser `/planning` localhost:18080 (1-plan then 2-plan probe); vitest `planSelector.test.ts` 8/8; served bundle `assets/index-CJ94Af9n.js` contains Q0031 tooltip string; code audit `planSelector.ts`, `PlanningPage.tsx` L111–114, L490, L667–675; **BUG-0022** / **Q0031**; **DEC-0082**; EARLY_RESEARCH=1 disabled-control UX refs (web below); no host `.env` / secrets read.
+
+**Findings:**
+
+### 1. Hypothesis resolution (final)
+
+| ID | Scenario | Verdict | Evidence |
+|----|----------|---------|----------|
+| **H1** | Sole active plan — missing actionable guidance | **CONFIRMED (BS)** | 1 active plan → `isDeleteDisabled` true; tooltip *Set another plan active before deleting the active plan* — no create→activate→delete path |
+| **H2** | Omniflow pre-Q0031 bundle | **LIKELY (BR on omniflow)** | **FRONTEND_DEPLOY** deferred per Q0031/Q0032 release notes; omniflow not probed; stale bundle would reproduce pre-Q0031 **BM** when operator has 2+ plans |
+| **H3** | 2+ plans, non-active selected, still disabled | **RULED OUT (localhost)** | After probe create `discovery-scenario`: non-active selected → `deleteDisabled=false`, title *Delete this plan*; vitest 8/8; `resolveDisplayedPlanId` wired |
+
+**Operator pain synthesis:** *Immer ausgegraut* on localhost is **explained by sole-plan + active selection + tooltip-only copy**, not a **Q0031** selector regression. On omniflow, **H2** remains the leading **BR** explanation until post-**FRONTEND_DEPLOY** smoke.
+
+### 2. Localhost 2-plan probe (discovery + research confirmation)
+
+| Step | Observation |
+|------|-------------|
+| Initial `GET /api/v1/plans` | **1** plan (`test`, `is_active=true`) → delete disabled |
+| Create second plan (`discovery-scenario`) | **2** plans; select non-active in dropdown |
+| Browser state | `activePlanIsSelected=false`; button title *Delete this plan*; click opens confirm modal |
+| Vitest | `planSelector.test.ts` **8/8** — `resolveDisplayedPlanId` prefers selected non-active; `isDeleteDisabled` false for non-active |
+| Bundle | `assets/index-CJ94Af9n.js` includes *Set another plan active* — Q0031-era frontend on localhost |
+
+**API contract unchanged:** `DELETE /api/v1/plans/:id` returns **409** when `is_active=true` per **DEC-0082** — no backend change required.
+
+### 3. Sole-plan copy options (architecture gate **GATE-COPY-1**)
+
+Industry guidance: disabled controls without visible next steps frustrate users; tooltips on `disabled` buttons are often **not keyboard-focusable** ([USWDS disabled-state research](https://github.com/uswds/uswds/wiki/Disabled-States-Research-Findings-2023), [Smashing Magazine — disabled buttons](https://www.smashingmagazine.com/2021/08/frustrating-design-patterns-disabled-buttons/), [Helios — disabled patterns](https://helios.hashicorp.design/patterns/disabled-patterns)). Prefer **inline helper text** adjacent to the control over tooltip-only explanations.
+
+| Option | Mechanism | Pros | Cons | Verdict |
+|--------|-----------|------|------|---------|
+| **A — inline hint below Delete row (recommended)** | When `plans.length === 1 && sole.is_active && activePlanIsSelected`, render visible copy below **Delete plan** button | Satisfies **BS** without backend change; keyboard/screen-reader discoverable; matches PO Option A | Slightly more vertical space on sole-plan layout | **Frozen default** |
+| **B — create-plan CTA from disabled row** | Button/link to open create-plan flow | Faster path | Higher UI churn; create affordance already elsewhere on page | **Deferred** |
+| **C — delete active sole plan with auto-deactivate** | Relax **DEC-0082** guard | One-click delete | Violates accepted DELETE contract; reopen **BUG-0022** scope | **Rejected** |
+
+**Frozen provisional contract (pending architecture):**
+
+```text
+shouldShowSolePlanDeleteHint(plans, activePlanIsSelected):
+  return plans?.length === 1
+    && plans[0].is_active === true
+    && activePlanIsSelected === true
+
+SOLE_PLAN_DELETE_HINT =
+  "To delete this plan, create another scenario, set it active, then delete this one."
+```
+
+**Placement:** Inline `<p className="help-text">` (or existing muted helper class) **immediately below** the **Delete plan** button within the plan-selector row — not tooltip-only, not modal.
+
+**Multi-plan behavior unchanged:** When `plans.length >= 2` and globally active plan selected, keep existing title tooltip *Set another plan active before deleting the active plan* — no inline hint (another plan already exists).
+
+**Optional P2:** Retain shortened tooltip on disabled button for hover users; inline hint is the **BS** closure artifact.
+
+### 4. Deploy verification (architecture gate **GATE-DEPLOY-1**)
+
+| Surface | **BR** expectation | Status |
+|---------|-------------------|--------|
+| **localhost:18080** | 2+ plans + non-active selected → delete enabled | **PASS** (2026-06-13 probe) |
+| **financegnome.omniflow.cc** | Same after **FRONTEND_DEPLOY** (Q0031 + Q0032 bundles) | **OPEN** — operator gate deferred |
+
+**Smoke checklist (post-deploy):**
+
+1. Confirm deployed bundle includes `resolveDisplayedPlanId` / updated tooltip strings (or **US-0022** version stamp when available).
+2. `/planning` with **2+** plans: select non-active → **Delete plan** enabled → confirm removes plan (**BR**).
+3. `/planning` with **1** sole active plan: delete disabled + **inline hint** visible (**BS**).
+4. OIDC-enabled deploy regression checks per acceptance.
+
+**If BR fails post-deploy:** treat as deploy/process gap first; only reopen selector code if bundle is current and **H3** reproduces.
+
+### 5. Scope (architecture gate **GATE-SCOPE-1**)
+
+| Layer | Scope |
+|-------|-------|
+| **Primary** | `frontend/src/pages/PlanningPage.tsx` — conditional inline hint render |
+| **Helper (recommended)** | `frontend/src/pages/planSelector.ts` — `shouldShowSolePlanDeleteHint` + `SOLE_PLAN_DELETE_HINT` constant (mirrors **BUG-0022** / **BUG-0026** pure-helper pattern) |
+| **Out of scope** | `DELETE /api/v1/plans/:id`, **DEC-0082** 409 contract, create-plan API, Playwright suite, omniflow deploy automation |
+
+**Frontend-only** — extends **DEC-0082** deactivate-first UX with sole-plan guidance; no DELETE contract change.
+
+### 6. Test strategy (architecture gate **GATE-TEST-1**)
+
+| Approach | Repo status | Recommendation |
+|----------|-------------|----------------|
+| **Vitest pure helper** | Precedent: `planSelector.test.ts` (8 cases) | **Primary** — table-driven `shouldShowSolePlanDeleteHint` cases |
+| **RTL / PlanningPage mount** | No existing PlanningPage tests | Optional P2 — not required for gate |
+| **Playwright E2E** | **0** `*.spec.*` files | Defer to verify-work / operator smoke |
+
+**Recommended vitest cases:**
+
+```typescript
+// sole plan active + active selected → true
+// sole plan active + somehow non-active selected → false (impossible state; guard false)
+// two plans, active selected → false (multi-plan uses tooltip only)
+// two plans, non-active selected → false (delete enabled; no hint)
+// empty plans → false
+```
+
+**Regression suite:** `npm test` frontend; existing `isDeleteDisabled` / `resolveDisplayedPlanId` cases must remain green.
+
+### 7. Architecture gates (mandatory decisions)
+
+| Gate | Question | Research default |
+|------|----------|------------------|
+| **GATE-COPY-1** | Sole-plan disabled copy placement | Option **A** — inline hint below **Delete plan** row when `plans.length===1 && sole.is_active && activePlanIsSelected`; copy per `SOLE_PLAN_DELETE_HINT` |
+| **GATE-DEPLOY-1** | Omniflow **BR** verification | Operator **FRONTEND_DEPLOY** then 2-plan `/planning` smoke; localhost **BR** already PASS |
+| **GATE-SCOPE-1** | Backend change? | **No** — frontend-only; **DEC-0082** intact |
+| **GATE-TEST-1** | Regression test | Vitest helper predicate; no Playwright required |
+| **GATE-DEC-1** | New DEC? | **No** — sole-plan copy is presentation layer on existing guard |
+
+### 8. `/quick` sizing
+
+| Estimate | Tasks |
+|----------|-------|
+| **2–4 atomic tasks** | Helper + copy constant; PlanningPage wire; vitest; G1 gate; V1 operator smoke (deferred **FRONTEND_DEPLOY**) |
+
+Well under `SPRINT_MAX_TASKS=12`. **Recommend `/quick`** (same track as **BUG-0022** / **Q0031**, **BUG-0026** / **Q0032**).
+
+**Provisional task tree (architecture to refine):**
+
+| ID | Title | Row |
+|----|-------|-----|
+| H1 | `shouldShowSolePlanDeleteHint` + copy constant | **BS** |
+| F1 | PlanningPage inline hint wire | **BS** |
+| T1 | Vitest sole-plan predicate cases | **BS** |
+| G1 | `npm test` + build | all |
+| V1 | Post-**FRONTEND_DEPLOY** `/planning` smoke (**BR** + **BS**) | **BR**, **BS** |
+
+### 9. Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Hint shown when delete unexpectedly enabled | Predicate requires `activePlanIsSelected === true` (same guard as disabled button) |
+| Copy clutter on multi-plan active selection | Hint gated on `plans.length === 1` only |
+| Omniflow **BR** still fails post-deploy | Verify bundle hash / version stamp (**US-0022**); only then hunt selector regression |
+| i18n | English copy constant; matches page default locale |
+| Tooltip-only **BS** closure | Architecture must require inline element, not `title` alone |
+| Reopening **BUG-0022** | Explicit out-of-scope — selector logic verified PASS |
+
+**Web references (EARLY_RESEARCH):** [USWDS disabled-state research — prefer feedback over silent disable](https://github.com/uswds/uswds/wiki/Disabled-States-Research-Findings-2023); [Helios disabled patterns — contextual guidance over disabled elements](https://helios.hashicorp.design/patterns/disabled-patterns); [Smashing Magazine — hint next to disabled button](https://www.smashingmagazine.com/2021/08/frustrating-design-patterns-disabled-buttons/).
+
+**Linked:** BUG-0024, BR, BS, BUG-0022, Q0031, DEC-0082, planSelector, PlanningPage, R-0094 (selector precedent), US-0022 (deploy stamp)  
+**Confidence:** **high** — discovery + localhost 2-plan probe + code audit + disabled-control UX cross-check  
+**Status:** fulfilled (BUG-0024/Q0033 released `bug0024-q0033`, 2026-06-13 — H1/F1/T1/G1 sole-plan inline hint; extends DEC-0082; no new DEC; operator FRONTEND_DEPLOY deferred)
+
+---
+
+## R-0097 — BUG-0025 Firefly category transactions not updating (Stromkosten)
+
+**Date:** 2026-06-13  
+**Work item:** BUG-0025 (acceptance **BW**, **BX**, **BY**)  
+**Phase:** research (tech-lead)  
+**Orchestrator:** `auto-20260613-bug0025`  
+**Probe environment:** Operator report 2026-06-13; operator screenshot `handoffs/evidence/bug0025-category-spending-trend-stromkosten-20260613.png`; live localhost:18080 — `GET /api/v1/sync/entities` (939 tx); category **146** expense-series **4** tx **only 2026-05**; sync runs mix `scheduled`/`manual` with `scheduled_exchanges`; code `backend/src/firefly/mod.rs` `sync_transactions` + `backend/src/sync/mod.rs` scheduler.
+
+**Findings:**
+
+### 1. Symptom vs mirror probe (updated with screenshot)
+
+| Layer | Observation |
+|-------|-------------|
+| **Operator UI** | `/forecast` **Category spending trend** — **Wohnen - Stromkosten** — **single bar 2026-05** (~€465); all other months **€0** |
+| **Screenshot** | Highest/Lowest month **2026-05**; hover **2025-08 → €0 outflow**; range **2025-07 … 2026-06** |
+| **Mirror API** | Category **146** expense-series: **4** txs, **all in 2026-05** — chart matches mirror (not a rendering bug) |
+| **Interpretation** | “One transaction” = **one month with data**; missing months likely **not ingested** from Firefly |
+
+### 2. Incremental sync mechanism (primary suspect)
+
+Per **DEC-0002** / **R-0089**: `sync_transactions` sets Firefly `start = last_successful_sync_at − overlap_days` (default **7**). Firefly API filters by **transaction date**, not edit time. Bulk backdated imports can be **skipped** until cursor reset or window widened.
+
+### 3. Scheduler confusion risk
+
+When Firefly full sync is not due, scheduler runs **`scheduled_exchanges`** only. Sync Status may show **success** while Firefly mirror unchanged — operator may believe sync ran.
+
+### 4. Discovery actions
+
+| ID | Action |
+|----|--------|
+| **H1** | Compare Firefly Strom tx **dates per month** vs mirror `category_id=146`; test backdated import outside 7-day window |
+| **H2** | Audit Sync Status copy; ensure manual sync = Full; label exchange-only runs |
+| **H3** | ~~Identify operator UI~~ **CONFIRMED** — `/forecast` Category spending trend (`US-0018` / **DEC-0088**) |
+
+### 5. Discovery phase findings (2026-06-13)
+
+| Hypothesis | Verdict | Evidence |
+|------------|---------|----------|
+| **H1** | **LIKELY PRIMARY** | `sync_cursors.transactions` watermark `2026-06-13 11:53:28Z`; `overlap_days=7` → next Firefly `start ≈ 2026-06-06`; mirror `category_id=146` = **4** txs dated **2026-05-11…13** only; expense-series API matches |
+| **H2** | **PARTIAL CONFIRMED** | `sync/status` `last_run.trigger=scheduled_exchanges` (12:53) while last Full `scheduled` (11:53); `trigger_manual` → `RunMode::Full`; history table shows trigger strings |
+| **H3** | **CONFIRMED** | Not a chart bug — mirror + `expense_series_by_month` SQL drive UI |
+
+**Live probe (localhost:18080, 2026-06-13):**
+
+| Endpoint / SQL | Result |
+|----------------|--------|
+| `GET /api/v1/sync/entities` | transactions **939** |
+| `GET /api/v1/categories/expense-series?category_id=146` | **4** txs; **2026-05** only (~€465 outflow) |
+| `GET /api/v1/sync/runs` | Alternating `scheduled` / `scheduled_exchanges` / `manual` |
+| `GET /api/v1/sync/status` | `last_run.trigger=scheduled_exchanges` |
+| `SELECT … FROM transactions WHERE category_id='146'` | 4 rows, all May 2026 |
+
+**PO fix preference:** document DEC-0002 + cursor-reset remediation (**GATE-OVERLAP-1** option A) before widening overlap; separate Last Firefly vs exchange sync in status UX (**GATE-SYNC-UX-1**).
+
+### 6. Firefly oracle, repro, and manual lookback sizing
+
+**H1 upgraded to CONFIRMED** — discovery mechanism + research sizing close the loop; direct Firefly III category-month GET was **not available** in probe env (app container has no `FIREFLY_URL`; names-only policy). Oracle inferred from **mirror gap + DEC-0002 contract** (same method as **R-0089** / **BUG-0019**).
+
+| Oracle layer | Stromkosten (category **146**) | Verdict |
+|--------------|-------------------------------|---------|
+| **Operator claim** | Many txs across months in Firefly | Intake + screenshot |
+| **Mirror SQL / API** | **4** rows, dates **2026-05-11…13** only | Matches chart |
+| **Gap months** | **2025-07 … 2026-04**, **2026-06** at €0 | Not ingested, not UI-filtered |
+| **Next incremental window** | watermark `2026-06-13 11:53:28Z` − 7d → `start ≈ 2026-06-06` | May 2025–Aug txs **outside** window |
+| **BUG-0006** | category_id binding works for in-window rows | **RULED OUT** |
+
+**Deterministic repro (architecture / GATE-TEST-1):**
+
+1. Note `sync_cursors.transactions.last_successful_sync_at` and compute `start = watermark − 7d`.
+2. Ensure Firefly holds a Stromkosten tx dated **before** `start` (e.g. **2025-08-01**) — operator ledger or wiremock fixture.
+3. Run **manual Full** sync (`POST /api/v1/sync/trigger`) with **current** code → mirror `category_id=146` **unchanged** for that month.
+4. **Remediation paths:** (a) `DELETE FROM sync_cursors WHERE entity_type='transactions'` then manual Full → initial **365d** lookback ingests row; or (b) post-fix manual lookback (§7 Option **B**) without SQL.
+
+**Manual lookback sizing (939-tx profile, localhost 2026-06-13):**
+
+| Scenario | Approx. Firefly fetch | Pages @ 500 | Notes |
+|----------|----------------------|-------------|-------|
+| **Scheduled incremental** (current) | ~12 txs (`records_synced=12` on last Full) | 1 | Fast; skips backdated |
+| **Manual 365d lookback** (proposed) | ~900 txs (mirror span **2025-06-05 … 2026-06-11**) | **2** | Upsert dedupe by Firefly `id` — safe |
+| **Cursor reset + 365d initial** | Same as manual 365d | 2 | No duplicate rows |
+
+**Latency / cost:** +1–3s per manual sync vs 7-day window at operator scale; acceptable for **Sync now** frequency. Scheduled ticks keep 7-day overlap — no global overlap inflation.
+
+**Cursor reset (GATE-REMED-1):**
+
+```sql
+DELETE FROM sync_cursors WHERE entity_type = 'transactions';
+```
+
+Safe: `upsert_transaction` is `ON CONFLICT (firefly_id) DO UPDATE`; no orphan rows. Next Full run uses `Utc::now() − 365d` when watermark absent (`firefly/mod.rs` L374–377). Document in runbook for backfills **>365d** or when manual lookback still insufficient.
+
+### 7. Backdated import policy (architecture gate **GATE-OVERLAP-1**)
+
+| Option | Mechanism | Pros | Cons | Verdict |
+|--------|-----------|------|------|---------|
+| **A — Document + cursor reset only** | Runbook + Sync Status callout; operator SQL reset | Matches **DEC-0002**; PO-preferred first tier; low blast radius | **BW fails** — manual Full still skips backdated without reset; operator burden | **Required for BX** (transparency); **insufficient alone for BW** |
+| **B — Manual Full extended lookback (recommended)** | On `trigger ∈ {manual}` pass `start = today − 365d` (or `min(watermark−overlap, today−365)`) to `sync_transactions`; scheduled unchanged | **Sync now** ingests backdated ≤1yr; satisfies **BW** without SQL; upsert-safe | Larger manual fetch (~2 pages); does not cover >365d deep backfill | **Default for architecture** |
+| **C — Increase global `overlap_days`** | Config bump (e.g. 30–90) | Simple | Every scheduled run pays cost; still misses deep backfill | **Rejected** |
+| **D — Sync Status UX only** | Relabel last sync | Fixes **H2** only | No ingest fix | **Rejected** as sole overlap fix |
+
+**Frozen provisional contract (pending architecture):**
+
+```text
+sync_transactions start_date:
+  if trigger is manual (Full):
+    start = (Utc::now() - 365 days).date()
+  else:
+    start = (watermark - overlap_days).date()  // DEC-0002 unchanged for scheduled
+```
+
+**BX fix split:** Document-only **does not** meet **BW** (acceptance requires ingest after manual Full). **Minimum code change:** Option **B** for manual path + Option **A** callout for scheduled incremental limits and >365d cursor reset.
+
+**Operator mental model:** **Sync now** = "pull my recent Firefly ledger including backdated imports this year." Scheduled sync = "incremental catch-up for recent edits." DEC-0002 overlap remains the scheduled contract per **R-0002** / [#8282](https://github.com/firefly-iii/firefly-iii/issues/8282).
+
+### 8. Sync Status semantics (architecture gate **GATE-SYNC-UX-1**)
+
+**Confirmed (live probe 2026-06-13):** `GET /api/v1/sync/status` → `last_run.trigger=scheduled_exchanges` (12:53) while last Full Firefly `scheduled` (11:53). Header **"Last sync:"** (`SyncStatusPage.tsx` L88–92) shows exchange-only success — **misleading for Firefly mirror freshness**.
+
+| Option | Mechanism | Pros | Cons | Verdict |
+|--------|-----------|------|------|---------|
+| **A — Split summary fields (recommended)** | Extend `SyncStatusResponse` with `last_firefly_run` (latest `trigger ∈ {manual, scheduled}`) and keep `last_run` or add `last_exchange_run` | Fixes **BY** summary; minimal UI churn | Small API + type change | **Default** |
+| **B — Relabel only** | "Last run (any)" + footnote | No API change | Still ambiguous which subsystem synced | **Rejected** |
+| **C — Hide exchange from header** | Show only Firefly in hero | Simple | Exchange operators lose signal | **Rejected** |
+
+**Frozen UX contract (pending architecture):**
+
+- Hero card: **"Last Firefly sync:"** ← `last_firefly_run.finished_at`; badge **`trigger`** (`manual` / `scheduled`).
+- Secondary line when latest run is exchange-only and newer: **"Last exchange sync:"** ← `last_run` when `trigger ∈ {scheduled_exchanges, manual_exchanges}`.
+- History table: keep raw `trigger` column (already satisfies **BY** partial); optional human labels P2.
+- Info callout (ties **GATE-OVERLAP-1** doc tier): explain DEC-0002 backdated-import behavior + cursor-reset link.
+
+**Scope:** `backend/src/sync/mod.rs` `status()` + `latest_run` query variant; `frontend/src/pages/SyncStatusPage.tsx`; `frontend/src/lib/api.ts` `SyncStatus` type; `HomePage.tsx` hero if it mirrors last sync (verify at architecture).
+
+### 9. Remaining gates, test strategy, sizing, risks
+
+| Gate | Question | Research default |
+|------|----------|------------------|
+| **GATE-OVERLAP-1** | Backdated import policy | **A + B** — document + manual 365d lookback; scheduled keeps DEC-0002 |
+| **GATE-SYNC-UX-1** | Status surface semantics | **A** — split `last_firefly_run` / exchange line + trigger badge |
+| **GATE-REMED-1** | Operator cursor reset | Runbook SQL one-liner; optional admin endpoint **deferred** (architecture) |
+| **GATE-TEST-1** | Repro harness | Rust integration: seed tx before `start` window → assert skip pre-fix, ingest post-fix or post-cursor-delete; mirror `category_id` count |
+| **GATE-DEC-1** | New DEC? | **Extend DEC-0002** with manual-trigger lookback exception; no new DEC unless architecture splits contracts |
+
+**`/quick` vs sprint sizing:**
+
+| Track | Estimate | Rationale |
+|-------|----------|-----------|
+| **Backend + frontend** | **5–7 tasks** | `sync_transactions` manual lookback; status API split; Sync Status UI + callout; runbook; integration test; V1 smoke |
+| **Document-only subset** | 2–3 tasks | **Insufficient** for **BW** — not recommended |
+
+Likely **small sprint or `/quick` 5–7** — above trivial copy fix; under `SPRINT_MAX_TASKS=12`.
+
+**Risks:**
+
+| Risk | Mitigation |
+|------|------------|
+| Manual 365d fetch slow on very large ledgers | Pagination already capped; monitor `records_synced`; operator-scale ~2 pages OK |
+| >365d backfill still skipped | Document cursor reset; architecture may add explicit "full re-sync" later |
+| Duplicate rows on cursor reset | Upsert by Firefly `id` — proven DEC-0002 pattern |
+| API breaking change for `SyncStatus` | Additive fields only; frontend co-deploy |
+| OIDC deploy regression | Acceptance **BY** requires post-deploy smoke |
+
+**Web references (EARLY_RESEARCH):** [Firefly API date parameters (`start`/`end` YYYY-MM-DD)](https://www.mintlify.com/firefly-iii/firefly-iii/api/overview); [Transaction list date filtering #1560](https://github.com/firefly-iii/firefly-iii/issues/1560); [Search API date fields](https://www.mintlify.com/firefly-iii/firefly-iii/api/search); [updated_at unreliability #8282](https://github.com/firefly-iii/firefly-iii/issues/8282) (supports DEC-0002 date-window choice).
+
+**Linked:** BUG-0025, BW, BX, BY, BUG-0006, DEC-0002, DEC-0088, US-0018, R-0089, sync/mod.rs, firefly/mod.rs, SyncStatusPage.tsx, `handoffs/po_to_tl.md` (discovery-20260613-bug0025, research-20260613-bug0025)  
+**Confidence:** **high** — H1 confirmed by mirror gap + DEC-0002 math; H2/H3 confirmed; manual lookback sized; Firefly direct oracle deferred (env) but not blocking  
+**Status:** fulfilled (research complete 2026-06-13 — GATE-OVERLAP-1 and GATE-SYNC-UX-1 frozen; next `/architecture`)
+
+---
+
+## R-0098 — BUG-0026 Forecast monthly Income card vs chart mismatch
+
+**Date:** 2026-06-13  
+**Work item:** BUG-0026 (acceptance **BZ**, **CA**)  
+**Phase:** research (tech-lead)  
+**Orchestrator:** `auto-20260613-bug0026`  
+**Probe environment:** discovery verdicts 2026-06-13; operator screenshot `handoffs/evidence/bug0026-forecast-income-card-zero-20260613.png`; live `GET http://localhost:18080/api/v1/forecast/monthly?account_id=114` (25 points: `series[0]` 2026-06 income **0.00**, `series[1]` 2026-07 income **3266.16**); code audit `ForecastPage.tsx` L148–152, L312–330, `MonthlyChart.tsx`; prior art **BUG-0012** / **Q0014**, **DEC-0089**; EARLY_RESEARCH=1 KPI period-label patterns (web refs below); no host `.env` / secrets read.
+
+**Findings:**
+
+### 1. Symptom and root cause (confirmed)
+
+| Surface | Value |
+|---------|-------|
+| **Income summary card** | **0.00** (binds `series[0]`) |
+| **MonthlyChart Income bars** | ~**3266** from **2026-07** onward |
+| **Other cards** | Fixed 86.02, Variable 2866.57, Free cashflow -2952.59 (also `series[0]` — partial-month spend) |
+
+`ForecastPage.tsx` sets `monthlySummary = series[0]` **without month label**; `MonthlyChart` maps the **full** `series` to x-axis months. First API point is the **current partial calendar month** (June) with **zero projected salary** in remaining days; chart correctly shows full salary from July. **Not** a **BUG-0012** backend regression.
+
+### 2. Month-selection policy options (architecture gate **GATE-MONTH-1**)
+
+| Option | Mechanism | Pros | Cons | Verdict |
+|--------|-----------|------|------|---------|
+| **A — skip partial zero-income head (recommended)** | When `parseFloat(series[0].income) === 0` and `series.length > 1`, select `series.find(income>0) ?? series[1]`; else `series[0]` | Fixes operator repro; keeps all four card metrics from **one** month point; no backend change | Skips a month that is legitimately zero-income end-to-end (rare); Fixed/Variable on skipped partial month not shown on cards | **Default for architecture** |
+| **B — always `series[0]` + partial copy** | Label current month; footnote "partial month — salary not yet due" | Transparent about partial semantics | Income card still **0.00** vs chart July bars — **BZ fails** unless operator reads footnote | **Rejected** for BZ |
+| **C — chart hover/selection sync** | Cards follow ECharts emphasis/hover | Exact chart parity | Interaction cost; no default on load; ECharts coupling | **Deferred** (discovery Option B) |
+| **D — rolling 12-month aggregate** | Sum/average across series | Single headline number | Changes metric semantics; not Finanzguru parity | **Rejected** (discovery Option C) |
+| **E — backend `summary_month` field** | API hints preferred month | Single source of truth | Out of scope; projection engine frozen | **Rejected** (**GATE-SCOPE-1**) |
+
+**Frozen provisional contract (pending architecture):**
+
+```text
+resolveForecastSummaryPoint(series):
+  if series.length === 0 → null
+  if parseFloat(series[0].income) === 0 && series.length > 1:
+    return series.find(p => parseFloat(p.income) > 0) ?? series[1]
+  return series[0]
+```
+
+**Operator mental model:** `/forecast` **Monthly** is a **household cashflow outlook**. Operators scan summary cards first, then the multi-month chart. When the current month is partial and salary has not yet fallen in the projection window, showing **unlabeled `series[0]`** reads as "broken forecast" because chart bars show the familiar salary month. Defaulting to the **first month with projected income** (July in repro) aligns card Income with the first meaningful blue bar without requiring hover.
+
+**Month-end boundary:** Selection uses API `month` ISO date (`2026-07-01`), **not** client `Date()` — avoids timezone drift at month boundaries (June 30 vs July 1).
+
+### 3. Month label UX (architecture gate **GATE-LABEL-1**)
+
+Dashboard KPI best practice: **period belongs in a subtitle**, not inferred from the metric name alone ([Power BI card visual guidance](https://learn.microsoft.com/en-us/answers/questions/5895850/new-kpi-card-features-and-enhancements-in-power-bi), [KPI card anatomy — label with time period](https://playbooks.com/skills/ancoleman/ai-design-components/creating-dashboards)).
+
+| Pattern | Example | Verdict |
+|---------|---------|---------|
+| **Shared subtitle above card grid (recommended)** | `Forecast for July 2026` | One label for all four cards; satisfies **CA**; matches existing `.grid` + `.card` layout |
+| Per-card micro-label | `Income (Jul 2026)` on each card | Redundant; clutters four identical suffixes | Defer |
+| Inline with metric name | `Income — July 2026` | Acceptable fallback | Use only if subtitle omitted |
+
+**Formatting:** `formatForecastMonthLabel("2026-07-01")` → locale month-year via `toLocaleDateString(undefined, { month: "long", year: "numeric" })` (app English default).
+
+**Optional P2 footnote** when skip rule fires: "Current month has no remaining projected income events." — not required for BZ/CA closure.
+
+### 4. Edge cases
+
+| Case | Expected behavior |
+|------|-------------------|
+| **`series[0].income > 0`** | Use `series[0]`; label that month — no skip |
+| **All months `income === 0`** | Use `series[0]`; label month — card/chart both zero for that month (**BZ** satisfied) |
+| **Single-month series** | Use `series[0]` |
+| **Empty series** | Hide card grid (current behavior) |
+| **Category filter set** | Cards unchanged per **DEC-0089** — helper text L278–281 already scopes filter to trend chart |
+
+### 5. Scope (architecture gate **GATE-SCOPE-1**)
+
+| Layer | Scope |
+|-------|-------|
+| **Primary** | `frontend/src/pages/ForecastPage.tsx` — replace raw `series[0]` with helper + subtitle |
+| **New module (recommended)** | `frontend/src/pages/forecastSummaryMonth.ts` — pure `resolveForecastSummaryPoint` + `formatForecastMonthLabel` (mirrors **BUG-0022** `planSelector.ts` pattern) |
+| **Out of scope** | `project.rs`, forecast API contract, `MonthlyChart.tsx`, category filter wiring, chart hover sync |
+
+**No backend change required** — monthly API already returns ordered points with `month`, `income`, `fixed_costs`, `variable_costs`, `free_cashflow`.
+
+### 6. Test strategy (architecture gate **GATE-TEST-1**)
+
+| Approach | Repo status | Recommendation |
+|----------|-------------|----------------|
+| **Vitest pure helper** | Precedent: `planSelector.test.ts` (8 cases, no RTL) | **Primary** — table-driven cases for skip rule, label format, empty/single |
+| **RTL / ForecastPage mount** | No existing ForecastPage tests | Optional P2 — not required for gate |
+| **Playwright E2E** | **0** `*.spec.*` files; scratchpad UAT browser probe only | Defer to verify-work / operator smoke |
+
+**Recommended vitest fixture** (matches live API repro):
+
+```typescript
+const partialMonthTrap = [
+  { month: "2026-06-01", income: "0.00", fixed_costs: "86.02", variable_costs: "2866.57", free_cashflow: "-2952.59" },
+  { month: "2026-07-01", income: "3266.16", fixed_costs: "86.02", variable_costs: "2866.57", free_cashflow: "313.57" },
+];
+// expect resolve → index 1; income === "3266.16"
+```
+
+**Regression suite:** `npm test` frontend; OIDC deploy smoke per acceptance BZ/CA.
+
+### 7. Architecture gates (mandatory decisions)
+
+| Gate | Question | Research default |
+|------|----------|------------------|
+| **GATE-MONTH-1** | Which month drives summary cards? | Option **A** — skip partial head when `series[0].income === 0` and later month exists; else `series[0]` |
+| **GATE-LABEL-1** | Month label placement | Shared subtitle **"Forecast for {Month YYYY}"** above card grid |
+| **GATE-SCOPE-1** | Backend change? | **No** — frontend-only; **DEC-0089** category filter must not affect cards |
+| **GATE-TEST-1** | Regression test | Vitest helper + partial-month fixture; no Playwright required |
+| **GATE-DEC-1** | New DEC? | **No** — UI presentation fix; extends forecast monthly view semantics (**US-0002**); document in architecture only |
+
+### 8. `/quick` sizing
+
+| Estimate | Tasks |
+|----------|-------|
+| **2–4 atomic tasks** | Helper + label util; ForecastPage wire; vitest; V1 operator smoke (deferred) |
+
+Well under `SPRINT_MAX_TASKS=12`. **Recommend `/quick`** (same track as **BUG-0022** / **Q0031**).
+
+### 9. Risks
+
+| Risk | Mitigation |
+|------|------------|
+| Skip rule hides partial-month Fixed/Variable on cards | Acceptable — operator sees full series in chart; subtitle names reference month |
+| Legitimate all-zero-income forecast | No skip; labeled zero matches chart bar for that month |
+| `parseFloat` on decimal strings | Same pattern as `MonthlyChart.tsx`; use consistent parsing in helper |
+| Category filter accidentally wired to cards | Do not touch `monthlyQuery` key or card data path; regression note in execute |
+| i18n / locale month names | Use browser default locale; consistent with page `toLocaleString` elsewhere |
+| Timezone month inference | Derive label from API `month` string slice, not `new Date()` on client clock |
+
+**Web references (EARLY_RESEARCH):** [Power BI KPI card period context](https://learn.microsoft.com/en-us/answers/questions/5895850/new-kpi-card-features-and-enhancements-in-power-bi); [KPI card anatomy with time period label](https://playbooks.com/skills/ancoleman/ai-design-components/creating-dashboards); [Dashboard scan order — metric before detail](https://ui-syntax.com/playbooks/dashboard-ux-principles).
+
+**Linked:** BUG-0026, BZ, CA, BUG-0012, Q0014, DEC-0089, US-0002, ForecastPage, MonthlyChart, R-0094 (vitest helper precedent)  
+**Confidence:** **high** — discovery + live API + code audit + KPI UX cross-check  
+**Status:** fulfilled (research complete 2026-06-13 — five gates frozen; GATE-DEC-1 no new DEC; next `/architecture`)
+
+---

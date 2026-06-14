@@ -133,13 +133,15 @@ impl ExchangeRepository {
         market_value_eur: Option<f64>,
         unrealized_pnl_eur: Option<f64>,
         avg_cost_eur: Option<f64>,
+        exposure_eur: Option<f64>,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
             UPDATE exchange_holdings SET
                 market_value_eur = $4,
                 unrealized_pnl_eur = $5,
-                avg_cost_eur = $6
+                avg_cost_eur = $6,
+                exposure_eur = $7
             WHERE exchange_id = $1 AND asset = $2 AND product_type = $3
             "#,
         )
@@ -149,6 +151,7 @@ impl ExchangeRepository {
         .bind(market_value_eur)
         .bind(unrealized_pnl_eur)
         .bind(avg_cost_eur)
+        .bind(exposure_eur)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -292,6 +295,7 @@ impl ExchangeRepository {
                    market_value_eur::float8 AS market_value_eur,
                    unrealized_pnl_eur::float8 AS unrealized_pnl_eur,
                    avg_cost_eur::float8 AS avg_cost_eur,
+                   exposure_eur::float8 AS exposure_eur,
                    COALESCE(payload, '{}'::jsonb) AS payload
             FROM exchange_holdings
             WHERE quantity > 0
@@ -343,6 +347,7 @@ pub struct HoldingRow {
     pub market_value_eur: Option<f64>,
     pub unrealized_pnl_eur: Option<f64>,
     pub avg_cost_eur: Option<f64>,
+    pub exposure_eur: Option<f64>,
     pub payload: serde_json::Value,
 }
 

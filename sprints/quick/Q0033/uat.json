@@ -1,0 +1,109 @@
+{
+  "sprint_id": "Q0033",
+  "bug_id": "BUG-0024",
+  "phase": "verify-work",
+  "orchestrator_run_id": "auto-20260613-bug0024",
+  "decisions": ["DEC-0082"],
+  "research": ["R-0096"],
+  "acceptance_rows": ["BR", "BS"],
+  "acceptance_source": "docs/product/acceptance.md#BUG-0024",
+  "acceptance_mapping": {
+    "BS": {
+      "tasks": ["H1", "F1", "T1", "G1", "V1"],
+      "primary_verify": "Sole active plan: inline hint with create→activate→delete guidance when delete disabled"
+    },
+    "BR": {
+      "tasks": ["G1", "V1"],
+      "primary_verify": "2+ plans non-active selected → delete enabled → plan removed post-FRONTEND_DEPLOY"
+    }
+  },
+  "verified_at": "2026-06-13T15:05:00Z",
+  "verdict": "PASS-WITH-PREREQUISITES",
+  "ready_for_verify_work": true,
+  "ready_for_release": true,
+  "operator_gates": [
+    {
+      "id": "FRONTEND_DEPLOY",
+      "status": "pending",
+      "action": "rebuild frontend only — no migration",
+      "notes": "Required before live BS sole-plan inline hint on /planning; omniflow BR/BS full smoke"
+    }
+  ],
+  "operator_prerequisites": [
+    "FRONTEND_DEPLOY — H1/F1 sole-plan hint must be live on target environment"
+  ],
+  "steps": [
+    {
+      "id": "BS-UI",
+      "row": "BS",
+      "probe": "/planning 1 sole active plan — inline hint visible, delete disabled",
+      "result": "pass_with_prerequisites",
+      "evidence": "Browser: 2-plan env; hasSoleHint=false pre-deploy; vitest shouldShowSolePlanDeleteHint 7/7 + SOLE_PLAN_DELETE_HINT PASS; deferred FRONTEND_DEPLOY + sole-plan fixture"
+    },
+    {
+      "id": "BR-UI",
+      "row": "BR",
+      "probe": "/planning 2+ plans — non-active selected → delete enabled",
+      "result": "pass",
+      "evidence": "Browser MCP: discovery-scenario selected → Delete plan enabled (disabled=false); Q0031 selector live on localhost"
+    },
+    {
+      "id": "BR-API",
+      "row": "BR",
+      "probe": "DELETE active plan → 409 active_plan_delete_forbidden",
+      "result": "pass",
+      "evidence": "curl DELETE /api/v1/plans/{active_id} → HTTP 409 + active_plan_delete_forbidden"
+    },
+    {
+      "id": "BN-regression",
+      "row": "regression",
+      "probe": "Active plan selected — delete disabled + tooltip (Q0031)",
+      "result": "pass",
+      "evidence": "Browser: test (active) selected → Delete plan disabled; title tooltip path unchanged per DEC-0082"
+    },
+    {
+      "id": "OIDC-1",
+      "row": "regression",
+      "probe": "/planning /api/v1/plans smoke on omniflow profile",
+      "result": "pass_with_prerequisites",
+      "evidence": "GET /planning HTTP 200; GET /api/v1/health HTTP 200; GET /api/v1/plans HTTP 200; BS inline hint not live until FRONTEND_DEPLOY"
+    }
+  ],
+  "probe_results": [
+    {
+      "probe_id": "BS-UI-browser",
+      "probe_kind": "browser_smoke",
+      "step_id": "BS-UI",
+      "passed": false,
+      "reason_code": "UAT_BROWSER_PROBE_FAILED",
+      "navigation_url": "http://localhost:18080/planning",
+      "browser_evidence_refs": [
+        "sprints/quick/Q0033/evidence/browser/br-bs-probe-summary.txt"
+      ],
+      "notes": "Pre-FRONTEND_DEPLOY: sole-plan inline hint absent; 2-plan env; vitest PASS; step classified pass_with_prerequisites"
+    },
+    {
+      "probe_id": "BR-UI-browser",
+      "probe_kind": "browser_smoke",
+      "step_id": "BR-UI",
+      "passed": true,
+      "reason_code": null,
+      "navigation_url": "http://localhost:18080/planning",
+      "browser_evidence_refs": [
+        "sprints/quick/Q0033/evidence/browser/br-bs-probe-summary.txt"
+      ],
+      "notes": "Non-active plan selected → Delete plan enabled"
+    }
+  ],
+  "automated_checks": {
+    "npm_test": "pass",
+    "npm_build": "pass"
+  },
+  "uat_counts": {
+    "pass": 3,
+    "pass_with_prerequisites": 2,
+    "fail": 0,
+    "pending": 0,
+    "total": 5
+  }
+}

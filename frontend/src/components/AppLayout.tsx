@@ -4,6 +4,8 @@ import { useState } from "react";
 import { isOidcConfigured } from "../auth/oidc";
 import { AlertBell } from "./AlertBell";
 import { AiSheet } from "./AiSheet";
+import { StaleBanner } from "./StaleBanner";
+import { useStaleDetection } from "../hooks/useStaleDetection";
 
 const navItems = [
   { to: "/", label: "Home", enabled: true },
@@ -28,6 +30,7 @@ const analyticsNavItems = [
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const auth = useAuth();
+  const { stale } = useStaleDetection();
 
   return (
     <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
@@ -88,6 +91,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               Logout
             </button>
           )}
+          <div
+            style={{
+              marginTop: "0.5rem",
+              fontSize: "0.7rem",
+              color: "#94a3b8",
+              fontFamily: "monospace",
+            }}
+            title={`Release: ${__RELEASE_TAG__}\nBuild: ${__BUILD_ID__}\nTimestamp: ${new Date().toISOString()}`}
+          >
+            {__BUILD_ID__.slice(0, 7)}
+          </div>
         </div>
       </aside>
       <div className="main">
@@ -104,6 +118,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <AlertBell />
           </div>
         </header>
+        <StaleBanner stale={stale} />
         <main className="content">{children}</main>
       </div>
     </div>

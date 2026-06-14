@@ -1,109 +1,112 @@
-# Curator Refresh — post Q0029 / BUG-0021
+# Curator Refresh — S0021 / US-0022
 
-**Date:** 2026-06-11T13:15:00Z  
-**Orchestrator:** `auto-20260611-bug0021`  
-**Phase:** refresh-context  
-**Role:** curator  
-**Trigger:** release PASS — BUG-0021 DONE, Q0029 released (`bug0021-q0029`); intake bundle bug queue drain complete
-
----
-
-## Summary
-
-Triad reconciled after BUG-0021 / Q0029 release. Rollover archived 21 state checkpoints + 1 architecture section; hot surfaces within policy caps; **bug_queue_remaining=0** — **idle** (await new intake).
-
-| Item | Status |
-|------|--------|
-| BUG-0021 / Q0029 | **DONE** — acceptance BK–BL checked |
-| BUG queue | **EMPTY** — intake bundle drain complete |
-| Open stories | (empty — intake bundle drain complete) |
-| Decision gate | none open |
+**Date:** 2026-06-14T19:31:00Z  
+**Orchestrator run:** auto-20260613-bug0025  
+**Segment:** US-0022 / S0021 (released `0.22.0-us0022`)  
+**Role:** curator (fresh isolated context)
 
 ---
 
-## Triad reconciliation
+## Triad status
 
-| Surface | Check | Result |
-|---------|-------|--------|
-| `docs/engineering/state.md` | BUG-0021 released; no active bug; traceability index current | pass |
-| `handoffs/po_to_tl.md` | within cap (127/800 lines) | pass |
-| `docs/engineering/architecture.md` | § BUG-0021 in architecture pack; DEC-0110/0111 aligned | pass |
-| `docs/engineering/decisions.md` | DEC-0110/0111 indexed; context pack → BUG-0021 latest bug fix | pass |
-| `docs/product/backlog.md` | BUG-0021 Status: DONE; no OPEN bugs in canonical section | pass |
-| `docs/product/acceptance.md` | BUG-0021 rows BK–BL checked | pass |
-| `docs/product/vision.md` | intake bundle scope complete | pass |
+**RECONCILED** — rollover executed and verified.
 
-**Triad gate:** **PASS**
+| Artifact | Before | After | Cap | Status |
+|----------|--------|-------|-----|--------|
+| `state.md` | 1345 lines | 938 lines | 1000 | PASS |
+| `po_to_tl.md` | 506 lines | (unchanged) | 650 | PASS |
+| `architecture.md` | 2944 lines | (unchanged) | 3000 | PASS |
 
----
-
-## Rollover actions
-
-| Surface | Action | Notes |
-|---------|--------|-------|
-| `docs/engineering/state.md` | archived 21 + 3 units | → `state-pack-20260611-b.md`, `state-pack-20260611-c.md`; hot 982/1000 lines |
-| `docs/engineering/architecture.md` | archived 1 section | → `architecture-pack-20260611-a.md`; hot 2996/3000 lines |
-| `handoffs/po_to_tl.md` | no rollover this cycle | hot 127/800 lines |
-| `docs/engineering/decisions.md` | context pack updated | latest bug fix → BUG-0021 / DEC-0110/0111; idle |
-| `handoffs/resume_brief.md` | refreshed | idle — no next bug/story |
-| `sprints/S0001/summary.md` | context pack prepended | Q0029 / BUG-0021 released |
-
-**Gate:** `python3 scripts/enforce-triad-hot-surface.py --rollover` (units=21,1 + 3 post-checkpoint trim) then `--check` — **PASS**  
-**Codebase map refresh:** skipped (`CODEBASE_MAP_REFRESH_ON_ROLLOVER` unset)
-
-**Verification tuple:** boundary=contiguous prefix; moved=24 state + 1 arch; retained=982/1000 state lines; pack_ref=`state-pack-20260611-b.md`, `state-pack-20260611-c.md`, `architecture-pack-20260611-a.md`
+**Rollover details:**
+- Units archived: 10 checkpoint units
+- Archive packs: `docs/engineering/state-archive/state-pack-20260614-b.md`, `state-pack-20260614-c.md`
+- `enforce-triad-hot-surface.py --rollover`: exit 0
+- `enforce-triad-hot-surface.py --check`: PASS (no output = compliant)
 
 ---
 
-## Research review
+## Backlog status
 
-| Entry | Status | Notes |
-|-------|--------|-------|
-| R-0091 | fulfilled | Q0029 released via DEC-0110/0111; retain |
-| R-0090 | fulfilled | Q0028 released via DEC-0109; retain |
-| R-0089 | fulfilled | Q0027 released via DEC-0108; retain |
-| R-0088 | fulfilled | Q0026 released via DEC-0107; retain |
-| R-0085 | fulfilled | S0019 released via DEC-0098..0103; retain |
-| R-0080 | fulfilled | Intake bundle complete; retain |
-| Unlinked entries | none flagged | No prune candidates this cycle |
+| Category | Count |
+|----------|-------|
+| OPEN stories | 0 |
+| OPEN bugs | 0 |
+| Open epics | 0 |
 
-No entries marked outdated. No duplicate merges required.
+**Backlog drain:** COMPLETE — all work items released.
 
 ---
 
-## Closed segment evidence (BUG-0021)
+## Segment closure
 
-- Release: `handoffs/releases/Q0029-release-notes.md`, `sprints/quick/Q0029/release-findings.md`
-- Verify-work: `sprints/quick/Q0029/uat.json` (1 pass, 6 pass_with_prerequisites, 0 fail)
-- Execute/QA: `sprints/quick/Q0029/qa-findings.md`, `handoffs/dev_to_qa.md`, `handoffs/qa_to_verify_work.md`
-- Decisions: DEC-0110 (static CategoryFilter BK surfaces), DEC-0111 (COALESCE account_role + label map)
-- Research: R-0091 (chunk-bound EA + attributes path EB)
-- Operator gates: BACKEND_FRONTEND_DEPLOY deferred AUTHENTIK_SECRET_KEY; optional SNAPSHOT_UPSERT_OR_SYNC for BL oracle
+**US-0022 / S0021** — CLOSED
 
----
-
-## Bug queue status
-
-| Metric | Value |
-|--------|-------|
-| `closed_bug_id` | BUG-0021 |
-| `bug_queue_remaining` | **0** |
-| `bug_queue_ids` | (empty) |
-| `open_stories_remaining` | **0** |
-| `intake_bundle` | `intake-20260609-ui-audit` — **drain complete** |
-| `stop_reason` | completed (segment closed; bug queue drained) |
-
-**Recommended next:** **idle** — await new intake (`/intake` or operator story)
-
-**Operator follow-up (optional):** **BACKEND_FRONTEND_DEPLOY** to ship Q0029 EA/EB changes; **SNAPSHOT_UPSERT_OR_SYNC** for BL snapshot/Grafana oracle; prior BUG-0020 deploy/migration smoke still deferred.
+- **Release version:** `0.22.0-us0022`
+- **Release date:** 2026-06-14
+- **Release notes:** `handoffs/releases/S0021-release-notes.md`
+- **UAT verdict:** PASS-WITH-PREREQUISITES (6 pass / 2 pass-with-prerequisites / 0 fail)
+- **Acceptance:** AC-1..AC-6 checked (live AC-5/AC-6 operator-deferred BACKEND_FRONTEND_DEPLOY)
+- **Test results:** cargo lib 221/221; meta_test 3/3; npm 31/31; build PASS
+- **Gates:** check-in_test:pass; qa:pass; uat:pass-with-prerequisites; isolation:pass; runtime_proof:pass; legacy_drift:pass; readme_feature:pass(advisory); project_readme:pass; user_guide:pass
+- **Operator gates pending:** BACKEND_FRONTEND_DEPLOY (live stale-detection browser smoke + OIDC external profile smoke)
 
 ---
 
-## Isolation
+## State compaction
 
-- Curator subagent; fresh context; artifact/handoff reads only
-- No prior chat history consumed
-- No host `.env`, `.env_prod`, or operator secret files read
+**Session status updated:**
+- Phase: REFRESH-CONTEXT COMPLETE
+- Active story/bug/sprint: none
+- Backlog: empty
+- Orchestrator: idle (await new intake)
 
-**Fresh context marker:** `refresh-context-20260611-bug0021-curator-fresh`  
-**Runtime proof:** `runtime-proof-refresh-context-20260611-bug0021-001`
+**Progress snapshot:**
+- Retained: latest 10 checkpoints (S0021 US-0022 lifecycle)
+- Archived: older checkpoints to state-archive packs
+
+**Active context surface:**
+- Archive index updated with US-0022 refresh rollover prefix
+
+---
+
+## DEC-0038 proof
+
+**Isolation evidence:**
+- Fresh context: yes (no prior chat history)
+- Artifact reads: state.md, decisions.md, resume_brief.md, release notes, uat.json, scratchpad
+- Triad enforcement: rollover + check
+- No new work initiated: confirmed
+- No host secrets read: confirmed
+
+**Phase boundary:**
+- All phases complete: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
+- Segment closed: yes
+- Next phase: none (backlog empty)
+
+---
+
+## Next work hint
+
+**Backlog empty** — orchestrator idle.
+
+- Await new intake (story or bug) from operator
+- Or await operator directive (research, refactor, documentation)
+- Operator-deferred gates: BACKEND_FRONTEND_DEPLOY (live smoke for US-0022 AC-5/AC-6)
+
+---
+
+## Artifacts updated
+
+- `docs/engineering/state.md`: session status + progress snapshot + checkpoint + isolation evidence + DEC-0038 proof + phase boundary
+- `docs/engineering/state-archive/state-pack-20260614-b.md`: archived checkpoints (rollover unit 1)
+- `docs/engineering/state-archive/state-pack-20260614-c.md`: archived checkpoints (rollover unit 2)
+- `handoffs/curator_refresh.md`: this file
+- `handoffs/resume_brief.md`: refreshed for segment-complete idle state
+
+---
+
+## Stop condition
+
+**REFRESH-CONTEXT COMPLETE** — segment closed; backlog empty; no further phases.
+
+Orchestrator will check backlog for next item or await operator directive.

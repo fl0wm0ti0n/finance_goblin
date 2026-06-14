@@ -1,0 +1,75 @@
+{
+  "id": "Q0031",
+  "type": "quick",
+  "bug_ids": ["BUG-0022"],
+  "status": "PLANNED",
+  "created": "2026-06-13",
+  "goal": "Close BUG-0022 plan delete selector regression: invert activePlanId useMemo so selectedPlanId wins over global is_active (BM1); vitest selector + delete enablement (T1); automated gate (G1); operator verify-work BM/BN on /planning + OIDC (V1). Frontend-only; extends DEC-0082.",
+  "scope": [
+    "BM1: invert useMemo priority in PlanningPage.tsx — selectedPlanId ?? globalActive ?? firstPlan",
+    "T1: extract resolveDisplayedPlanId + isDeleteDisabled; vitest BM/BN guard cases",
+    "G1: npm test + npm run build automated gate",
+    "V1: verify-work /planning BM/BN + OIDC smoke",
+    "L1: optional dropdown label Active plan → Plan (P2)"
+  ],
+  "risks": [
+    "Stale selectedPlanId after external delete — existing mutation clears id; plans refetch",
+    "Identifier activePlanId misleading post-fix — optional L1 label or rename deferred",
+    "Single-plan operator cannot delete — DEC-0082 §Risks acceptable; tooltip explains",
+    "Browser automation empty SPA (discovery) — BM/BN verified via vitest + API + operator V1",
+    "Accidental backend touch — frozen; no plans.rs or plan/service.rs changes"
+  ],
+  "task_count": 4,
+  "mandatory_task_count": 4,
+  "conditional_task_ids": [],
+  "optional_task_ids": ["L1"],
+  "estimate_total_hours": 5,
+  "decisions": ["DEC-0082", "DEC-0024", "DEC-0074"],
+  "research": ["R-0094"],
+  "acceptance_rows": ["BM", "BN"],
+  "user_guide_mode": {
+    "enabled": true,
+    "waived": true,
+    "reason": "bug regression fix; no new operator workflow"
+  },
+  "execute_order": ["BM1", "T1", "G1", "V1", "L1"],
+  "gated_tasks": ["V1"],
+  "operator_gates": [
+    {
+      "id": "FRONTEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "description": "Rebuild frontend only — no migration; BM1 selector fix must be live on target environment"
+    }
+  ],
+  "acceptance_mapping": {
+    "BM": {
+      "tasks": ["BM1", "T1", "G1", "V1"],
+      "verify": "2+ plans with one global active; select non-active in dropdown → Delete plan enabled; confirm modal removes plan; list refreshes — not permanently disabled when global active exists"
+    },
+    "BN": {
+      "tasks": ["BM1", "T1", "G1", "V1"],
+      "verify": "Select globally active plan → delete disabled + tooltip per DEC-0082; DELETE /api/v1/plans/:id active → 409 active_plan_delete_forbidden; OIDC-enabled deploy regression pass"
+    }
+  },
+  "waived_ops_only": {
+    "backend_plans_api": "No backend change — DEC-0082 409 guard intact",
+    "pva_endpoint": "PVA tab uses /api/v1/plans/active/plan-vs-actual — decoupled from dropdown",
+    "sole_plan_delete": "DEC-0082 §Risks — single active plan delete blocked acceptable",
+    "grafana": "No Grafana changes",
+    "new_dec": "GATE-DEC-1 closed — no new DEC"
+  },
+  "deploy_order": [
+    "BM1 invert useMemo priority",
+    "T1 planSelector vitest",
+    "G1 automated gate",
+    "FRONTEND_DEPLOY",
+    "V1 verify-work smoke",
+    "L1 optional label rename"
+  ],
+  "rollback": "git revert PlanningPage.tsx + planSelector files; frontend-only — no migration",
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260613-bug0022-q0031",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0022",
+  "spec_pack_ref": "docs/engineering/spec-pack/BUG-0022-technical-specification.md",
+  "orchestrator_run_id": "auto-20260613-bug0022"
+}

@@ -11,13 +11,19 @@ import {
   fetchCategories,
   fetchDiscover,
   fetchOperatorTags,
+  fetchTransactionSearch,
   ForecastAccount,
   OperatorTag,
+  previewTransactionGroup,
+  PreviewGroupResponse,
   renameOperatorTag,
   SubscriptionAlert,
   SubscriptionPattern,
   SubscriptionUnreadCount,
+  TransactionSearchItem,
 } from "../lib/api";
+import { CategoryFilter } from "../components/category/CategoryFilter";
+import { formatAccountRole } from "../lib/accountRole";
 
 const PriceHistoryChart = lazy(() =>
   import("../components/subscriptions/PriceHistoryChart").then((m) => ({
@@ -26,6 +32,16 @@ const PriceHistoryChart = lazy(() =>
 );
 
 type Tab = "all" | "pending" | "standing" | "discover";
+type DiscoverMode = "transactions" | "patterns";
+
+const ACCOUNT_ROLE_OPTIONS = [
+  { value: "", label: "Any Geldbereich" },
+  { value: "defaultAsset", label: "Checking" },
+  { value: "cashWalletAsset", label: "Cash wallet" },
+  { value: "savingAsset", label: "Savings" },
+  { value: "sharedAsset", label: "Shared" },
+  { value: "ccAsset", label: "Credit card" },
+] as const;
 
 const INTERVAL_BUCKETS = [
   { label: "Weekly", days: 7 },
@@ -73,10 +89,21 @@ export function SubscriptionsPage() {
 
   const [discoverAccountId, setDiscoverAccountId] = useState("");
   const [discoverPayee, setDiscoverPayee] = useState("");
+  const [discoverMode, setDiscoverMode] = useState<DiscoverMode>("transactions");
   const [discoverInterval, setDiscoverInterval] = useState<number | "" | "custom">("");
   const [discoverCustomInterval, setDiscoverCustomInterval] = useState("");
   const [discoverSearched, setDiscoverSearched] = useState(false);
   const [discoverConfirm, setDiscoverConfirm] = useState<DiscoverCandidate | null>(null);
+
+  const [txCategoryId, setTxCategoryId] = useState("");
+  const [txAccountRole, setTxAccountRole] = useState("");
+  const [txDateFrom, setTxDateFrom] = useState("");
+  const [txDateTo, setTxDateTo] = useState("");
+  const [txRecurringHint, setTxRecurringHint] = useState(true);
+  const [txPage, setTxPage] = useState(1);
+  const [txSearched, setTxSearched] = useState(false);
+  const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set());
+  const [txPreviewConfirm, setTxPreviewConfirm] = useState<PreviewGroupResponse | null>(null);
 
   const accountsQuery = useQuery({
     queryKey: ["forecast-accounts"],
@@ -144,7 +171,33 @@ export function SubscriptionsPage() {
         interval_days: interval,
       });
     },
-    enabled: discoverSearched && !!discoverAccountId && tab === "discover",
+    enabled: discoverSearched && !!discoverAccountId && tab === "discover" && discoverMode === "patterns",
+  });
+
+  const txSearchQuery = useQuery({
+    queryKey: [
+      "subscriptions-tx-search",
+      discoverAccountId,
+      discoverPayee,
+      txCategoryId,
+      txAccountRole,
+      txDateFrom,
+      txDateTo,
+      txRecurringHint,
+      txPage,
+    ],
+    queryFn: () =>
+      fetchTransactionSearch({
+        account_id: discoverAccountId,
+        payee: discoverPayee || undefined,
+        category_id: txCategoryId || undefined,
+        account_role: txAccountRole || undefined,
+        date_from: txDateFrom || undefined,
+        date_to: txDateTo || undefined,
+        recurring_hint: txRecurringHint,
+        page: txPage,
+      }),
+    enabled: txSearched && !!discoverAccountId && tab === "discover" && discoverMode === "transactions",
   });
 
   const pendingQuery = useQuery({
@@ -229,6 +282,33 @@ export function SubscriptionsPage() {
       queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
       queryClient.invalidateQueries({ queryKey: ["subscriptions-discover"] });
       setDiscoverConfirm(null);
+      setToast(data.merged ? "Merged with existing confirmed subscription." : "Subscription confirmed.");
+    },
+  });
+
+  const txPreviewMutation = useMutation({
+    mutationFn: (ids: string[]) => previewTransactionGroup(ids),
+    onSuccess: (preview) => {
+      setConfirmKind("subscription");
+      setTxPreviewConfirm(preview);
+    },
+    onError: () => setToast("Could not preview selected transactions — check payee match"),
+  });
+
+  const txConfirmMutation = useMutation({
+    mutationFn: (preview: PreviewGroupResponse) =>
+      confirmDiscoverCandidate({
+        payee_key: preview.payee_key,
+        interval_days: preview.interval_days,
+        median_amount: preview.median_amount,
+        transaction_ids: preview.transaction_ids,
+        kind: confirmKind,
+      }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+      queryClient.invalidateQueries({ queryKey: ["subscriptions-tx-search"] });
+      setTxPreviewConfirm(null);
+      setSelectedTxIds(new Set());
       setToast(data.merged ? "Merged with existing confirmed subscription." : "Subscription confirmed.");
     },
   });
@@ -395,8 +475,30 @@ export function SubscriptionsPage() {
 
       {tab === "discover" && (
         <div className="card" style={{ marginBottom: "1rem" }}>
-          <h2>Discover recurring candidates</h2>
-          <p>Search expense transactions for recurring patterns not yet confirmed. Account is required.</p>
+          <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+            {(["transactions", "patterns"] as DiscoverMode[]).map((mode) => (
+              <button
+                key={mode}
+                className={`btn ${discoverMode === mode ? "active" : ""}`}
+                type="button"
+                onClick={() => setDiscoverMode(mode)}
+              >
+                {mode === "transactions" ? "Transactions" : "Suggested patterns"}
+              </button>
+            ))}
+          </div>
+
+          <h2>
+            {discoverMode === "transactions"
+              ? "Search transactions"
+              : "Suggested recurring patterns"}
+          </h2>
+          <p>
+            {discoverMode === "transactions"
+              ? "Browse individual expense transactions with rich filters. Select multiple rows to activate manually."
+              : "Search expense transactions for recurring pattern candidates not yet confirmed. Account is required."}
+          </p>
+
           <div style={{ display: "grid", gap: "1rem", marginTop: "1rem" }}>
             <label>
               Account (required)
@@ -423,96 +525,290 @@ export function SubscriptionsPage() {
                 style={{ display: "block", marginTop: "0.25rem", width: "100%", maxWidth: "24rem" }}
               />
             </label>
-            <label>
-              Interval bucket
-              <select
-                value={discoverInterval === "" ? "" : discoverInterval === "custom" ? "custom" : String(discoverInterval)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "") setDiscoverInterval("");
-                  else if (v === "custom") setDiscoverInterval("custom");
-                  else setDiscoverInterval(Number(v));
-                }}
-                style={{ display: "block", marginTop: "0.25rem" }}
-              >
-                <option value="">Any interval</option>
-                {INTERVAL_BUCKETS.map((b) => (
-                  <option key={b.days} value={b.days}>
-                    {b.label} ({b.days}d)
-                  </option>
-                ))}
-                <option value="custom">Custom</option>
-              </select>
-            </label>
-            {discoverInterval === "custom" && (
-              <label>
-                Custom interval (days)
-                <input
-                  type="number"
-                  min={1}
-                  value={discoverCustomInterval}
-                  onChange={(e) => setDiscoverCustomInterval(e.target.value)}
-                  style={{ display: "block", marginTop: "0.25rem", width: "8rem" }}
-                />
-              </label>
+
+            {discoverMode === "transactions" && (
+              <>
+                <div>
+                  <span style={{ display: "block", marginBottom: "0.25rem" }}>Category</span>
+                  <CategoryFilter
+                    value={txCategoryId}
+                    onChange={setTxCategoryId}
+                    allowAll
+                  />
+                </div>
+                <label>
+                  Geldbereich
+                  <select
+                    value={txAccountRole}
+                    onChange={(e) => setTxAccountRole(e.target.value)}
+                    style={{ display: "block", marginTop: "0.25rem", minWidth: "16rem" }}
+                  >
+                    {ACCOUNT_ROLE_OPTIONS.map((opt) => (
+                      <option key={opt.value || "any"} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+                  <label>
+                    Date from
+                    <input
+                      type="date"
+                      value={txDateFrom}
+                      onChange={(e) => setTxDateFrom(e.target.value)}
+                      style={{ display: "block", marginTop: "0.25rem" }}
+                    />
+                  </label>
+                  <label>
+                    Date to
+                    <input
+                      type="date"
+                      value={txDateTo}
+                      onChange={(e) => setTxDateTo(e.target.value)}
+                      style={{ display: "block", marginTop: "0.25rem" }}
+                    />
+                  </label>
+                </div>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <input
+                    type="checkbox"
+                    checked={txRecurringHint}
+                    onChange={(e) => setTxRecurringHint(e.target.checked)}
+                  />
+                  Show recurring hints on results
+                </label>
+              </>
             )}
+
+            {discoverMode === "patterns" && (
+              <>
+                <label>
+                  Interval bucket
+                  <select
+                    value={
+                      discoverInterval === ""
+                        ? ""
+                        : discoverInterval === "custom"
+                          ? "custom"
+                          : String(discoverInterval)
+                    }
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "") setDiscoverInterval("");
+                      else if (v === "custom") setDiscoverInterval("custom");
+                      else setDiscoverInterval(Number(v));
+                    }}
+                    style={{ display: "block", marginTop: "0.25rem" }}
+                  >
+                    <option value="">Any interval</option>
+                    {INTERVAL_BUCKETS.map((b) => (
+                      <option key={b.days} value={b.days}>
+                        {b.label} ({b.days}d)
+                      </option>
+                    ))}
+                    <option value="custom">Custom</option>
+                  </select>
+                </label>
+                {discoverInterval === "custom" && (
+                  <label>
+                    Custom interval (days)
+                    <input
+                      type="number"
+                      min={1}
+                      value={discoverCustomInterval}
+                      onChange={(e) => setDiscoverCustomInterval(e.target.value)}
+                      style={{ display: "block", marginTop: "0.25rem", width: "8rem" }}
+                    />
+                  </label>
+                )}
+              </>
+            )}
+
             <button
               className="btn"
               disabled={!discoverAccountId}
-              onClick={() => setDiscoverSearched(true)}
+              onClick={() => {
+                if (discoverMode === "transactions") {
+                  setTxPage(1);
+                  setTxSearched(true);
+                  setSelectedTxIds(new Set());
+                } else {
+                  setDiscoverSearched(true);
+                }
+              }}
             >
               Search
             </button>
           </div>
-          {discoverSearched && discoverQuery.isLoading && <p style={{ marginTop: "1rem" }}>Searching…</p>}
-          {discoverQuery.data?.meta.truncated && (
-            <p style={{ marginTop: "1rem", color: "#b45309" }}>
-              Showing top {discoverQuery.data.meta.limit} candidates — refine payee or interval to narrow results.
-            </p>
+
+          {discoverMode === "patterns" && (
+            <>
+              {discoverSearched && discoverQuery.isLoading && (
+                <p style={{ marginTop: "1rem" }}>Searching…</p>
+              )}
+              {discoverQuery.data?.meta.truncated && (
+                <p style={{ marginTop: "1rem", color: "#b45309" }}>
+                  Showing top {discoverQuery.data.meta.limit} candidates — refine payee or interval
+                  to narrow results.
+                </p>
+              )}
+              {discoverSearched && !discoverQuery.isLoading && (
+                <table style={{ marginTop: "1rem", width: "100%" }}>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Interval</th>
+                      <th>Median</th>
+                      <th>Confidence</th>
+                      <th>Tx count</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(discoverQuery.data?.candidates ?? []).map((c) => (
+                      <tr key={`${c.payee_key}-${c.interval_days}-${c.median_amount}`}>
+                        <td>{c.display_name}</td>
+                        <td>{intervalLabel(c.interval_days)}</td>
+                        <td>€{Math.abs(c.median_amount).toFixed(2)}</td>
+                        <td>
+                          <span className={confidenceClass(c.confidence_pct)}>
+                            {c.confidence_pct}%
+                          </span>
+                        </td>
+                        <td>{c.transaction_count}</td>
+                        <td>
+                          <button
+                            className="btn"
+                            onClick={() => {
+                              setConfirmKind("subscription");
+                              setDiscoverConfirm(c);
+                            }}
+                          >
+                            Confirm
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {discoverSearched &&
+                !discoverQuery.isLoading &&
+                (discoverQuery.data?.candidates.length ?? 0) === 0 && (
+                  <p style={{ marginTop: "1rem" }}>No candidates match your filters.</p>
+                )}
+            </>
           )}
-          {discoverSearched && !discoverQuery.isLoading && (
-            <table style={{ marginTop: "1rem", width: "100%" }}>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Interval</th>
-                  <th>Median</th>
-                  <th>Confidence</th>
-                  <th>Tx count</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {(discoverQuery.data?.candidates ?? []).map((c) => (
-                  <tr key={`${c.payee_key}-${c.interval_days}-${c.median_amount}`}>
-                    <td>{c.display_name}</td>
-                    <td>{intervalLabel(c.interval_days)}</td>
-                    <td>€{Math.abs(c.median_amount).toFixed(2)}</td>
-                    <td>
-                      <span className={confidenceClass(c.confidence_pct)}>{c.confidence_pct}%</span>
-                    </td>
-                    <td>{c.transaction_count}</td>
-                    <td>
-                      <button
-                        className="btn"
-                        onClick={() => {
-                          setConfirmKind("subscription");
-                          setDiscoverConfirm(c);
-                        }}
-                      >
-                        Confirm
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+          {discoverMode === "transactions" && (
+            <>
+              {txSearched && txSearchQuery.isLoading && (
+                <p style={{ marginTop: "1rem" }}>Searching…</p>
+              )}
+              {(txSearchQuery.data?.meta.truncated ||
+                txSearchQuery.data?.meta.truncated_hint_scan) && (
+                <p style={{ marginTop: "1rem", color: "#b45309" }}>
+                  Showing up to {txSearchQuery.data?.meta.limit ?? 100} transactions per page —
+                  refine filters or narrow account.
+                  {txSearchQuery.data?.meta.truncated_hint_scan &&
+                    " Hint scan capped at 500 transactions."}
+                </p>
+              )}
+              {txSearched && !txSearchQuery.isLoading && selectedTxIds.size >= 2 && (
+                <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+                  <button
+                    className="btn"
+                    disabled={txPreviewMutation.isPending}
+                    onClick={() => txPreviewMutation.mutate([...selectedTxIds])}
+                  >
+                    Activate selected ({selectedTxIds.size})
+                  </button>
+                  <button className="btn" type="button" onClick={() => setSelectedTxIds(new Set())}>
+                    Clear selection
+                  </button>
+                </div>
+              )}
+              {txSearched && !txSearchQuery.isLoading && (
+                <table style={{ marginTop: "1rem", width: "100%" }}>
+                  <thead>
+                    <tr>
+                      <th />
+                      <th>Date</th>
+                      <th>Description</th>
+                      <th>Amount</th>
+                      <th>Category</th>
+                      <th>Geldbereich</th>
+                      <th>Hint</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(txSearchQuery.data?.transactions ?? []).map((tx: TransactionSearchItem) => (
+                      <tr key={tx.firefly_id}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedTxIds.has(tx.firefly_id)}
+                            onChange={(e) => {
+                              const next = new Set(selectedTxIds);
+                              if (e.target.checked) next.add(tx.firefly_id);
+                              else next.delete(tx.firefly_id);
+                              setSelectedTxIds(next);
+                            }}
+                          />
+                        </td>
+                        <td>{tx.date}</td>
+                        <td>{tx.description ?? "—"}</td>
+                        <td>€{Math.abs(tx.amount).toFixed(2)}</td>
+                        <td>{tx.category_name ?? categoryLabel(tx.category_id, categoryMap)}</td>
+                        <td>{formatAccountRole(tx.account_role)}</td>
+                        <td>
+                          {tx.recurring_hint ? (
+                            <span
+                              className={confidenceClass(tx.recurring_hint.confidence_pct)}
+                              title={`${intervalLabel(tx.recurring_hint.interval_days)} · ${tx.recurring_hint.confidence_pct}%`}
+                            >
+                              {intervalLabel(tx.recurring_hint.interval_days)}{" "}
+                              {tx.recurring_hint.confidence_pct}%
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {txSearched &&
+                !txSearchQuery.isLoading &&
+                (txSearchQuery.data?.transactions.length ?? 0) === 0 && (
+                  <p style={{ marginTop: "1rem" }}>No transactions match your filters.</p>
+                )}
+              {txSearched && txSearchQuery.data?.meta.has_more && (
+                <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+                  <button
+                    className="btn"
+                    disabled={txPage <= 1}
+                    onClick={() => setTxPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </button>
+                  <span style={{ alignSelf: "center" }}>
+                    Page {txSearchQuery.data.meta.page} · {txSearchQuery.data.meta.total_count}{" "}
+                    total
+                  </span>
+                  <button
+                    className="btn"
+                    disabled={!txSearchQuery.data.meta.has_more}
+                    onClick={() => setTxPage((p) => p + 1)}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
           )}
-          {discoverSearched &&
-            !discoverQuery.isLoading &&
-            (discoverQuery.data?.candidates.length ?? 0) === 0 && (
-              <p style={{ marginTop: "1rem" }}>No candidates match your filters.</p>
-            )}
         </div>
       )}
 
@@ -678,6 +974,42 @@ export function SubscriptionsPage() {
                 Confirm
               </button>
               <button className="btn" onClick={() => setDiscoverConfirm(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {txPreviewConfirm && (
+        <div className="modal-overlay" onClick={() => setTxPreviewConfirm(null)}>
+          <div className="card modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Confirm selected transactions</h2>
+            <p>
+              {txPreviewConfirm.payee_key} · {intervalLabel(txPreviewConfirm.interval_days)} · €
+              {Math.abs(txPreviewConfirm.median_amount).toFixed(2)} ·{" "}
+              {txPreviewConfirm.transaction_ids.length} transactions
+            </p>
+            <label>
+              Kind
+              <select
+                value={confirmKind}
+                onChange={(e) => setConfirmKind(e.target.value as "subscription" | "standing_order")}
+                style={{ display: "block", marginTop: "0.5rem" }}
+              >
+                <option value="subscription">Subscription</option>
+                <option value="standing_order">Standing order</option>
+              </select>
+            </label>
+            <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+              <button
+                className="btn"
+                disabled={txConfirmMutation.isPending}
+                onClick={() => txConfirmMutation.mutate(txPreviewConfirm)}
+              >
+                Confirm
+              </button>
+              <button className="btn" onClick={() => setTxPreviewConfirm(null)}>
                 Cancel
               </button>
             </div>

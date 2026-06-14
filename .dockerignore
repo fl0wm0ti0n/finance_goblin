@@ -1,0 +1,13 @@
+backend/target
+frontend/node_modules
+frontend/dist
+.git
+**/*.md
+docs
+sprints
+handoffs
+milestones
+decisions
+.cursor
+node_modules
+*.log

@@ -7,6 +7,11 @@ Canonical sprint history lives under:
 - `handoffs/releases/Sxxxx-release-notes.md`
 
 Canonical quick-task / bug-fix history:
+- `handoffs/releases/Q0034-release-notes.md` (BUG-0025)
+- `handoffs/releases/Q0033-release-notes.md` (BUG-0024)
+- `handoffs/releases/Q0032-release-notes.md` (BUG-0026)
+- `handoffs/releases/Q0031-release-notes.md` (BUG-0022)
+- `handoffs/releases/Q0030-release-notes.md` (BUG-0023)
 - `handoffs/releases/Q0029-release-notes.md` (BUG-0021)
 - `handoffs/releases/Q0028-release-notes.md` (BUG-0020)
 - `handoffs/releases/Q0027-release-notes.md` (BUG-0019)
@@ -37,16 +42,46 @@ Canonical queue state:
 
 ## Latest finalized release pointer
 
-- **Latest released sprint:** S0019
-- **Latest sprint notes:** [handoffs/releases/S0019-release-notes.md](releases/S0019-release-notes.md)
-- **Latest sprint date:** 2026-06-10
-- **Latest sprint story:** US-0020
-- **Sprint release version:** `0.20.0-us0020`
-- **Open stories:** (empty — intake bundle backlog drain complete)
-- **Open bug queue:** (empty — intake bundle drain complete)
+- **Latest released sprint:** S0021
+- **Latest sprint notes:** [handoffs/releases/S0021-release-notes.md](releases/S0021-release-notes.md)
+- **Latest sprint date:** 2026-06-14
+- **Latest sprint story:** US-0022
+- **Sprint release version:** `0.22.0-us0022`
+- **Open stories:** (empty — US-0022 DONE)
+- **Open bug queue:** (empty)
 
-- **Latest released quick task:** Q0029 / BUG-0021 (2026-06-11)
-- **Latest quick-task notes:** [handoffs/releases/Q0029-release-notes.md](releases/Q0029-release-notes.md)
+- **Latest released quick task:** Q0034 / BUG-0025 (2026-06-14)
+- **Latest quick-task notes:** [handoffs/releases/Q0034-release-notes.md](releases/Q0034-release-notes.md)
+- **Bug status:** DONE; acceptance BW, BX, BY checked (live operator-deferred)
+- **Release version:** `bug0025-q0034`
+
+- **Latest sprint release:** S0021 / US-0022 (2026-06-14)
+- **Latest sprint notes:** [handoffs/releases/S0021-release-notes.md](releases/S0021-release-notes.md)
+- **Story status:** DONE; acceptance AC-1..AC-6 checked (AC-5/AC-6 live operator-deferred BACKEND_FRONTEND_DEPLOY)
+- **Release version:** `0.22.0-us0022`
+
+- **Prior quick task:** Q0033 / BUG-0024 (2026-06-13)
+- **Latest quick-task notes:** [handoffs/releases/Q0033-release-notes.md](releases/Q0033-release-notes.md)
+- **Bug status:** DONE; acceptance BR, BS checked (BS browser deploy operator-deferred)
+- **Release version:** `bug0024-q0033`
+
+- **Prior quick task:** Q0032 / BUG-0026 (2026-06-13)
+- **Prior quick-task notes:** [handoffs/releases/Q0032-release-notes.md](releases/Q0032-release-notes.md)
+- **Bug status:** DONE; acceptance BZ, CA checked (browser deploy operator-deferred)
+- **Release version:** `bug0026-q0032`
+
+- **Prior quick task:** Q0031 / BUG-0022 (2026-06-13)
+- **Prior quick-task notes:** [handoffs/releases/Q0031-release-notes.md](releases/Q0031-release-notes.md)
+- **Bug status:** DONE; acceptance BM, BN checked (browser deploy operator-deferred)
+- **Release version:** `bug0022-q0031`
+
+- **Prior quick task:** Q0030 / BUG-0023 (2026-06-12)
+- **Prior quick-task notes:** [handoffs/releases/Q0030-release-notes.md](releases/Q0030-release-notes.md)
+- **Bug status:** DONE; acceptance BO, BP, BQ checked (live API/UI deploy operator-deferred)
+- **Release version:** `bug0023-q0030`
+
+- **Prior quick task:** Q0029 / BUG-0021 (2026-06-11)
+- **Prior quick-task notes:** [handoffs/releases/Q0029-release-notes.md](releases/Q0029-release-notes.md)
 - **Bug status:** DONE; acceptance BK, BL checked (browser/API/snapshot deploy operator-deferred)
 - **Release version:** `bug0021-q0029`
 
@@ -74,7 +109,67 @@ Canonical queue state:
 
 No rows with `status=unreleased` or `status=blocked`. See `handoffs/release_queue.md` for full queue.
 
-## Latest operator summary (Run/Connect/Verify) — BUG-0020 / Q0028
+## Latest operator summary (Run/Connect/Verify) — US-0022 / S0021
+
+- **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai` (backend + frontend rebuild; no migration)
+- **Verify:** `cd backend && cargo test --lib && cargo test --test meta_test`; `cd frontend && npm test && npm run build`; operator smoke per `sprints/S0021/uat.json`
+- **Endpoint:** `http://localhost:18080/api/v1/meta/build-info` (public metadata); sidebar footer stamp visible after login
+- **Full steps:** [handoffs/releases/S0021-release-notes.md](releases/S0021-release-notes.md)
+
+## Prior operator summary — BUG-0025 / Q0034
+
+- **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai` (backend + frontend rebuild; no migration)
+- **Sync:** Manual **Sync now** on `/sync` after deploy (365-day lookback)
+- **Verify:** `cd backend && cargo test --lib && cargo test --test bug0025_sync_transaction_window`; `cd frontend && npm test && npm run build`; operator smoke per `sprints/quick/Q0034/uat.json`
+- **Endpoint:** `http://localhost:18080/sync` / `http://localhost:18080/forecast` / `https://financegnome.omniflow.cc`
+- **Full steps:** [handoffs/releases/Q0034-release-notes.md](releases/Q0034-release-notes.md)
+
+## Prior operator summary — BUG-0024 / Q0033
+
+- **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai` (frontend rebuild only; no migration)
+- **Verify:** `cd frontend && npm test && npm run build` (31/31); operator smoke per `sprints/quick/Q0033/uat.json`
+- **Endpoint:** `http://localhost:18080/planning` / `https://financegnome.omniflow.cc`
+- **Full steps:** [handoffs/releases/Q0033-release-notes.md](releases/Q0033-release-notes.md)
+
+## Prior operator summary — BUG-0026 / Q0032
+
+- **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai` (frontend rebuild only; no migration)
+- **Verify:** `cd frontend && npm test && npm run build` (24/24); operator smoke per `sprints/quick/Q0032/uat.json`
+- **Endpoint:** `http://localhost:18080/forecast` / `https://financegnome.omniflow.cc`
+- **Full steps:** [handoffs/releases/Q0032-release-notes.md](releases/Q0032-release-notes.md)
+
+## Prior operator summary — US-0021 / S0020
+
+- **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai` (backend + frontend; no migration)
+- **Verify:** `cd backend && cargo test --lib && cargo test --test us0021_transaction_search` (221/221 + 6/6); `cd frontend && npm test && npm run build` (17/17); operator smoke per `sprints/S0020/uat.json`
+- **Endpoint:** `http://localhost:18080/subscriptions` / `https://financegnome.omniflow.cc`
+- **Full steps:** [handoffs/releases/S0020-release-notes.md](releases/S0020-release-notes.md)
+
+## Prior operator summary — BUG-0022 / Q0031
+
+- **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai` (frontend rebuild only; no migration)
+- **Verify:** `cd frontend && npm test && npm run build` (17/17); operator smoke per `sprints/quick/Q0031/uat.json`
+- **Endpoint:** `http://localhost:18080/planning` / `https://financegnome.omniflow.cc`
+- **Full steps:** [handoffs/releases/Q0031-release-notes.md](releases/Q0031-release-notes.md)
+
+## Prior operator summary — BUG-0023 / Q0030
+
+- **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai` (backend only; migration 017 auto-applies)
+- **Exchange sync:** `curl -X POST http://localhost:18080/api/v1/sync/trigger` (Bitunix wallet ingest)
+- **PnL recompute:** automatic post-sync; confirm `GET /api/v1/wealth` shows non-null `total_return_pct`
+- **Verify:** `cd backend && cargo test --test bug0023_crypto_wealth_eur` (4/4); operator smoke per `sprints/quick/Q0030/uat.json`
+- **Endpoint:** `http://localhost:18080/wealth` / `https://financegnome.omniflow.cc`
+- **Full steps:** [handoffs/releases/Q0030-release-notes.md](releases/Q0030-release-notes.md)
+
+## Prior operator summary — BUG-0021 / Q0029
+
+- **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai`
+- **Sync:** `curl -X POST http://localhost:18080/api/v1/sync/trigger` (optional snapshot upsert for BL oracle)
+- **Verify:** `cd backend && cargo test --test bug0021_wealth_account_role` (4/4); operator smoke per `sprints/quick/Q0029/uat.json`
+- **Endpoint:** `http://localhost:18080/forecast` / `http://localhost:18080/wealth` / `https://financegnome.omniflow.cc`
+- **Full steps:** [handoffs/releases/Q0029-release-notes.md](releases/Q0029-release-notes.md)
+
+## Prior operator summary — BUG-0020 / Q0028
 
 - **Prerequisite:** Fix `ForecastPage.tsx` TS6133 (`hasForecast` unused) — blocks `docker build`
 - **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai` (after TS6133 fix)
@@ -121,6 +216,7 @@ No rows with `status=unreleased` or `status=blocked`. See `handoffs/release_queu
 - Q0026 / BUG-0018: `handoffs/releases/Q0026-release-notes.md`
 - Q0025 / BUG-0017: `handoffs/releases/Q0025-release-notes.md`
 - S0019 / US-0020: `handoffs/releases/S0019-release-notes.md`
+- S0020 / US-0021: `handoffs/releases/S0020-release-notes.md`
 - S0018 / US-0019: `handoffs/releases/S0018-release-notes.md`
 - S0017 / US-0018: `handoffs/releases/S0017-release-notes.md`
 - Q0024 / BUG-0016: `handoffs/releases/Q0024-release-notes.md`

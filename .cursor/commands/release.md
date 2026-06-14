@@ -24,6 +24,10 @@ At the end of `/release`, append an isolation evidence entry to
 - `evidence_ref=<primary output ref>` (recommended: `sprints/Sxxxx/release-findings.md` and `handoffs/releases/Sxxxx-release-notes.md`)
 
 ## Inputs
+
+- **Narrow-read (US-0053 / US-0096 Tranche A)**: Start at docs/engineering/phase-context.md
+  and the story section anchor in vision/architecture/decisions when a heading exists; forbid
+  full-file reads when a section heading exists.
 - `sprints/Sxxxx/summary.md` (target sprint)
 - `sprints/Sxxxx/qa-findings.md` (target sprint)
 - `sprints/Sxxxx/release-findings.md` (target sprint; create/update during release gate evaluation)
@@ -252,6 +256,20 @@ Guardrails:
      `docs/engineering/context/readme-section-affinity.json`.
    - Active + `template/.cursor/commands/release.md` byte-identical step **3f**
      block (full-file parity per US-0017).
+3g. Project README coverage gate (US-0097 / DEC-0083):
+   - Read merged scratchpad `PROJECT_README_ENFORCE` (default `1` post-bootstrap).
+   - When `0`: skip with `PROJECT_README_ENFORCE_SKIPPED` evidence in
+     `sprints/Sxxxx/release-findings.md` § doc gates (migration/grandfathering only).
+   - When `1`: run
+     `python scripts/validate_project_readme_coverage.py --repo . --enforce`.
+   - On failure: emit `PROJECT_README_COVERAGE_BLOCKED` plus sub-codes
+     (`PROJECT_README_COVERAGE_GAP:<US-xxxx>`, `PROJECT_README_MIGRATION_AMBIGUOUS`,
+     `PROJECT_README_INPUT_INVALID`) on stderr; remediation lists each missing id.
+   - Gate order is strict: **3e → 3f (framework / US-0091) → 3g (project / US-0097) → 4 (UAT)**.
+     Framework and project enforce toggles are independent (`README_FEATURE_COVERAGE_ENFORCE`
+     vs `PROJECT_README_ENFORCE`).
+   - Active + `template/.cursor/commands/release.md` byte-identical step **3g**
+     block (full-file parity per US-0017).
 4. Verify UAT completeness (DEC-0009): confirm all sprint UAT artifacts (`uat.json`,
    `uat.md`) are in populated/verified state per DEC-0009. All steps must have
    recorded results. If any UAT is placeholder or incomplete, block release and
@@ -407,6 +425,24 @@ Guardrails:
       - `RELEASE_OPERATOR_HINTS_SECRET_EXPOSURE`
     - Remediation: populate required fields in canonical sprint notes with
       sanitized env-ref-only credential guidance, then rerun `/release`.
+19. Version changelog derivation (US-0100 / DEC-0085):
+    - Runs **only after** step **9** successful finalization (`unreleased → released`)
+      and step **18** operator hints (**US-0067**). Doc writes are **not** publish
+      execution — **`RELEASE_PUBLISH_MODE=disabled`** remains valid (**US-0054**).
+    - **19a — Resolve semver**: read target queue row **`release_version`**; when
+      blank, workflow-only release → **`[Unreleased]`** path only (no per-version file).
+    - **19b — Derive work items**: `derive_work_items` for target sprint + coalesce
+      peer **`released`** rows sharing normalized semver when semver known
+      (`coalesce_sprints_by_semver`).
+    - **19c — Write docs**: when semver known → `build_version_doc` +
+      `promote_unreleased` + `bind_queue_release_version`; else `append_unreleased`
+      only. Per-version SOT = `handoffs/releases/{semver}-release-notes.md` (stem
+      without leading **`v`**). Never pass `Sxxxx-release-notes.md` to **`gh -F`**.
+    - **19d — Validate (optional enforce)**: when scratchpad
+      **`RELEASE_CHANGELOG_ENFORCE=1`** (default **`1`** post-bootstrap), run
+      `python scripts/release_changelog_validate.py --repo . --enforce`; record
+      outcome in `sprints/Sxxxx/release-findings.md` § version-doc gates. When
+      **`0`**, report `skipped` evidence only.
 
 ## Fail-safe reason codes and remediation guidance
 

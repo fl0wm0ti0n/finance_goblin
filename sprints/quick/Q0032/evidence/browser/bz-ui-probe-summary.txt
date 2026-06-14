@@ -1,0 +1,16 @@
+UAT browser probe — BZ-UI / CA-UI (2026-06-13T14:42:00Z)
+navigation_url: http://localhost:18080/forecast
+account: 114 (Raiffeisenbank Giro EUR)
+tab: Monthly
+
+Observed (pre-FRONTEND_DEPLOY running container):
+- Income card: 0.00 (BUG-0026 repro — binds series[0] partial June)
+- Subtitle "Forecast for July 2026": NOT present (CA not yet live)
+- Category filter helper text present (DEC-0089 regression OK)
+- Chart area: non-zero income bars visible below cards (partial scroll)
+
+API oracle (same session):
+- GET /api/v1/forecast/monthly?account_id=114 → series[0] income 0.00, series[1] income 3266.16
+
+Verdict: pass_with_prerequisites — fix verified by vitest/code; live UI blocked on FRONTEND_DEPLOY
+reason_code: UAT_BROWSER_PROBE_FAILED (expected pre-deploy; not a regression of qa PASS)

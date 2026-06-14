@@ -1,0 +1,33 @@
+Verify-work browser probe — Q0033 / BUG-0024
+Date: 2026-06-13
+URL: http://localhost:18080/planning
+View ID: 7e8c11
+
+Plans API (GET /api/v1/plans):
+- discovery-scenario (23895c4c-99b8-43b4-af88-52ee0660ca06) is_active=false
+- test (75f21c4a-34b2-469f-ad46-949b4ec1847c) is_active=true
+
+BR-UI probe:
+- Selected discovery-scenario (non-active) in Active plan dropdown
+- Delete plan button: enabled (disabled=false)
+- PASS — multi-plan non-active delete enabled (Q0031 selector live)
+
+BN-regression probe:
+- Selected test (active)
+- Delete plan button: disabled
+- PASS — active plan delete guard intact
+
+BS-UI probe:
+- document.body.innerText hasSoleHint=false ("create another scenario" absent)
+- Environment has 2 plans (not sole-plan fixture); Q0033 inline hint bundle not yet deployed
+- Classified pass_with_prerequisites — vitest shouldShowSolePlanDeleteHint 7/7 PASS
+
+BR-API probe (curl):
+- DELETE /api/v1/plans/75f21c4a-34b2-469f-ad46-949b4ec1847c → HTTP 409
+- Body: {"error":"active_plan_delete_forbidden","message":"Cannot delete the active plan..."}
+- PASS
+
+OIDC-1 smoke:
+- GET /planning → HTTP 200
+- GET /api/v1/health → HTTP 200
+- GET /api/v1/plans → HTTP 200

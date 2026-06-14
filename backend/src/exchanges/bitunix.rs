@@ -125,7 +125,14 @@ impl BitunixConnector {
             let available = parse_f64_field(account, &["available", "avail"]).unwrap_or(0.0);
             let frozen = parse_f64_field(account, &["frozen", "freeze"]).unwrap_or(0.0);
             let margin = parse_f64_field(account, &["margin", "marginBalance"]).unwrap_or(0.0);
-            let sum = available + frozen + margin;
+            let cross_upnl =
+                parse_f64_field(account, &["crossUnrealizedPNL", "crossUnPnl"]).unwrap_or(0.0);
+            let isolation_upnl = parse_f64_field(
+                account,
+                &["isolationUnrealizedPNL", "isolationUnPnl"],
+            )
+            .unwrap_or(0.0);
+            let sum = available + frozen + margin + cross_upnl + isolation_upnl;
             if sum > 0.0 {
                 Some(sum)
             } else {
@@ -150,6 +157,8 @@ impl BitunixConnector {
             &[
                 "unrealizedPNL",
                 "unrealizedPnl",
+                "crossUnrealizedPNL",
+                "isolationUnrealizedPNL",
                 "crossUnPnl",
                 "unrealizedProfit",
                 "unPnl",
@@ -263,6 +272,42 @@ fn sort_query_params(query: &str) -> String {
     pairs.join("&")
 }
 
+fn bitunix_response_ok(body: &Value) -> bool {
+    match body.get("code") {
+        Some(code) => code.as_i64() == Some(0) || code.as_str() == Some("0"),
+        None => true,
+    }
+}
+
+fn warn_futures_wallet_parse_skip(body: &Value) {
+    let data = body.get("data").unwrap_or(body);
+    let account = resolve_futures_account(data);
+    let margin_coin = account
+        .get("marginCoin")
+        .or_else(|| data.get("marginCoin"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("<missing>");
+    let direct_keys = ["accountEquity", "totalEquity", "equity", "balance"];
+    let available = parse_f64_field(account, &["available", "avail"]).unwrap_or(0.0);
+    let frozen = parse_f64_field(account, &["frozen", "freeze"]).unwrap_or(0.0);
+    let margin = parse_f64_field(account, &["margin", "marginBalance"]).unwrap_or(0.0);
+    let cross_upnl =
+        parse_f64_field(account, &["crossUnrealizedPNL", "crossUnPnl"]).unwrap_or(0.0);
+    let isolation_upnl =
+        parse_f64_field(account, &["isolationUnrealizedPNL", "isolationUnPnl"]).unwrap_or(0.0);
+    warn!(
+        margin_coin = margin_coin,
+        equity_keys_tried = ?direct_keys,
+        available = available,
+        frozen = frozen,
+        margin = margin,
+        cross_unrealized_pnl = cross_upnl,
+        isolation_unrealized_pnl = isolation_upnl,
+        derived_sum = available + frozen + margin + cross_upnl + isolation_upnl,
+        "bitunix futures wallet parse skipped"
+    );
+}
+
 fn parse_f64_field(obj: &Value, keys: &[&str]) -> Option<f64> {
     for key in keys {
         if let Some(v) = obj.get(*key) {
@@ -349,8 +394,16 @@ impl ExchangeConnector for BitunixConnector {
                 .await
             {
                 Ok(futures_body) => {
-                    if let Some(h) = self.parse_futures_wallet(&futures_body) {
+                    if !bitunix_response_ok(&futures_body) {
+                        warn!(
+                            code = ?futures_body.get("code"),
+                            msg = ?futures_body.get("msg"),
+                            "bitunix futures wallet response rejected"
+                        );
+                    } else if let Some(h) = self.parse_futures_wallet(&futures_body) {
                         holdings.push(h);
+                    } else {
+                        warn_futures_wallet_parse_skip(&futures_body);
                     }
                 }
                 Err(e) => {
@@ -562,6 +615,168 @@ mod tests {
         let account = resolve_futures_account(&data);
         assert_eq!(account["marginCoin"], "USDT");
         assert_eq!(account["available"], "250.0");
+    }
+
+    #[tokio::test]
+    async fn sync_balances_futures_wallet_openapi_sample() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let creds = TestCreds::new("bal_openapi");
+        let spot_server = MockServer::start().await;
+        let futures_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/spot/v1/user/account"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": { "balances": [] }
+            })))
+            .mount(&spot_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/v1/futures/account"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "code": 0,
+                "msg": "success",
+                "data": [
+                    {
+                        "marginCoin": "USDT",
+                        "available": "1500.0",
+                        "frozen": "100.0",
+                        "margin": "200.0",
+                        "crossUnrealizedPNL": "150.0",
+                        "isolationUnrealizedPNL": "50.0"
+                    }
+                ]
+            })))
+            .mount(&futures_server)
+            .await;
+
+        let connector = BitunixConnector::new(creds.config(
+            &futures_server.uri(),
+            &spot_server.uri(),
+            true,
+        ));
+        let mut state = ExchangeSyncState::default();
+        let holdings = connector
+            .sync_balances(&mut state)
+            .await
+            .expect("sync balances");
+
+        assert_eq!(holdings.len(), 1);
+        assert_eq!(holdings[0].product_type, "futures");
+        assert_eq!(holdings[0].asset, "USDT");
+        assert_eq!(holdings[0].quantity, 2000.0);
+        assert_eq!(holdings[0].market_value_usd, Some(2000.0));
+        assert_eq!(holdings[0].unrealized_pnl, Some(150.0));
+    }
+
+    #[tokio::test]
+    async fn sync_balances_futures_wallet_empty_data_warns_no_row() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let creds = TestCreds::new("bal_empty");
+        let spot_server = MockServer::start().await;
+        let futures_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/spot/v1/user/account"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": { "balances": [] }
+            })))
+            .mount(&spot_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/v1/futures/account"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "code": 0,
+                "data": []
+            })))
+            .mount(&futures_server)
+            .await;
+
+        let connector = BitunixConnector::new(creds.config(
+            &futures_server.uri(),
+            &spot_server.uri(),
+            true,
+        ));
+        let mut state = ExchangeSyncState::default();
+        let holdings = connector
+            .sync_balances(&mut state)
+            .await
+            .expect("sync balances");
+
+        assert!(holdings.is_empty());
+    }
+
+    #[tokio::test]
+    async fn sync_balances_futures_wallet_code_nonzero_no_row() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let creds = TestCreds::new("bal_code");
+        let spot_server = MockServer::start().await;
+        let futures_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/spot/v1/user/account"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": { "balances": [] }
+            })))
+            .mount(&spot_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/v1/futures/account"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "code": 10001,
+                "msg": "invalid signature",
+                "data": [
+                    { "marginCoin": "USDT", "accountEquity": "2500.0" }
+                ]
+            })))
+            .mount(&futures_server)
+            .await;
+
+        let connector = BitunixConnector::new(creds.config(
+            &futures_server.uri(),
+            &spot_server.uri(),
+            true,
+        ));
+        let mut state = ExchangeSyncState::default();
+        let holdings = connector
+            .sync_balances(&mut state)
+            .await
+            .expect("sync balances");
+
+        assert!(holdings.is_empty());
+    }
+
+    #[test]
+    fn parse_futures_wallet_openapi_equity_fallback() {
+        let connector = BitunixConnector::new(BitunixConfig {
+            enabled: true,
+            api_key_env: "unused".into(),
+            api_secret_env: "unused".into(),
+            spot_base_url: "http://unused".into(),
+            futures_base_url: "http://unused".into(),
+            enabled_futures: true,
+        });
+        let body = serde_json::json!({
+            "code": 0,
+            "data": [
+                {
+                    "marginCoin": "USDT",
+                    "available": "1000",
+                    "frozen": "0",
+                    "margin": "500",
+                    "crossUnrealizedPNL": "300",
+                    "isolationUnrealizedPNL": "200"
+                }
+            ]
+        });
+        let holding = connector
+            .parse_futures_wallet(&body)
+            .expect("futures wallet row");
+        assert_eq!(holding.product_type, "futures");
+        assert_eq!(holding.quantity, 2000.0);
     }
 
     #[tokio::test]

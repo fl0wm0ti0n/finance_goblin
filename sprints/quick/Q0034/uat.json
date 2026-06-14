@@ -1,0 +1,156 @@
+{
+  "sprint_id": "Q0034",
+  "bug_id": "BUG-0025",
+  "phase": "verify-work",
+  "orchestrator_run_id": "auto-20260613-bug0025",
+  "decisions": ["DEC-0002"],
+  "research": ["R-0097"],
+  "acceptance_rows": ["BW", "BX", "BY"],
+  "acceptance_source": "docs/product/acceptance.md#BUG-0025",
+  "acceptance_mapping": {
+    "BW": {
+      "tasks": ["B1", "T1", "G1", "V1"],
+      "primary_verify": "Manual Full sync ingests multi-month Stromkosten; expense-series category 146 shows bars per month with data"
+    },
+    "BX": {
+      "tasks": ["B1", "D1", "F1", "G1", "V1"],
+      "primary_verify": "DEC-0002 limitation documented; manual Full or cursor reset remediation — not silent omission"
+    },
+    "BY": {
+      "tasks": ["B2", "F1", "G1", "V1"],
+      "primary_verify": "last_firefly_run hero; exchange secondary; Sync now → manual in history; trigger column distinguishes run kinds"
+    }
+  },
+  "verified_at": "2026-06-14T17:55:00Z",
+  "verdict": "PASS-WITH-PREREQUISITES",
+  "ready_for_verify_work": true,
+  "ready_for_release": true,
+  "operator_gates": [
+    {
+      "id": "BACKEND_REBUILD",
+      "status": "pending",
+      "action": "rebuild/restart backend — B1 + B2 live",
+      "notes": "Required before manual 365d ingest + last_firefly_run API smoke"
+    },
+    {
+      "id": "FRONTEND_DEPLOY",
+      "status": "pending",
+      "action": "rebuild frontend — F1 Sync Status UX live",
+      "notes": "Required before BX callout + BY hero smoke"
+    }
+  ],
+  "operator_prerequisites": [
+    "BACKEND_REBUILD — B1 manual 365d lookback + B2 last_firefly_run API must be live",
+    "FRONTEND_DEPLOY — F1 Sync Status hero + DEC-0002 callout must be live"
+  ],
+  "steps": [
+    {
+      "id": "BW-API",
+      "row": "BW",
+      "probe": "GET /api/v1/categories/expense-series?category_id=146 multi-month after manual Sync now",
+      "result": "pass_with_prerequisites",
+      "evidence": "Live API: only 2026-05 outflow 465.53 (4 tx); integration manual 365d 3/3 PASS; deferred BACKEND_REBUILD + manual Sync now"
+    },
+    {
+      "id": "BW-UI",
+      "row": "BW",
+      "probe": "/forecast Category spending trend Wohnen - Stromkosten — bars per month",
+      "result": "pass_with_prerequisites",
+      "evidence": "Browser /forecast Monthly; pre-deploy symptom; deferred deploy + manual Full sync"
+    },
+    {
+      "id": "BX-UI",
+      "row": "BX",
+      "probe": "/sync DEC-0002 info callout + runbook link visible",
+      "result": "pass_with_prerequisites",
+      "evidence": "Browser /sync: callout absent pre-deploy; SyncStatusPage.tsx F1 source PASS; deferred FRONTEND_DEPLOY"
+    },
+    {
+      "id": "BX-DOC",
+      "row": "BX",
+      "probe": "docs/engineering/runbook.md backdated import + cursor reset section",
+      "result": "pass",
+      "evidence": "runbook.md #backdated-firefly-imports anchor resolves; DELETE FROM sync_cursors WHERE entity_type = 'transactions' documented"
+    },
+    {
+      "id": "BY-API",
+      "row": "BY",
+      "probe": "GET /api/v1/sync/status — last_firefly_run distinct from exchange-only last_run",
+      "result": "pass_with_prerequisites",
+      "evidence": "Live API: last_run.trigger=scheduled_exchanges; last_firefly_run field absent pre-deploy; source B2 PASS"
+    },
+    {
+      "id": "BY-UI",
+      "row": "BY",
+      "probe": "Hero Last Firefly sync + trigger badge; exchange secondary when newer",
+      "result": "pass_with_prerequisites",
+      "evidence": "Browser: hero shows Last sync exchange timestamp pre-deploy; F1 source uses last_firefly_run; deferred FRONTEND_DEPLOY"
+    },
+    {
+      "id": "BY-HIST",
+      "row": "BY",
+      "probe": "Sync history trigger column — manual vs scheduled_exchanges",
+      "result": "pass",
+      "evidence": "GET /api/v1/sync/runs: manual, scheduled, scheduled_exchanges triggers present and distinguished"
+    },
+    {
+      "id": "OIDC-1",
+      "row": "regression",
+      "probe": "/sync /forecast sync trigger smoke on OIDC profile",
+      "result": "pass_with_prerequisites",
+      "evidence": "GET /sync HTTP 200; GET /forecast HTTP 200; GET /health HTTP 200; BW/BX/BY fix not live until deploy gates"
+    }
+  ],
+  "probe_results": [
+    {
+      "probe_id": "BY-UI-browser",
+      "probe_kind": "browser_smoke",
+      "step_id": "BY-UI",
+      "passed": false,
+      "reason_code": "UAT_BROWSER_PROBE_FAILED",
+      "navigation_url": "http://localhost:18080/sync",
+      "browser_evidence_refs": [
+        "sprints/quick/Q0034/evidence/browser/bw-by-sync-probe-summary.txt",
+        "sprints/quick/Q0034/evidence/browser/bw-by-sync-probe-01.png"
+      ],
+      "notes": "Pre-deploy: hero Last sync exchange timestamp; last_firefly_run hero absent; pass_with_prerequisites at step level"
+    },
+    {
+      "probe_id": "BX-UI-browser",
+      "probe_kind": "browser_smoke",
+      "step_id": "BX-UI",
+      "passed": false,
+      "reason_code": "UAT_BROWSER_PROBE_FAILED",
+      "navigation_url": "http://localhost:18080/sync",
+      "browser_evidence_refs": [
+        "sprints/quick/Q0034/evidence/browser/bw-by-sync-probe-summary.txt"
+      ],
+      "notes": "DEC-0002 callout absent pre-deploy; source F1 PASS; pass_with_prerequisites"
+    },
+    {
+      "probe_id": "BW-UI-browser",
+      "probe_kind": "browser_smoke",
+      "step_id": "BW-UI",
+      "passed": false,
+      "reason_code": "UAT_BROWSER_PROBE_FAILED",
+      "navigation_url": "http://localhost:18080/forecast",
+      "browser_evidence_refs": [
+        "sprints/quick/Q0034/evidence/browser/bw-by-sync-probe-summary.txt"
+      ],
+      "notes": "Pre-deploy Stromkosten symptom; API oracle 2026-05 only; pass_with_prerequisites"
+    }
+  ],
+  "automated_checks": {
+    "cargo_test_lib": "pass",
+    "cargo_test_bug0025": "pass",
+    "npm_test": "pass",
+    "npm_build": "pass"
+  },
+  "uat_counts": {
+    "pass": 2,
+    "pass_with_prerequisites": 6,
+    "fail": 0,
+    "pending": 0,
+    "total": 8
+  }
+}

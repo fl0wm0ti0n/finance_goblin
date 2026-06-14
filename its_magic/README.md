@@ -15,6 +15,15 @@ backend, React frontend, and provisioning under the its-magic phased workflow.
 
 Recent closed work (newest first). Full history: [`docs/product/backlog.md`](docs/product/backlog.md).
 
+- US-0021 — Subscription tx explorer: dual-mode Discover, rich filters, hint badges, multi-select activate (S0020)
+- BUG-0022 — Plan delete selector regression: selectedPlanId-first resolution + planSelector vitest delete enablement (Q0031)
+- BUG-0023 — Crypto wealth EUR values: Bitunix wallet ingest hardening + exposure_eur display + baseline return ordering (Q0030)
+- BUG-0021 — Frontend UX polish: static CategoryFilter on Forecast/Wealth + wealth Role column COALESCE/labels (Q0029)
+- BUG-0018 — Alert evaluation SQL: qualify `fbd.balance` in `evaluate_scarcity` to fix PostgreSQL 42702 (Q0026)
+- BUG-0017 — Post-sync forecast recompute: audit CHECK migration, FK CASCADE retention, ForecastPage loading guard (Q0025)
+- BUG-0016 — SPA deep links: Axum `index.html` fallback HTTP 200 for client routes (Q0024)
+- US-0020 — Subscription discover: manual search/confirm, majority display category, operator tags + Grafana `$tag` (S0019)
+- US-0019 — Goal-driven planning: target-balance plans, per-plan goal-stats strip, category overlay cap, savings modal + AI tool (S0018)
 - US-0018 — Category filters & expense trend analytics: shared filter, expense-series API, bar trend chart, Grafana `$category` (S0017)
 - BUG-0015 — Subscription confirm persistence after rebuild: payee normalization + payee+interval inheritance (Q0023)
 - BUG-0014 — Post-rebuild omniflow: ML banner copy, wealth crypto display, plan delete UX (Q0022)

@@ -1,0 +1,143 @@
+{
+  "sprint": "Q0031",
+  "bug_id": "BUG-0022",
+  "orchestrator_run_id": "auto-20260613-bug0022",
+  "verified_at": "2026-06-13T20:00:00Z",
+  "result": "APPROVED",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0022",
+  "tasks_source": "sprints/quick/Q0031/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0022",
+  "research_ref": "docs/engineering/research.md#r-0094",
+  "decision_alignment": {
+    "decisions": ["DEC-0082", "DEC-0024", "DEC-0074"],
+    "extensions": [],
+    "research_basis": ["R-0094"],
+    "contract_elements_covered": [
+      "GATE-SEL-1: selectedPlanId ?? globalActive ?? firstPlan — BM1 useMemo invert",
+      "GATE-DEC82-1: no backend change; active DELETE 409 + UI disabled + tooltip preserved",
+      "GATE-TEST-1: resolveDisplayedPlanId + isDeleteDisabled vitest cases — T1",
+      "GATE-SCOPE-1: frontend-only /quick 4 mandatory tasks under SPRINT_MAX_TASKS",
+      "GATE-LABEL-1: optional L1 dropdown label Active plan → Plan (P2 defer OK)",
+      "GATE-DEC-1: no new DEC — extends DEC-0082 §2 frontend selector contract",
+      "DEC-0024: Set active on displayed plan; single global active",
+      "DEC-0074: PVA tab uses /api/v1/plans/active/plan-vs-actual — not dropdown id",
+      "T1: planSelector.ts + planSelector.test.ts BM/BN guard matrix",
+      "G1: npm test + npm run build + git diff --stat blast-radius frontend-only",
+      "V1: uat.md/uat.json BM-UI/BM-API/BN-UI/BN-API/OIDC-1 smoke after FRONTEND_DEPLOY"
+    ],
+    "frozen_boundaries_respected": [
+      "No backend/src/api/plans.rs or plan/service.rs changes",
+      "No PVA endpoint change",
+      "No sole-plan delete policy change (DEC-0082 §Risks acceptable)",
+      "No new DEC — GATE-DEC-1 closed",
+      "No Grafana changes",
+      "deletePlanMutation invalidate + clear selectedPlanId on deleted id preserved"
+    ],
+    "sprint_artifact_verification": "PASS — sprint.json, task.json, tasks.md, sprint.md, progress.md, uat.md, uat.json present; acceptance_mapping 1:1 with architecture task table"
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "BM1 → T1 → G1 → FRONTEND_DEPLOY → V1 verify-work → optional L1",
+    "notes": "T1 depends on BM1 contract; G1 blocked on T1; V1 blocked on G1 + FRONTEND_DEPLOY; L1 optional after V1"
+  },
+  "operator_gates_review": {
+    "documented": true,
+    "gates": [
+      {
+        "id": "FRONTEND_DEPLOY",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md", "uat.json"]
+      }
+    ],
+    "waived_ops_only": {
+      "backend_plans_api": "No backend change — DEC-0082 409 guard intact",
+      "pva_endpoint": "PVA tab uses active endpoint — decoupled from dropdown",
+      "sole_plan_delete": "DEC-0082 §Risks — single active plan delete blocked acceptable",
+      "grafana": "No Grafana changes",
+      "new_dec": "GATE-DEC-1 closed — no new DEC"
+    }
+  },
+  "conditional_tasks_review": {},
+  "baseline_tests": {
+    "cargo_test_lib": {
+      "command": "cargo test --lib",
+      "passed": 218,
+      "failed": 0,
+      "recorded_at": "2026-06-13T20:00:00Z"
+    },
+    "npm_test": {
+      "command": "npm test",
+      "passed": 9,
+      "failed": 0,
+      "test_files": 4,
+      "recorded_at": "2026-06-13T20:00:00Z"
+    }
+  },
+  "test_coverage": {
+    "unit_fixtures": "T1 planSelector.test.ts: selected non-active + global active, selected null + global active, no global active, empty plans, is_active delete guard",
+    "integration": "planningFeedback.test.ts 409 path verify-only (unchanged backend contract)",
+    "verify_only": "BN backend active_plan_delete_returns_409 — no change expected per GATE-DEC82-1",
+    "operator_tests": "V1 uat.md: BM-UI/BM-API, BN-UI/BN-API, OIDC-1 on localhost:18080 + optional omniflow",
+    "automated_gate": "G1 npm test + npm run build + git diff --stat frontend-only blast radius",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "BM",
+      "criterion": "With two or more plans on /planning, selecting a non-active plan in the dropdown enables Delete plan; confirmation removes the plan and refreshes the list—not a permanently disabled delete control when a global active plan exists",
+      "tasks": ["BM1", "T1", "G1", "V1"],
+      "operator_gates": ["FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "BM1 inverts useMemo priority per GATE-SEL-1; T1 vitest non-active + global active case; V1 BM-UI select non-active delete enabled confirm removes plan; BM-API DELETE non-active 204"
+    },
+    {
+      "acceptance_id": "BN",
+      "criterion": "Deleting the globally active plan remains blocked in UI (disabled + tooltip) and via DELETE /api/v1/plans/:id (409 per DEC-0082). OIDC-enabled deploy regression checks pass",
+      "tasks": ["BM1", "T1", "G1", "V1"],
+      "operator_gates": ["FRONTEND_DEPLOY"],
+      "covered": true,
+      "notes": "T1 isDeleteDisabled when displayed is_active; planningFeedback.test.ts 409 path verify-only; V1 BN-UI disabled + tooltip; BN-API DELETE active 409 active_plan_delete_forbidden; OIDC-1 smoke"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Discovery browser automation empty SPA shell — BM visual deferred to V1 after FRONTEND_DEPLOY; vitest + API probes cover BM/BN logic pre-deploy."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "Identifier activePlanId may remain post-fix (architecture allows rename defer); optional L1 label rename P2 does not block P0 closure."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "G1 uses npm run build (not cargo) — frontend-only scope; cargo lib baseline 218/218 recorded at plan-verify for pre-execute reference."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 2,
+    "covered_count": 2,
+    "gap_count": 0,
+    "task_count": 4,
+    "mandatory_task_count": 4,
+    "conditional_task_count": 0,
+    "optional_task_count": 1,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0082_0024_0074_aligned": true,
+    "operator_gates_documented": true,
+    "conditional_gates_documented": true,
+    "v1_e2e_smoke": true,
+    "scope_creep_beyond_architecture": false,
+    "dependency_graph_valid": true,
+    "execute_ready": true,
+    "verdict": "APPROVED",
+    "next_scheduled_phase": "execute"
+  },
+  "notes": "QA plan-verify 2026-06-13: Q0031 tasks align with docs/product/acceptance.md BUG-0022 rows BM/BN and architecture § BUG-0022 / R-0094; 4 mandatory tasks mapped; 2/2 acceptance rows covered; 0 gaps; 0 orphans; operator gate FRONTEND_DEPLOY documented; baseline cargo test --lib 218/218, npm test 9/9. Approved for /execute."
+}

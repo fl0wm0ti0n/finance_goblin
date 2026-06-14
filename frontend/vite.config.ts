@@ -5,6 +5,10 @@ import path from "path";
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __BUILD_ID__: JSON.stringify(process.env.BUILD_ID || 'dev'),
+    __RELEASE_TAG__: JSON.stringify(process.env.RELEASE_TAG || 'dev'),
+  },
   test: {
     environment: "jsdom",
     globals: true,

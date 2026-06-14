@@ -1,0 +1,71 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260613-firefly-stale-mirror",
+  "intake_work_item_kind": "bug",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Firefly-Änderungen (viele Transaktionen Kategorie Wohnen - Stromkosten) erscheinen nicht in Finance Goblin — weiterhin nur eine Transaktion sichtbar",
+      "intake_run_id": "intake-20260613-firefly-stale-mirror",
+      "turn_index": 0,
+      "ref": "ie:intake-20260613-firefly-stale-mirror:0:fbb6d4c48efb883d"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "Live probe: mirror 939 tx; category 146 Wohnen - Stromkosten shows 4 tx in expense-series; last sync runs mix scheduled vs scheduled_exchanges; sync_transactions uses watermark start date per DEC-0002/R-0089",
+      "intake_run_id": "intake-20260613-firefly-stale-mirror",
+      "turn_index": 1,
+      "delegation_scope": "backend/src/firefly/mod.rs sync_transactions; backend/src/sync/mod.rs RunMode Full vs ExchangesOnly; GET /api/v1/categories/expense-series; Sync Status UI; Firefly /api/v1/transactions?start=",
+      "delegation_rationale": "Operator sees 1 tx vs Firefly many — discovery splits backdated-window miss vs exchange-only scheduler vs UI filter",
+      "delegation_confidence": "high",
+      "ref": "ie:intake-20260613-firefly-stale-mirror:1:7ab035c8648a36ba"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Read-only Firefly contract preserved; DEC-0002 7-day overlap may miss backdated bulk imports; scheduled tick may run exchange-only when Firefly not due — operator may believe sync ran",
+      "intake_run_id": "intake-20260613-firefly-stale-mirror",
+      "turn_index": 2,
+      "ref": "ie:intake-20260613-firefly-stale-mirror:2:f19d26d7e26b6c6c"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Add N Strom txs in Firefly → manual Full sync → mirror COUNT and expense-series match; backdated txs outside overlap window repro; sync/runs trigger distinguishes manual vs scheduled_exchanges",
+      "intake_run_id": "intake-20260613-firefly-stale-mirror",
+      "turn_index": 3,
+      "ref": "ie:intake-20260613-firefly-stale-mirror:3:2faf2ed0111a5d11"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator Firefly category edits visible in Finance Goblin after explicit Full sync within expected latency; or documented limitation with remediation (reset cursor / widen window)",
+      "intake_run_id": "intake-20260613-firefly-stale-mirror",
+      "turn_index": 4,
+      "ref": "ie:intake-20260613-firefly-stale-mirror:4:900dc9ff4fc0c776"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug",
+    "work_items": [
+      "BUG-0025"
+    ],
+    "rationale": "Firefly mirror stale vs operator ledger for category Wohnen - Stromkosten; distinct from BUG-0006 category ingest (DONE) — likely incremental window or sync-mode confusion.",
+    "split_axis": "none",
+    "alternatives_considered": [
+      "Reopen BUG-0002 sync failure — rejected (sync succeeds; entity count 939)",
+      "US story — rejected (defect-shaped; /intake bug)"
+    ]
+  }
+}

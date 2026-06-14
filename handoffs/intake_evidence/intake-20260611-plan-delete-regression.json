@@ -1,0 +1,69 @@
+{
+  "selected_pack": "small-intake-pack",
+  "intake_run_id": "intake-20260611-plan-delete-regression",
+  "intake_work_item_kind": "bug",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "(none)",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Delete plan geht immer noch nicht — operator cannot remove unwanted plans from /planning after BUG-0014 AS1 shipped.",
+      "intake_run_id": "intake-20260611-plan-delete-regression",
+      "turn_index": 0,
+      "ref": "ie:intake-20260611-plan-delete-regression:0:8d26f8f7d6ea39ba"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "delegation_ref",
+      "quoted_user_text": "PlanningPage.tsx activePlanId useMemo ignores selectedPlanId when global is_active plan exists; delete button disabled via activePlanIsSelected.",
+      "intake_run_id": "intake-20260611-plan-delete-regression",
+      "turn_index": 1,
+      "ref": "ie:intake-20260611-plan-delete-regression:1:7521ad87c146c691",
+      "delegation_scope": "frontend/src/pages/PlanningPage.tsx L110-113, L643-683; backend delete_plan unchanged",
+      "delegation_rationale": "Code audit: activePlanId always resolves to is_active plan, dropdown onChange sets selectedPlanId but useMemo never prefers it when active exists.",
+      "delegation_confidence": "high"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Preserve DEC-0082 active-plan delete 409 guard; regression in plan selector not API; single-plan operators need documented workaround or sole-plan delete path.",
+      "intake_run_id": "intake-20260611-plan-delete-regression",
+      "turn_index": 2,
+      "ref": "ie:intake-20260611-plan-delete-regression:2:26db42ba66336c12"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "With 2+ plans: select non-active in dropdown, Delete plan succeeds; active plan delete blocked in UI and returns 409; npm/cargo plan delete tests green.",
+      "intake_run_id": "intake-20260611-plan-delete-regression",
+      "turn_index": 3,
+      "ref": "ie:intake-20260611-plan-delete-regression:3:9839d6d709309580"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Operator deletes non-active plans from /planning with confirmation; active plan requires switching active first per DEC-0082 copy.",
+      "intake_run_id": "intake-20260611-plan-delete-regression",
+      "turn_index": 4,
+      "ref": "ie:intake-20260611-plan-delete-regression:4:315a6641a270d86a"
+    }
+  ],
+  "decomposition": {
+    "split_decision": "single-bug",
+    "work_items": ["BUG-0022"],
+    "rationale": "Narrow regression on plan delete UX delivered in BUG-0014 AS1 — single root cause in plan selector state, not multi-surface cluster.",
+    "split_axis": "none",
+    "alternatives_considered": [
+      "Reopen BUG-0014 — rejected (DONE Q0022; distinct selector regression post-release)",
+      "Split UI vs API — rejected (DELETE API and 409 guard verified; defect is frontend selectedPlanId ignored)"
+    ]
+  }
+}

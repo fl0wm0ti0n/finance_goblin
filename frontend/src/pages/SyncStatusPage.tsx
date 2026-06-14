@@ -25,6 +25,29 @@ function phaseLabel(phase: string | null | undefined) {
   return null;
 }
 
+function triggerBadgeLabel(trigger: string | undefined) {
+  if (trigger === "manual") return "Manual";
+  if (trigger === "scheduled") return "Scheduled";
+  return trigger ?? "Unknown";
+}
+
+function isExchangeOnlyTrigger(trigger: string | undefined) {
+  return trigger === "scheduled_exchanges" || trigger === "manual_exchanges";
+}
+
+function shouldShowExchangeSecondary(
+  lastRun: SyncRun | null | undefined,
+  lastFireflyRun: SyncRun | null | undefined,
+) {
+  if (!lastRun || !isExchangeOnlyTrigger(lastRun.trigger)) {
+    return false;
+  }
+  if (!lastFireflyRun) {
+    return true;
+  }
+  return new Date(lastRun.started_at).getTime() > new Date(lastFireflyRun.started_at).getTime();
+}
+
 export function SyncStatusPage() {
   const queryClient = useQueryClient();
   const statusQuery = useQuery({
@@ -76,6 +99,8 @@ export function SyncStatusPage() {
   const isRunning = statusQuery.data?.state === "running";
   const phaseText = phaseLabel(statusQuery.data?.phase);
   const lastRun = statusQuery.data?.last_run;
+  const lastFireflyRun = statusQuery.data?.last_firefly_run;
+  const showExchangeSecondary = shouldShowExchangeSecondary(lastRun, lastFireflyRun);
 
   return (
     <div>
@@ -85,12 +110,31 @@ export function SyncStatusPage() {
       >
         <div>
           <h1>Sync Status</h1>
-          <p>
-            Last sync:{" "}
-            {lastRun?.finished_at
-              ? new Date(lastRun.finished_at).toLocaleString()
+          <p style={{ margin: 0 }}>
+            Last Firefly sync:{" "}
+            {lastFireflyRun?.finished_at
+              ? new Date(lastFireflyRun.finished_at).toLocaleString()
               : "Never"}
+            {lastFireflyRun?.trigger && (
+              <span
+                style={{
+                  marginLeft: "0.5rem",
+                  padding: "0.125rem 0.5rem",
+                  borderRadius: "9999px",
+                  fontSize: "0.75rem",
+                  background: "#e5e7eb",
+                  verticalAlign: "middle",
+                }}
+              >
+                {triggerBadgeLabel(lastFireflyRun.trigger)}
+              </span>
+            )}
           </p>
+          {showExchangeSecondary && lastRun?.finished_at && (
+            <p style={{ margin: "0.25rem 0 0", color: "#6b7280", fontSize: "0.875rem" }}>
+              Last exchange sync: {new Date(lastRun.finished_at).toLocaleString()}
+            </p>
+          )}
           {isRunning && phaseText && (
             <p className="status-running" style={{ margin: "0.25rem 0 0" }}>
               {phaseText}
@@ -111,6 +155,30 @@ export function SyncStatusPage() {
           {(triggerMutation.error as Error).message}
         </div>
       )}
+
+      <div
+        className="card"
+        style={{
+          marginTop: "1rem",
+          background: "#f0f9ff",
+          border: "1px solid #bae6fd",
+          fontSize: "0.875rem",
+          lineHeight: 1.5,
+        }}
+      >
+        <strong>Incremental sync window (DEC-0002)</strong>
+        <p style={{ margin: "0.5rem 0 0" }}>
+          Scheduled sync fetches Firefly transactions from the last successful sync minus a{" "}
+          <strong>7-day overlap</strong>, filtered by <em>transaction date</em> — not edit time.
+          Backdated bulk imports in Firefly may be skipped until you run{" "}
+          <strong>Sync now</strong> (manual Full sync uses a 365-day lookback) or follow the
+          cursor-reset steps in the{" "}
+          <a href="/docs/engineering/runbook.md#backdated-firefly-imports" target="_blank" rel="noreferrer">
+            runbook
+          </a>
+          .
+        </p>
+      </div>
 
       <div className="grid">
         {entityCountEntries(entitiesQuery.data).map((row) => (

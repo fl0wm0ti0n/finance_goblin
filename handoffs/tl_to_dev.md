@@ -1,3 +1,80 @@
+# sprint-plan-20260614-bug0025-q0034 — BUG-0025 Firefly Stromkosten mirror lag
+
+**From:** Tech Lead  
+**To:** QA (`/plan-verify`) → Dev (`/execute`)  
+**Date:** 2026-06-14  
+**Work item:** BUG-0025 (bug)  
+**Sprint:** `/quick` **Q0034**  
+**Orchestrator run:** `auto-20260613-bug0025`  
+**Next phase:** `/plan-verify` (role: qa)
+
+### Summary
+
+Sprint **Q0034** materialized from architecture § BUG-0025: **DEC-0002** backdated skip root cause (category **146** mirror **2026-05** only) plus misleading Sync Status hero when exchange-only runs succeed. **B1** adds manual Full **365d** lookback on `trigger=manual` (**GATE-OVERLAP-1**). **B2**/**F1** split **`last_firefly_run`** from exchange-only `last_run` (**GATE-SYNC-UX-1**). **D1** documents cursor-reset remediation (**GATE-REMED-1**). **T1** integration repro (**GATE-TEST-1**). Closes **BW**/**BX**/**BY**. Extends **DEC-0002** — **GATE-DEC-1 closed**, no new DEC.
+
+**Decisions:** extends **DEC-0002** — **GATE-DEC-1 closed**  
+**Research:** **R-0097** §1–9  
+**Architecture ref:** `docs/engineering/architecture.md` § **BUG-0025**  
+**Spec-pack:** `docs/engineering/spec-pack/BUG-0025-{design-concept,crs,technical-specification}.md`  
+**Sprint artifacts:** `sprints/quick/Q0034/*`
+
+### Task tree
+
+| ID | Title | Row | Files | Gate | Priority |
+|----|-------|-----|-------|------|----------|
+| B1 | Manual 365d lookback wiring | **BW**, **BX** | `backend/src/firefly/mod.rs`, `backend/src/sync/mod.rs` | GATE-OVERLAP-1 | P0 |
+| B2 | `last_firefly_run` API split | **BY** | `backend/src/sync/mod.rs`, `frontend/src/lib/api.ts` | GATE-SYNC-UX-1 | P0 |
+| F1 | Sync Status hero + DEC-0002 callout | **BX**, **BY** | `frontend/src/pages/SyncStatusPage.tsx` | GATE-SYNC-UX-1 | P0 |
+| D1 | Runbook backdated-import remediation | **BX** | `docs/engineering/runbook.md` | GATE-REMED-1 | P0 |
+| T1 | Integration backdated-window repro | **BW** | `backend/tests/` | GATE-TEST-1 | P0 |
+| G1 | Automated gate | all | cargo test, npm test, build | — | P0 |
+| V1 | verify-work BW/BX/BY + OIDC smoke | all | `sprints/quick/Q0034/uat.md` | — | P0 |
+
+**Mandatory count:** 7 (B1, B2, F1, D1, T1, G1, V1) — 7/12 under `SPRINT_MAX_TASKS`.
+
+### Acceptance traceability
+
+| Row | Tasks | Verify |
+|-----|-------|--------|
+| **BW** | B1, T1, G1, V1 | Manual **Sync now** → multi-month Stromkosten in mirror; expense-series category **146** bars per month |
+| **BX** | B1, D1, F1, G1, V1 | Manual Full ingest **or** callout + runbook explain DEC-0002 + cursor reset |
+| **BY** | B2, F1, G1, V1 | Hero **Last Firefly sync**; exchange secondary; **Sync now** → `manual` in history |
+
+### Execute order
+
+```text
+B1 ∥ B2 (parallel backend)
+  → F1 (needs B2 API field)
+  → D1 (after B1 contract frozen)
+  → T1 (needs B1)
+  → G1
+  → operator: BACKEND_REBUILD + FRONTEND_DEPLOY
+  → V1
+```
+
+### Must-not-break
+
+- **DEC-0002** scheduled path — `watermark − overlap_days` unchanged for `trigger=scheduled`
+- Upsert + watermark contract — no duplicate rows on cursor reset
+- Exchange-only runs — must not update **Last Firefly sync** hero
+- CategoryTrendChart / expense-series SQL — mirror ingest fix only (**H3 ruled out**)
+- **BUG-0006** category_id ingest — not reopened
+
+### Operator gates (V1)
+
+1. **BACKEND_REBUILD** — B1 + B2 live.
+2. **FRONTEND_DEPLOY** — F1 Sync Status UX live.
+3. **BW:** Manual **Sync now** → `/forecast` Category spending trend **Wohnen - Stromkosten** multi-month bars.
+4. **BX:** `/sync` DEC-0002 callout + runbook anchor.
+5. **BY:** Hero uses `last_firefly_run`; history `trigger` column distinguishes run kinds.
+6. OIDC smoke per acceptance **BW**/**BX**/**BY**.
+
+### Blockers
+
+None — sprint-plan complete; ready for `/plan-verify`.
+
+---
+
 # sprint-plan-20260611-q0029-bug0021 — BUG-0021 Frontend UX polish
 
 **From:** Tech Lead  

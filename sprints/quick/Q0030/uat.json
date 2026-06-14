@@ -1,0 +1,137 @@
+{
+  "sprint_id": "Q0030",
+  "bug_id": "BUG-0023",
+  "phase": "verify-work",
+  "orchestrator_run_id": "auto-20260612-bug0023",
+  "decisions": ["DEC-0064", "DEC-0080", "DEC-0081", "DEC-0038"],
+  "research": ["R-0093"],
+  "acceptance_rows": ["BO", "BP", "BQ"],
+  "acceptance_source": "docs/product/acceptance.md#BUG-0023",
+  "verified_at": "2026-06-12T21:45:00Z",
+  "verdict": "PASS-WITH-PREREQUISITES",
+  "ready_for_verify_work": true,
+  "ready_for_release": true,
+  "operator_gates": [
+    {
+      "id": "BACKEND_DEPLOY",
+      "status": "pending",
+      "action": "rebuild backend with BO+BP fixes; apply migration 017",
+      "notes": "Required before live BO/BP/BQ probes; live API still shows pre-deploy baseline"
+    },
+    {
+      "id": "EXCHANGE_SYNC",
+      "status": "pending",
+      "action": "Bitunix full/exchange sync after deploy",
+      "notes": "Wallet row ingest depends on sync; last_sync_at 2026-06-12T21:15:31Z pre-fix data"
+    },
+    {
+      "id": "PNL_RECOMPUTE",
+      "status": "pending",
+      "action": "post-sync PnL recompute",
+      "notes": "Populates exposure_eur, wallet market_value_eur, baseline, total_return_pct"
+    },
+    {
+      "id": "AP1_SQL_PROBE",
+      "status": "pending",
+      "action": "optional SQL probe on exchange_holdings",
+      "notes": "Architecture § BUG-0023 operator gate; futures market_value_eur check"
+    }
+  ],
+  "operator_prerequisites": [
+    "BACKEND_DEPLOY — migration 017 + bitunix/wealth/portfolio fixes not yet live on :18080",
+    "EXCHANGE_SYNC — Bitunix sync after deploy to ingest futures wallet equity",
+    "PNL_RECOMPUTE — post-sync recompute for exposure_eur and total_return_pct baseline"
+  ],
+  "steps": [
+    {
+      "id": "BO-API",
+      "row": "BO",
+      "probe": "GET /api/v1/wealth crypto.subtotal_eur ~€2000; bitunix not €0",
+      "result": "pass_with_prerequisites",
+      "evidence": "Live pre-deploy crypto.subtotal_eur -0.0 bitunix -0.0; integration bo_futures_wallet_priced_subtotal_nonzero PASS"
+    },
+    {
+      "id": "BO-UI",
+      "row": "BO",
+      "probe": "Wealth Crypto Bitunix card not €-0,00",
+      "result": "pass_with_prerequisites",
+      "evidence": "Browser deferred until BACKEND_DEPLOY + EXCHANGE_SYNC"
+    },
+    {
+      "id": "BO-SQL",
+      "row": "BO",
+      "probe": "exchange_holdings futures market_value_eur populated",
+      "result": "pass_with_prerequisites",
+      "evidence": "AP1_SQL_PROBE deferred post-deploy"
+    },
+    {
+      "id": "BP-API",
+      "row": "BP",
+      "probe": "linear holdings_all[].value_eur non-null when entryValue present",
+      "result": "pass_with_prerequisites",
+      "evidence": "Live 11 linear rows value_eur null; integration bp_linear_exposure_eur_value_without_subtotal_merge PASS"
+    },
+    {
+      "id": "BP-UI",
+      "row": "BP",
+      "probe": "Holdings table Value EUR column not all em dash",
+      "result": "pass_with_prerequisites",
+      "evidence": "UI deferred post-deploy"
+    },
+    {
+      "id": "BP-SUBTOTAL",
+      "row": "BP",
+      "probe": "crypto.subtotal_eur wallet-only; linear market_value_eur NULL",
+      "result": "pass_with_prerequisites",
+      "evidence": "DEC-0064 code verified at QA; live subtotal -0.0 pre-deploy"
+    },
+    {
+      "id": "BQ-API",
+      "row": "BQ",
+      "probe": "pnl.total_return_pct non-null when baseline exists",
+      "result": "pass_with_prerequisites",
+      "evidence": "Live total_return_pct null unrealized_eur 376.83; integration bq_priced_wallet_baseline_total_return_pct PASS"
+    },
+    {
+      "id": "BQ-UI",
+      "row": "BQ",
+      "probe": "PnL Total return % not em dash with non-zero unrealized",
+      "result": "pass_with_prerequisites",
+      "evidence": "UI deferred post-deploy + PNL_RECOMPUTE"
+    },
+    {
+      "id": "OIDC-1",
+      "row": "regression",
+      "probe": "/wealth /api/v1/wealth smoke",
+      "result": "pass",
+      "evidence": ":18080/api/v1/wealth HTTP 200; /health HTTP 200"
+    }
+  ],
+  "automated_checks": {
+    "bug0023_crypto_wealth_eur": "4/4 PASS",
+    "cargo_lib": "218/218 PASS (qa stage)",
+    "npm_test": "9/9 PASS (qa stage)",
+    "npm_build": "PASS (qa stage)"
+  },
+  "pre_deploy_baseline": {
+    "crypto_subtotal_eur": -0.0,
+    "bitunix_subtotal_eur": -0.0,
+    "linear_holdings_count": 11,
+    "linear_value_eur_non_null": 0,
+    "pnl_unrealized_eur": 376.83,
+    "pnl_total_return_pct": null,
+    "last_sync_at": "2026-06-12T21:15:31.819941Z"
+  },
+  "row_verdicts": {
+    "BO": "pass_with_prerequisites",
+    "BP": "pass_with_prerequisites",
+    "BQ": "pass_with_prerequisites"
+  },
+  "uat_counts": {
+    "pass": 1,
+    "pass_with_prerequisites": 8,
+    "fail": 0,
+    "total": 9
+  },
+  "evidence_ref": "sprints/quick/Q0030/verify-work-findings.md"
+}

@@ -1,0 +1,167 @@
+{
+  "sprint": "Q0030",
+  "bug_id": "BUG-0023",
+  "orchestrator_run_id": "auto-20260612-bug0023",
+  "verified_at": "2026-06-12T23:40:00Z",
+  "result": "APPROVED",
+  "acceptance_source": "docs/product/acceptance.md#BUG-0023",
+  "tasks_source": "sprints/quick/Q0030/tasks.md",
+  "architecture_ref": "docs/engineering/architecture.md#BUG-0023",
+  "research_ref": "docs/engineering/research.md#r-0093",
+  "decision_alignment": {
+    "decisions": ["DEC-0064", "DEC-0080", "DEC-0081", "DEC-0038"],
+    "extensions": [],
+    "research_basis": ["R-0093"],
+    "contract_elements_covered": [
+      "DEC-0080 BO: parse_futures_wallet equity keys + fallback sum; futures row product_type=futures with market_value_eur for subtotal",
+      "DEC-0064 BP: linear excluded from sum(market_value_eur) subtotal; display via exposure_eur only",
+      "DEC-0081 BP: holdings_all[].value_eur = market_value_eur.or(exposure_eur); holdings_top wallet-only unchanged",
+      "DEC-0038 BQ: total_return_pct denominator wallet-priced crypto_value_eur; baseline on first priced sync; unrealized alone rejected",
+      "GATE-BO-1: BO1 equity+unrealized keys, BO2 code==0+warn, BO3 OpenAPI wiremock per R-0093",
+      "GATE-BP-1 D1: entryValue → exposure_eur (not market_value_eur)",
+      "GATE-AGG-1: subtotal = sum(market_value_eur) wallet-only",
+      "GATE-BQ-1: BQ1 verify-only unless baseline bug found",
+      "GATE-DEC-1: no new DEC — contracts unchanged",
+      "T1: backend/tests/bug0023_crypto_wealth_eur.rs BO/BP/BQ integration + DEC-0064 subtotal guard",
+      "G1: cargo test --lib + bug0023 suite + npm run build + blast-radius diff stat",
+      "V1: uat.md/uat.json BO-API/UI/SQL, BP-API/UI/SUBTOTAL, BQ-API/UI, OIDC smoke"
+    ],
+    "frozen_boundaries_respected": [
+      "No merge linear exposure_eur into subtotal (DEC-0064)",
+      "No tier-2 ExchangePriceBook / mark-price feed",
+      "No BUG-0014 AP2 defensive subtotal fallback",
+      "No write display value into market_value_eur for linear",
+      "No Grafana portfolio.json SQL edit",
+      "Unrealized alone must not drive total_return_pct (DEC-0038)"
+    ],
+    "sprint_artifact_verification": "PASS — sprint.json, task.json, tasks.md, sprint.md, progress.md, uat.md, uat.json present; acceptance_mapping 1:1 with architecture task table"
+  },
+  "dependency_review": {
+    "circular_dependencies": false,
+    "execution_order_feasible": true,
+    "recommended_order": "BO1 → BO2 → BO3 → BP1 → BP2 → BQ1 → T1 → G1 → BACKEND_DEPLOY → EXCHANGE_SYNC → PNL_RECOMPUTE → V1 verify-work",
+    "notes": "BO slice sequential in bitunix.rs; BP1 after BO3 tests green; BQ1 verify-only unless baseline bug; V1 blocked on G1 + three operator gates"
+  },
+  "operator_gates_review": {
+    "documented": true,
+    "gates": [
+      {
+        "id": "BACKEND_DEPLOY",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md"]
+      },
+      {
+        "id": "EXCHANGE_SYNC",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md"]
+      },
+      {
+        "id": "PNL_RECOMPUTE",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "uat.md"]
+      },
+      {
+        "id": "AP1_SQL_PROBE",
+        "before_tasks": ["V1"],
+        "documented_in": ["sprint.json", "task.json", "tasks.md", "architecture.md"],
+        "optional": true,
+        "rationale": "Architecture operator gate for BO/BP DB oracles on exchange_holdings"
+      }
+    ],
+    "waived_ops_only": {
+      "tier2_mark_price": "ExchangePriceBook out of scope per architecture",
+      "bug0014_ap2": "Defensive subtotal fallback rejected — would mask parse bug",
+      "holdings_count_footnote": "P2 optional UX footnote out of scope"
+    }
+  },
+  "conditional_tasks_review": {},
+  "baseline_tests": {
+    "cargo_test_lib": {
+      "command": "cargo test --lib",
+      "passed": 213,
+      "failed": 0,
+      "recorded_at": "2026-06-12T23:40:00Z"
+    },
+    "npm_test": {
+      "command": "npm test",
+      "passed": 9,
+      "failed": 0,
+      "test_files": 4,
+      "recorded_at": "2026-06-12T23:40:00Z"
+    }
+  },
+  "test_coverage": {
+    "unit_fixtures": "BO3 bitunix.rs wiremock: OpenAPI sample, empty data warn, code!=0 reject",
+    "integration": "T1 bug0023_crypto_wealth_eur.rs BO wallet ingest, BP exposure_eur+subtotal guard, BQ baseline+total_return_pct",
+    "verify_only": "BQ1 portfolio/service.rs baseline capture + total_return_pct — fix only if bug found",
+    "operator_tests": "V1 uat.md: BO-API/UI/SQL, BP-API/UI/SUBTOTAL, BQ-API/UI, OIDC-1 smoke on localhost:18080 + optional omniflow",
+    "automated_gate": "G1 cargo test --test bug0023_crypto_wealth_eur + cargo test --lib + npm run build + git diff --stat blast radius",
+    "gaps": []
+  },
+  "coverage": [
+    {
+      "acceptance_id": "BO",
+      "criterion": "With Bitunix connected and exchange sync success, Wealth Crypto tab Bitunix card and GET /api/v1/wealth crypto.subtotal_eur reflect operator portfolio value (~€2000 order of magnitude) — not €0 / €-0,00 with 11 open linear positions",
+      "tasks": ["BO1", "BO2", "BO3", "T1", "G1", "V1"],
+      "operator_gates": ["BACKEND_DEPLOY", "EXCHANGE_SYNC", "PNL_RECOMPUTE"],
+      "covered": true,
+      "notes": "BO1 equity fallback sum + unrealized key aliases; BO2 code==0 + parse-skip warn; BO3 R-0093 OpenAPI wiremock; T1 wiremock wallet ingest integration; V1 BO-API (~€2000 subtotal), BO-UI (card not €-0,00), BO-SQL (futures market_value_eur populated)"
+    },
+    {
+      "acceptance_id": "BP",
+      "criterion": "Holdings table Value EUR column shows EUR equivalent at valuation time for linear positions when prices available — not all em dash while Native qty and Unrealized PnL populated",
+      "tasks": ["BP1", "BP2", "T1", "G1", "V1"],
+      "operator_gates": ["BACKEND_DEPLOY", "EXCHANGE_SYNC", "PNL_RECOMPUTE"],
+      "covered": true,
+      "notes": "BP1 migration 017 + entryValue→exposure_eur via fx.to_eur; BP2 value_eur=market_value_eur.or(exposure_eur); subtotal wallet-only per DEC-0064; V1 BP-API/UI/SUBTOTAL probes; D1 contract uses entryValue notional (architecture GATE-BP-1) — see advisory ADV-1"
+    },
+    {
+      "acceptance_id": "BQ",
+      "criterion": "PnL summary Total return % populated when baseline exists after exchange sync + PnL recompute — not em dash while unrealized EUR is non-zero",
+      "tasks": ["BQ1", "T1", "G1", "V1"],
+      "operator_gates": ["BACKEND_DEPLOY", "EXCHANGE_SYNC", "PNL_RECOMPUTE"],
+      "covered": true,
+      "notes": "BQ1 verify compute_hybrid_pnl crypto_value_eur>0, capture_if_missing baseline, total_return_pct formula; resolves when BO priced per GATE-BQ-1; T1 BQ integration case; V1 BQ-API/UI probes; unrealized-alone path explicitly rejected"
+    }
+  ],
+  "gaps": [],
+  "orphan_tasks": [],
+  "advisories": [
+    {
+      "id": "ADV-1",
+      "severity": "low",
+      "note": "Acceptance BP copy says 'when prices available' — sprint implements D1 entryValue→exposure_eur (not mark-price feed). Architecture § BUG-0023 GATE-BP-1 and tasks BP1/BP2 align; operator release note in V1 if mark gap questioned."
+    },
+    {
+      "id": "ADV-2",
+      "severity": "low",
+      "note": "BUG-0023 acceptance footer OIDC regression not explicit row — V1 OIDC-1 smoke on /wealth and /api/v1/wealth covers standard quick-sprint regression posture."
+    },
+    {
+      "id": "ADV-3",
+      "severity": "low",
+      "note": "G1 automated gate uses npm run build (not npm test) — frontend WealthPage.tsx pass-through only per BP2; npm test baseline recorded at plan-verify for pre-execute reference."
+    }
+  ],
+  "summary": {
+    "acceptance_rows_count": 3,
+    "covered_count": 3,
+    "gap_count": 0,
+    "task_count": 9,
+    "mandatory_task_count": 9,
+    "conditional_task_count": 0,
+    "optional_task_count": 0,
+    "tasks_without_acceptance_ref": [],
+    "architecture_aligned": true,
+    "dec_0064_0080_0081_0038_aligned": true,
+    "operator_gates_documented": true,
+    "conditional_gates_documented": true,
+    "v1_e2e_smoke": true,
+    "scope_creep_beyond_architecture": false,
+    "dependency_graph_valid": true,
+    "execute_ready": true,
+    "verdict": "APPROVED",
+    "next_scheduled_phase": "execute"
+  },
+  "notes": "QA plan-verify 2026-06-12: Q0030 tasks align with docs/product/acceptance.md BUG-0023 rows BO/BP/BQ and architecture § BUG-0023 / R-0093; 9 mandatory tasks mapped; 3/3 acceptance rows covered; 0 gaps; 0 orphans; operator gates BACKEND_DEPLOY + EXCHANGE_SYNC + PNL_RECOMPUTE documented; baseline cargo test --lib 213/213, npm test 9/9. Approved for /execute."
+}

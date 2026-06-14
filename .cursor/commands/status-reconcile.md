@@ -15,6 +15,10 @@ description: "its-magic status-reconcile: deterministic status normalization and
 - After writing outputs, stop and recommend next phase.
 
 ## Inputs
+
+- **Narrow-read (US-0053 / US-0096 Tranche A)**: Start at docs/engineering/phase-context.md
+  and the story section anchor in vision/architecture/decisions when a heading exists; forbid
+  full-file reads when a section heading exists.
 - `docs/product/backlog.md` (canonical status source)
 - `docs/product/acceptance.md` (derived checklist surface)
 - `docs/engineering/state.md` (traceability + checkpoints)

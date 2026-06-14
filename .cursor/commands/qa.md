@@ -29,6 +29,10 @@ In an execute↔QA implementation loop (`AUTO_IMPLEMENTATION_LOOP=1`), each new
 stale isolation evidence).
 
 ## Inputs
+
+- **Narrow-read (US-0053 / US-0096 Tranche A)**: Start at docs/engineering/phase-context.md
+  and the story section anchor in vision/architecture/decisions when a heading exists; forbid
+  full-file reads when a section heading exists.
 - `handoffs/dev_to_qa.md`
 - `sprints/S0001/summary.md`
 
@@ -55,6 +59,35 @@ acceptance steps, execute probes where stack profile resolves, record evidence i
 **`sprints/Sxxxx/uat.json`** `probe_results[]` and **`sprints/Sxxxx/qa-findings.md`**.
 Fail closed with **`UAT_PROBE_UNRESOLVED`** (not PASS) when no probe maps.
 Forbidden: auto-read **`.env`**, mutate intake evidence — **`UAT_PROBE_FORBIDDEN`**.
+
+Reason codes extend with **`UAT_BROWSER_UNAVAILABLE`**, **`UAT_BROWSER_PROBE_FAILED`**,
+**`UAT_BROWSER_PROBE_TIMEOUT`** (**US-0093** / **DEC-0079**).
+
+### Browser UAT self-test (US-0093)
+
+When **`UAT_BROWSER_PROBE_MODE=cursor`** (default) and step classifies as **`browser_smoke`**
+(or automatable **`manual_operator`** reclassified per **DEC-0079** §4), execute the **Cursor
+browser MCP** sequence — **lib never calls MCP directly** (**BUG-0006**):
+
+1. **Resolve target URL** — `docs/engineering/runtime-connectivity.md` first `http(s)://`; else
+   dev-server port from `package.json` + scratchpad **`DEV_SERVER_PORT`**.
+2. **`browser_navigate`** — load health/app URL; respect enterprise origin allowlist.
+3. **Step plan** — map acceptance verbs to **`browser_click`** / **`browser_type`** /
+   **`browser_scroll`** when automatable; **never** fill password/credential fields or read **`.env`**.
+4. **`browser_screenshot`** — write to **`sprints/Sxxxx/evidence/browser/<probe_id>-<seq>.png`**
+   (max **5** per probe).
+5. **Console + network evidence** — counts + summary path refs only (no inline secrets).
+6. **Verdict** — set **`passed`**, **`reason_code`**, **`browser_evidence_refs`** in
+   **`uat.json`** `probe_results[]`; **`passed=true`** in **`cursor`** mode **requires** non-empty
+   **`navigation_url`** + at least one screenshot or console/network summary path — else
+   **`UAT_BROWSER_PROBE_FAILED`**. Mirror under **`qa-findings.md`** **Runtime browser evidence**.
+7. **Fallback** — MCP unavailable → record **`UAT_BROWSER_UNAVAILABLE`**, run stdlib fallback when
+   **`UAT_BROWSER_FALLBACK_CHAIN=1`**; validate via
+   **`python scripts/uat_probe_lib.py --merge-result <fragment.json>`**.
+
+**No silent PASS** — stdlib alone does **not** PASS **`browser_smoke`** in **`cursor`** mode
+without agent **`browser_evidence_refs`**. Security: no auto-read **`.env`**, no credential
+auto-fill, no intake evidence mutation — **`UAT_PROBE_FORBIDDEN`** unchanged.
 
 ## Steps
 0. If `SECURITY_REVIEW=1`, verify `docs/engineering/security-review.md` exists
