@@ -72,26 +72,31 @@
 - BUG-0024 refresh rollover prefix → `docs/engineering/state-archive/state-pack-20260613-k.md`, `state-pack-20260613-l.md`
 - BUG-0025 segment prefix → `docs/engineering/state-archive/state-pack-20260614.md`, `state-pack-20260614-a.md`
 - US-0022 refresh rollover prefix → `docs/engineering/state-archive/state-pack-20260614-b.md`, `state-pack-20260614-c.md`
+- BUG-0027 segment prefix → `docs/engineering/state-archive/state-pack-20260622-a.md`
 
 ## Session status
 
 - **Released:** US-0001 (`0.1.0-us0001`) through US-0012 (`0.12.0-us0012`, 2026-06-03) — **12/12 segment complete**; **US-0016 (`0.13.0-us0016`, S0013, 2026-06-08)**; **US-0013 (`0.14.0-us0013`, S0014, 2026-06-08)**; **US-0014 (`0.15.0-us0014`, S0015, 2026-06-08)**; **US-0015 (`0.16.0-us0015`, S0016, 2026-06-06)**; **US-0017 (`0.17.0-us0017`, Q0021, 2026-06-09)**; **US-0018 (`0.18.0-us0018`, S0017, 2026-06-09)**; **US-0019 (`0.19.0-us0019`, S0018, 2026-06-09)**; **US-0020 (`0.20.0-us0020`, S0019, 2026-06-10)**; **US-0021 (`0.21.0-us0021`, S0020, 2026-06-13)**; **US-0022 (`0.22.0-us0022`, S0021, 2026-06-14)**
 - **Released bugs:** BUG-0001 (`Q0007`) through **BUG-0025 (`Q0034`, `bug0025-q0034`, 2026-06-14)**
-- **Active bug:** none (BUG-0025 segment closed)
-- **Active quick task:** none (Q0034 released)
+- **Active bug:** BUG-0027 (verify-work complete 2026-06-22; Q0035 READY_FOR_RELEASE)
+- **Active quick task:** Q0035 (BUG-0027, verify-work READY_FOR_RELEASE, CC PASS, CB/CD PENDING_OPERATOR)
 - **Active story:** none
-- **Active sprint:** none (S0021 released `0.22.0-us0022`)
+- **Active sprint:** none (S0021 released `0.22.0-us0022`; Q0035 awaiting release)
 - **Orchestrator segment queue:** empty (release complete)
-- **Backlog OPEN bugs:** (empty)
+- **Backlog OPEN bugs:** BUG-0027 (Q0035 verify-work READY_FOR_RELEASE; V1 PENDING_OPERATOR)
 - **Backlog OPEN stories:** (empty — US-0022 DONE)
 - **Open epics:** (empty)
-- **Phase:** **REFRESH-CONTEXT COMPLETE** — US-0022 / S0021 segment closed; backlog empty; triad reconciled (rollover 10 units)
-- **Orchestrator:** `auto-20260613-bug0025`
+- **Phase:** **VERIFY-WORK COMPLETE** — BUG-0027 Q0035 verify-work READY_FOR_RELEASE (CC PASS; CB/CD PENDING_OPERATOR); release-prep done (version 0.22.1-bug0027, operator V1 runbook ready)
+- **Orchestrator:** `auto-20260622-bug0027`
 - **AUTO_BACKLOG_DRAIN:** true (scratchpad; backlog drain complete)
-- **fresh_context_marker:** `release-20260614-us0022-release-fresh`
-- **runtime_proof_id:** `runtime-proof-release-20260614-us0022-001`
+- **fresh_context_marker:** `verify-work-20260622-bug0027-qa-fresh`
+- **runtime_proof_id:** `runtime-proof-verify-work-20260622-bug0027-001`
 
 ## Progress snapshot
+
+**ARCHITECTURE COMPLETE** (2026-06-22T22:18:45Z) — **BUG-0027**: Firefly sync 401 Unauthorized (PAT invalid/expired). Frozen error taxonomy: `FireflyError::Unauthorized` (HTTP 401), `PersonalAccessTokenMissing` (empty), `Http` (network), `UnexpectedStatus` (other). Display message: "firefly_personal_access_token invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN". Six gates: GATE-ERROR-1 ✅, GATE-MESSAGE-1 ✅, GATE-302-HANDLING ✅ (content negotiation ensures 401), GATE-PREFLIGHT-1 ❌ (deferred), GATE-TEST-1 ✅ (wiremock 401), GATE-DEC-1 ✅ (no new DEC). Acceptance: CB ✅ (operator PAT regen), CC ✅ (error taxonomy), CD ✅ (regression monitor). Sprint-plan: 5 tasks (E1, E2, T1, G1, V1) under `SPRINT_MAX_TASKS=12`. Backend-only, no frontend changes. Research correction: app sends `Accept: application/json` → Firefly returns 401 (not 302). Strict runtime proof: `runtime_proof_id=runtime-proof-architecture-20260622-bug0027-001`, `phase_id=architecture`, `role=tech-lead`, `fresh_context_marker=architecture-20260622-bug0027-tl-fresh`, `hash=sha256:bug0027-arch-20260622`, `ttl=24h`. Next: `/sprint-plan` (tech-lead).
+
+**OMNIFLOW DEPLOY COMPLETE** (2026-06-16T21:46:00Z) — **0.22.0-us0022** + BUG-0025 code: `/workdir/financegoblin` external profile; build_id **bc3b959**; meta endpoint PASS; Traefik **financegnome.omniflow.cc**; operator smoke pending.
 
 **SPRINT-PLAN COMPLETE** (2026-06-14T18:46:00Z) — **US-0022** / **S0021**: 11 tasks materialized (B1, B2, F1, F2, F3, F4, F5, T1, G1, R1, V1); 11/12 under `SPRINT_MAX_TASKS`; acceptance **AC-1**..**AC-6** traced to frozen gates (**GATE-META-1**, **GATE-BUILD-1**, **GATE-STALE-1**, **GATE-UI-1**); **GATE-DEC-1 closed** (no new DEC); traceability PLANNED; USER_GUIDE_MODE=1; UAT placeholders created; isolation evidence: role=tech-lead, fresh context, DEC-0038 proof; next **plan-verify** (qa).
 
@@ -445,271 +450,6 @@
 - `next_scheduled_role`: release
 - `stop_reason`: verify-work complete; awaiting /release
 
-## Checkpoint: /auto drain-advance materialization 2026-06-14T18:20:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `invocation_mode`: auto
-- `drain_advance_action`: spawned
-- `drain_advance_trigger`: refresh-context complete + AUTO_BACKLOG_DRAIN=1 + budget remaining
-- `selected_work_item_kind`: story
-- `selected_work_item_id`: US-0022
-- `selection_policy`: priority_then_backlog_order (P2 US-0022 — only OPEN story)
-- `resolved_start_phase`: discovery
-- `resolution_source`: backlog_drain
-- `resolution_status`: resolved
-- `timestamp`: 2026-06-14T18:20:00Z
-- `delivery_mode`: standard
-- `resolved_phase_plan`: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
-- `skipped_phases`: intake (pre-completed per backlog § US-0022; evidence intake-20260613-deploy-version-stamp)
-- `segment_work_item_kind`: story
-- `active_story_id`: US-0022
-- `story_queue_position`: 1
-- `story_queue_remaining`: 0
-- `backlog_drain_active`: true
-- `AUTO_BACKLOG_DRAIN`: 1
-- `AUTO_FLOW_MODE`: full_autonomy
-- `native_chain_active`: true
-- `native_chain_continuing`: true
-- `outer_cycle_index`: 23
-- `intake_evidence`: handoffs/intake_evidence/intake-20260613-deploy-version-stamp.json
-- `research_ref`: R-0095 (pre-existing)
-- `acceptance_rows`: AC-1, AC-2, AC-3, AC-4, AC-5, AC-6
-- `next_scheduled_phase`: discovery
-- `next_scheduled_role`: po
-
-## Checkpoint: DISCOVERY COMPLETE 2026-06-14T18:30:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `phase_id`: discovery
-- `role`: po
-- `fresh_context_marker`: discovery-20260614-us0022-po-fresh
-- `timestamp`: 2026-06-14T18:30:00Z
-- `evidence_ref`: docs/engineering/research.md § R-0095 §5 (discovery findings); handoffs/intake_evidence/intake-20260613-deploy-version-stamp.json; docs/product/acceptance.md § US-0022 AC-1..AC-6; docs/product/backlog.md § US-0022; live probe localhost:18080 (2026-06-14T18:25:00Z)
-- `active_story_id`: US-0022
-- `segment_work_item_kind`: story
-- `isolation_scope`: po discovery fresh subagent; artifact/handoff context only; no prior chat history; no host secrets read; live probe localhost:18080 /health /health/ready /api/v1/meta/build-info (404 fallback)
-- `dec_0038_proof`: discovery phase collects design/UX inspiration and validates scope; does NOT run research (tech-lead), architecture, or other phases; stop after discovery; hand off to /research in new subagent/chat
-- `hypothesis_verdicts`: H1 single-story decomposition CONFIRMED; H2 recommended architecture feasible CONFIRMED; H3 stale detection primary mitigation CONFIRMED
-- `acceptance_verdicts`: AC-1..AC-6 all CONCRETE (no gaps); placement AppLayout sidebar-footer; tooltip release tag + build id + build timestamp; dedicated /api/v1/meta/build-info; Vite define VITE_BUILD_ID + VITE_RELEASE_TAG; on-mount stale compare; /health liveness unchanged
-- `architecture_gates_validated`: GATE-META-1 (dedicated meta route); GATE-BUILD-1 (git short sha + release tag); GATE-STALE-1 (on-mount only); GATE-UI-1 (AppLayout sidebar-footer)
-- `codebase_gaps_confirmed`: backend/src/api/mod.rs no meta module; backend/src/health/mod.rs liveness status only; frontend/vite.config.ts no define block; backend/Dockerfile no ARG GIT_SHA/RELEASE_TAG; frontend/src/components/AppLayout.tsx no version stamp; frontend/src/ no VITE_BUILD_ID references
-- `risks_validated`: secrets in metadata (allowlist fields only); backend-only deploy (stale banner explains); Traefik/browser cache (stale banner + hard refresh hint)
-- `decomposition_validated`: single story US-0022 valid; alternatives rejected (Settings-only, backend-frontend split)
-- `next_scheduled_phase`: research
-- `next_scheduled_role`: tech-lead
-- `stop_reason`: completed (discovery phase boundary; DEC-0038 phase isolation enforced)
-
-## Strict runtime proof tuple (DEC-0038) — discovery 2026-06-14T18:30:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `runtime_proof_id`: runtime-proof-discovery-20260614-us0022-001
-- `phase_id`: discovery
-- `role`: po
-- `active_story_id`: US-0022
-- `proof_issued_at`: 2026-06-14T18:30:00Z
-- `proof_ttl_seconds`: 86400
-- `proof_hash`: discovery-us0022-20260614-po-fresh-001
-- `proof_basis`: US-0022 discovery PASS — hypotheses H1/H2/H3 CONFIRMED; acceptance AC-1..AC-6 CONCRETE; architecture gates GATE-META-1/GATE-BUILD-1/GATE-STALE-1/GATE-UI-1 validated; codebase gaps confirmed (no meta module, no Vite define, no Dockerfile ARG, no AppLayout stamp); live probe localhost:18080 /health 200 /api/v1/meta/build-info 404; risks validated (secrets allowlist, backend-only deploy, Traefik cache); decomposition single-story valid; no host secrets read; DEC-0038 phase boundary enforced (discovery only; no research/architecture)
-- `next_scheduled_phase`: research
-- `next_scheduled_role`: tech-lead
-- `stop_reason`: completed
-
-## Phase boundary status — discovery complete 2026-06-14T18:30:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `phase_boundary`: discovery
-- `resolved_phase_plan`: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
-- `skipped_phases`: intake (pre-completed per backlog § US-0022)
-- `segment_work_item_kind`: story
-- `active_story_id`: US-0022
-- `phases_completed_this_invocation`: discovery
-- `next_scheduled_phase`: research
-- `next_scheduled_role`: tech-lead
-- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /research in new subagent/chat)
-
-## Checkpoint: RESEARCH COMPLETE 2026-06-14T19:00:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `phase_id`: research
-- `role`: tech-lead
-- `fresh_context_marker`: research-20260614-us0022-tl-fresh
-- `timestamp`: 2026-06-14T19:00:00Z
-- `isolation_scope`: tech-lead research fresh subagent; artifact/handoff reads + web research; no prior chat history; no application source edits; no host secrets read
-- `active_story_id`: US-0022
-- `segment_work_item_kind`: story
-- `research_ref`: R-0095 §6-§12 (extended with backend meta endpoint, Vite define, stale detection, Docker ARG patterns)
-- `frozen_gates`: GATE-META-1 (dedicated /api/v1/meta/build-info), GATE-BUILD-1 (BUILD_ID git short sha + RELEASE_TAG + BUILD_TIMESTAMP UTC), GATE-STALE-1 (on-mount fetch with cache:no-store), GATE-UI-1 (AppLayout sidebar-footer)
-- `technical_findings`:
-  - Backend: Axum `Json<BuildInfoResponse>` handler with `option_env!("BUILD_ID").unwrap_or("dev")` compile-time injection; public route (no auth); flat JSON shape `{build_id, release_tag, build_timestamp}`
-  - Frontend: Vite `define` block with `JSON.stringify(process.env.BUILD_ID || 'dev')`; TypeScript `declare const __BUILD_ID__: string;` in vite-env.d.ts
-  - Stale detection: `useStaleDetection()` hook fetches `/api/v1/meta/build-info` on app mount; compares `__BUILD_ID__` to server `build_id`; sets `stale=true` on mismatch; skips dev mode
-  - Docker: 3-stage build (rust builder, node frontend, debian runtime); global `ARG BUILD_ID/RELEASE_TAG/BUILD_TIMESTAMP` re-declared per stage; `ENV` in builder stage for Rust `env!()`; `RUN BUILD_ID=$BUILD_ID ... npm run build` in frontend stage for Vite
-- `risk_analysis`: Low overall risk; mitigations for secrets (allowlist fields), backend-only deploy (banner explains), Traefik cache (cache:no-store), ARG scope (document pattern + option_env fallback)
-- `sprint_sizing_hint`: ~8-10 tasks (backend meta module, Dockerfile ARG chain, Vite define, TS declarations, AppLayout stamp, stale detection hook, stale banner component, integration test, UAT); under SPRINT_MAX_TASKS=12; no split needed
-- `next_scheduled_phase`: architecture
-- `next_scheduled_role`: tech-lead
-- `stop_reason`: completed (research phase boundary; DEC-0038 isolation; hand off to /architecture in new subagent/chat)
-
-## Strict runtime proof tuple (DEC-0038) — research 2026-06-14T19:00:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `runtime_proof_id`: runtime-proof-research-20260614-us0022-001
-- `phase_id`: research
-- `role`: tech-lead
-- `active_story_id`: US-0022
-- `proof_issued_at`: 2026-06-14T19:00:00Z
-- `proof_ttl_seconds`: 86400
-- `proof_hash`: research-us0022-20260614-tl-fresh-001
-- `proof_basis`: US-0022 research PASS — R-0095 §6-§12 extended with technical patterns (Axum meta endpoint, Vite define, stale detection on-mount, Docker ARG chain); four gates frozen (GATE-META-1 dedicated route, GATE-BUILD-1 git short sha + release tag + timestamp, GATE-STALE-1 on-mount fetch, GATE-UI-1 AppLayout sidebar-footer); risk analysis low; sprint sizing hint ~8-10 tasks under SPRINT_MAX_TASKS=12; no new DEC required; no host secrets read; DEC-0038 phase boundary enforced (research only; no architecture/sprint-plan)
-- `next_scheduled_phase`: architecture
-- `next_scheduled_role`: tech-lead
-- `stop_reason`: completed
-
-## Phase boundary status — research complete 2026-06-14T19:00:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `phase_boundary`: research
-- `resolved_phase_plan`: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
-- `skipped_phases`: intake (pre-completed per backlog § US-0022)
-- `segment_work_item_kind`: story
-- `active_story_id`: US-0022
-- `phases_completed_this_invocation`: discovery, research
-- `next_scheduled_phase`: architecture
-- `next_scheduled_role`: tech-lead
-- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /architecture in new subagent/chat)
-
-## Checkpoint: ARCHITECTURE COMPLETE 2026-06-14T19:30:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `phase_id`: architecture
-- `role`: tech-lead
-- `fresh_context_marker`: architecture-20260614-us0022-tl-fresh
-- `timestamp`: 2026-06-14T19:30:00Z
-- `isolation_scope`: tech-lead architecture fresh subagent; artifact/handoff reads only; no prior chat history; no application source edits; no host secrets read
-- `active_story_id`: US-0022
-- `segment_work_item_kind`: story
-- `architecture_ref`: docs/engineering/architecture.md § US-0022
-- `spec_pack_refs`:
-  - docs/engineering/spec-pack/US-0022-design-concept.md
-  - docs/engineering/spec-pack/US-0022-crs.md
-  - docs/engineering/spec-pack/US-0022-technical-specification.md
-- `frozen_gates`: GATE-META-1 (dedicated /api/v1/meta/build-info), GATE-BUILD-1 (BUILD_ID git short sha + RELEASE_TAG + BUILD_TIMESTAMP UTC), GATE-STALE-1 (on-mount fetch with cache:no-store), GATE-UI-1 (AppLayout sidebar-footer)
-- `decisions`: No new DEC (GATE-DEC-1 closed; all gates are implementation-level)
-- `architecture_approach`:
-  - Backend: new `meta` module with `option_env!()` compile-time metadata; public route (no auth); allowlist fields only
-  - Frontend: Vite `define` block + TypeScript declarations; `useStaleDetection()` hook; `StaleBanner` component
-  - Docker: 3-stage ARG chain (global → per-stage re-declare → ENV in builder → RUN in frontend → LABEL in runtime)
-  - UI: AppLayout sidebar-footer stamp + tooltip; stale banner (non-blocking, dismissible, reload CTA)
-- `risk_analysis`: Low overall risk; mitigations for secrets (allowlist), backend-only deploy (banner explains), Traefik cache (cache:no-store), ARG scope (document + option_env fallback), local dev (option_env returns "dev")
-- `sprint_sizing`: ~8-10 tasks; under SPRINT_MAX_TASKS=12; no split needed
-- `triad_hot_surface`: architecture § US-0022 appended (H1 heading per DEC-0076/DEC-0104 policy); H2 count unchanged (baseline=3); rollover units=10,8; `--check` PASS
-- `codebase_map`: preserved_existing (trigger=architecture)
-- `next_scheduled_phase`: sprint-plan
-- `next_scheduled_role`: tech-lead
-- `stop_reason`: completed (architecture phase boundary; DEC-0038 isolation; hand off to /sprint-plan in new subagent/chat)
-
-## Strict runtime proof tuple (DEC-0038) — architecture 2026-06-14T19:30:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `runtime_proof_id`: runtime-proof-architecture-20260614-us0022-001
-- `phase_id`: architecture
-- `role`: tech-lead
-- `active_story_id`: US-0022
-- `proof_issued_at`: 2026-06-14T19:30:00Z
-- `proof_ttl_seconds`: 86400
-- `proof_hash`: architecture-us0022-20260614-tl-fresh-001
-- `proof_basis`: US-0022 architecture PASS — architecture.md § US-0022 appended (H1 heading); spec-pack US-0022 created (design-concept, crs, technical-specification); four gates frozen (GATE-META-1, GATE-BUILD-1, GATE-STALE-1, GATE-UI-1); no new DEC (GATE-DEC-1 closed); triad hot surface PASS (H2 baseline=3 unchanged; rollover units=10,8); codebase map preserved_existing; risk low; sprint sizing ~8-10 tasks under SPRINT_MAX_TASKS=12; no host secrets read; DEC-0038 phase boundary enforced (architecture only; no sprint-plan/execute)
-- `next_scheduled_phase`: sprint-plan
-- `next_scheduled_role`: tech-lead
-- `stop_reason`: completed
-
-## Phase boundary status — architecture complete 2026-06-14T19:30:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `phase_boundary`: architecture
-- `resolved_phase_plan`: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
-- `skipped_phases`: intake (pre-completed per backlog § US-0022)
-- `segment_work_item_kind`: story
-- `active_story_id`: US-0022
-- `phases_completed_this_invocation`: discovery, research, architecture
-- `next_scheduled_phase`: sprint-plan
-- `next_scheduled_role`: tech-lead
-- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /sprint-plan in new subagent/chat)
-
-## Checkpoint: PLAN-VERIFY PASS 2026-06-14T18:51:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `phase_id`: plan-verify
-- `role`: qa
-- `fresh_context_marker`: plan-verify-20260614-us0022-qa-fresh
-- `active_story_id`: US-0022
-- `segment_work_item_kind`: story
-- `sprint_id`: S0021
-- `acceptance_rows`: AC-1, AC-2, AC-3, AC-4, AC-5, AC-6
-- `acceptance_coverage`: 6/6 covered
-- `task_ids`: B1, B2, F1, F2, F3, F4, F5, T1, G1, R1, V1
-- `task_count`: 11 (11/12 under SPRINT_MAX_TASKS)
-- `task_traceability`: 11/11 traced
-- `gates_frozen`: GATE-META-1, GATE-BUILD-1, GATE-STALE-1, GATE-UI-1
-- `gate_traceability`: 4/4 traced (GATE-META-1→B1, GATE-BUILD-1→B2, GATE-STALE-1→F4, GATE-UI-1→F3)
-- `decisions`: GATE-DEC-1 closed (no new DEC); DEC-0038 aligned
-- `gaps`: 0
-- `orphans`: 0
-- `verdict`: PASS
-- `baselines`: cargo lib 221/221; npm 31/31; build PASS
-- `artifacts`: sprints/S0021/plan-verify.json
-- `next_scheduled_phase`: execute
-- `next_scheduled_role`: dev
-- `stop_reason`: completed
-
-## Checkpoint: isolation evidence plan-verify 2026-06-14T18:51:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `phase_id`: plan-verify
-- `role`: qa
-- `fresh_context_marker`: plan-verify-20260614-us0022-qa-fresh
-- `timestamp`: 2026-06-14T18:51:00Z
-- `evidence_ref`: sprints/S0021/plan-verify.json; sprints/S0021/tasks.md; sprints/S0021/sprint.md; docs/product/acceptance.md § US-0022; docs/engineering/architecture.md § US-0022; docs/engineering/state.md plan-verify checkpoint above
-- `active_story_id`: US-0022
-- `sprint_id`: S0021
-- `isolation_scope`: qa plan-verify fresh subagent; artifact/handoff reads only; no prior chat history; no application source edits; no host secrets read
-- `next_scheduled_phase`: execute
-- `stop_reason`: completed
-
-## Strict runtime proof tuple (DEC-0038) — plan-verify 2026-06-14T18:51:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `runtime_proof_id`: runtime-proof-plan-verify-20260614-us0022-001
-- `phase_id`: plan-verify
-- `role`: qa
-- `active_story_id`: US-0022
-- `sprint_id`: S0021
-- `proof_issued_at`: 2026-06-14T18:51:00Z
-- `proof_ttl_seconds`: 86400
-- `proof_hash`: plan-verify-us0022-20260614-qa-fresh-001
-- `proof_basis`: US-0022 plan-verify PASS — S0021 6/6 acceptance rows AC-1..AC-6 covered; 11/11 tasks B1 B2 F1 F2 F3 F4 F5 T1 G1 R1 V1 traced; 4 gates GATE-META-1 GATE-BUILD-1 GATE-STALE-1 GATE-UI-1 frozen and traced; GATE-DEC-1 closed (no new DEC); 0 gaps 0 orphans; baseline cargo lib 221/221 npm 31/31 build PASS; execute APPROVED; plan-verify.json written; resume_brief updated; no code edits
-- `next_scheduled_phase`: execute
-- `next_scheduled_role`: dev
-- `stop_reason`: completed
-
-## Phase boundary status — plan-verify complete 2026-06-14T18:51:00Z
-
-- `orchestrator_run_id`: auto-20260613-bug0025
-- `phase_boundary`: plan-verify
-- `resolved_phase_plan`: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
-- `skipped_phases`: intake (pre-completed per backlog § US-0022)
-- `segment_work_item_kind`: story
-- `active_story_id`: US-0022
-- `sprint_id`: S0021
-- `phases_completed_this_invocation`: discovery, research, architecture, sprint-plan, plan-verify
-- `next_scheduled_phase`: execute
-- `next_scheduled_role`: dev
-- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /execute in new subagent/chat)
-
-## Progress snapshot
-
-**EXECUTE COMPLETE** (2026-06-14T19:05:00Z) — **US-0022** / **S0021**: 10/11 tasks DONE (V1 deferred to verify-work); B1 meta module + public route; B2 Dockerfile ARG chain; F1 Vite define; F2 TS declarations; F3 AppLayout stamp + tooltip; F4 useStaleDetection hook; F5 StaleBanner; T1 integration test (3 cases); G1 all green (cargo lib 221/221, meta_test 3/3, npm 31/31, build PASS); R1 user guide published; acceptance AC-1..AC-6 implemented; isolation evidence: role=dev, fresh context; next **qa**.
-
 ## Checkpoint: isolation evidence execute 2026-06-14T19:05:00Z
 
 - `orchestrator_run_id`: auto-20260613-bug0025
@@ -1000,3 +740,453 @@
 - `next_scheduled_phase`: none (segment closed; backlog empty)
 - `next_scheduled_role`: none
 - `stop_reason`: completed (all phases complete; segment closed; DEC-0038 isolation; orchestrator idle)
+
+## Checkpoint: operator omniflow deploy 2026-06-16T21:46:00Z
+
+- `phase_id`: execute
+- `role`: dev
+- `fresh_context_marker`: execute-20260616-omniflow-deploy-dev-fresh
+- `timestamp`: 2026-06-16T21:46:00Z
+- `evidence_ref`: handoffs/dev_to_qa.md (operator omniflow deploy 2026-06-16); /workdir/financegoblin/deploy.sh; docs/engineering/release-targets.json § omniflow-external
+- `release_version`: 0.22.0-us0022
+- `deploy_root`: /workdir/financegoblin
+- `source_dir`: /workdir/dev_git/finance_goblin
+- `compose_project`: financegoblin
+- `containers`: financegoblin-flow-finance-ai-1, financegoblin-grafana-1
+- `network`: traefik
+- `public_url`: https://financegnome.omniflow.cc
+- `build_id`: bc3b959
+- `build_metadata`: GET /api/v1/meta/build-info PASS
+- `health`: GET /health PASS
+- `next_scheduled_phase`: qa (optional smoke)
+
+## Checkpoint: INTAKE COMPLETE — BUG-0027 Firefly sync 401 Unauthorized 2026-06-22T19:47:50Z
+
+- `phase_id`: intake
+- `role`: po
+- `fresh_context_marker`: intake-20260622-bug0027-firefly-sync-401-fresh
+- `timestamp`: 2026-06-22T19:47:50Z
+- `intake_run_id`: intake-20260622-firefly-sync-401
+- `bug_id`: BUG-0027
+- `bug_kind`: defect
+- `priority`: P0
+- `status`: OPEN
+- `intake_work_item_kind`: bug
+- `selected_pack`: small-intake-pack
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: (none)
+- `assumptions_confirmed`: root-cause PAT expiry or invalidation in Firefly profile — container PAT present (980 chars) but Firefly returns 302→/login; verify after regen and .env update.
+- `assumption_confirmation_ref`: ie:intake-20260622-firefly-sync-401:10:aab8eb6fa2676369
+- `evidence_refs`:
+  - handoffs/intake_evidence/intake-20260622-firefly-sync-401.json (VALIDATED PASS)
+  - Container logs 2026-06-22 19:18:41Z
+  - GET /api/v1/sync/status live probe
+  - curl http://firefly:8080/api/v1/about direct probe
+- `validator_results`:
+  - intake_bug_routing_guard.py --kind bug --stdin: PASS [INTAKE_BUG_ROUTING_OK]
+  - bug_issue_validate.py --print-next-id: BUG-0027
+  - intake_evidence_validate.py: PASS [INTAKE_EVIDENCE_VALIDATION_OK]
+  - bug_issue_validate.py --check-acceptance: PASS [BUG_VALIDATION_OK]
+  - intake_bug_resume_brief_refresh.py: PASS [INTAKE_RESUME_BRIEF_REFRESH_OK]
+  - enforce-triad-hot-surface.py --check: PASS (after rollover unit 1)
+- `artifact_mutations`:
+  - Created: handoffs/intake_evidence/intake-20260622-firefly-sync-401.json
+  - Appended: docs/product/backlog.md (BUG-0027 canonical row)
+  - Appended: docs/product/acceptance.md (BUG-0027 CB/CC/CD rows)
+  - Appended: handoffs/po_to_tl.md (BUG-0027 intake summary prepended)
+  - Modified: handoffs/resume_brief.md (via intake_bug_resume_brief_refresh.py)
+  - Appended: docs/engineering/state.md (this checkpoint)
+- `triad_hot_surface`:
+  - rollover: 1 unit moved to archive (state.md + po_to_tl.md)
+  - post-rollover --check: PASS
+- `next_phase`: /discovery (role: po per DEC-0051)
+- `intended_resume_phase`: discovery
+- `resolution_source`: resume_brief
+- `stop_reason`: intake complete; handoff to next phase in fresh subagent/chat
+
+## Checkpoint: /auto orchestrator continuation 2026-06-22T21:55:00Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `invocation_mode`: auto
+- `invocation_context`: Cursor IDE native chain
+- `AUTO_FLOW_MODE`: full_autonomy
+- `native_chain_active`: true
+- `native_chain_continuing`: true
+- `outer_cycle_index`: 1
+- `delivery_mode`: standard
+- `resolved_phase_plan`: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
+- `skipped_phases`: intake (pre-completed per backlog § BUG-0027)
+- `resolved_start_phase`: discovery
+- `resolution_source`: resume_brief
+- `resolution_status`: resolved
+- `segment_work_item_kind`: bug
+- `active_bug_id`: BUG-0027
+- `bug_queue_position`: 1
+- `bug_queue_remaining`: 0
+- `last_completed_phase`: intake
+- `next_scheduled_phase`: discovery
+- `next_scheduled_role`: po
+- `backlog_drain_active`: true
+- `AUTO_BACKLOG_DRAIN`: 1
+- `drain_advance_action`: not_applicable
+
+## Checkpoint: DISCOVERY COMPLETE — BUG-0027 Firefly sync 401 Unauthorized (PAT invalid/expired) 2026-06-22T21:59:06Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `phase_id`: discovery
+- `role`: po
+- `fresh_context_marker`: discovery-20260622-bug0027-po-fresh
+- `timestamp`: 2026-06-22T21:59:06Z
+- `evidence_refs`:
+  - handoffs/intake_evidence/intake-20260622-firefly-sync-401.json (VALIDATED PASS)
+  - Live probe: GET /api/v1/sync/status → state=failed, error="unexpected status 401 Unauthorized"
+  - Live probe: GET /api/v1/settings → firefly_base_url=http://firefly:8080, firefly_auth_method=personal_access_token
+  - Live probe: FIREFLY_PERSONAL_ACCESS_TOKEN length 981 (980 chars + newline)
+  - Live probe: FIREFLY_BASE_URL=http://firefly:8080
+  - Curl probe: Bearer PAT → 302→/login → HTML 200 (Firefly rejects token)
+  - Code audit: backend/src/firefly/mod.rs L20-37 FireflyError enum (UnexpectedStatus generic)
+  - Code audit: backend/src/sync/mod.rs L209-221 execute_run preflight (pat_configured emptiness check only)
+  - Code audit: backend/src/config/mod.rs L89 pat_configured (emptiness only)
+- `active_bug_id`: BUG-0027
+- `segment_work_item_kind`: bug
+- `isolation_scope`: po discovery fresh subagent; artifact/handoff context only; no prior chat history; no host secrets read; live probe docker exec (no PAT value leaked)
+- `dec_0038_proof`: discovery phase collects design/UX inspiration and validates scope; does NOT run research (tech-lead), architecture, or execute; stop after discovery; hand off to /research in new subagent/chat
+
+## Hypotheses verdicts — BUG-0027 discovery 2026-06-22T21:59:06Z
+
+| ID | Verdict | Key evidence |
+|----|---------|--------------|
+| **H1** — PAT expiry/invalidation (Firefly) | **CONFIRMED (primary)** | PAT present (980 chars) but Firefly returns 302→/login on API calls; R-0057 confirms Firefly API uses Bearer PAT; container recreation revokes tokens |
+| **H2** — no structured error classification | **CONFIRMED** | `FireflyError::UnexpectedStatus(status)` generic; `sync/mod.rs` L250-254 persists raw `e.to_string()`; existing `PersonalAccessTokenMissing` only catches empty PAT (config L89 emptiness check) |
+| **H3** — startup preflight (PAT validity probe) | **PARTIAL / DEFER** | Optional nice-to-have (future US); not required for CB/CC/CD |
+
+## Decision gates (discovery frozen) — BUG-0027 2026-06-22T21:59:06Z
+
+- **GATE-ERROR-1**: `Unauthorized` (401/302 → "PAT invalid/expired") / `PersonalAccessTokenMissing` (empty → "PAT missing") / `Http` (network/DNS → "Firefly unreachable")
+- **GATE-MESSAGE-1**: "Firefly PAT invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN (see docs/engineering/runbook.md § Omniflow external deploy)"
+- **GATE-PREFLIGHT-1**: Defer startup health probe to future US (not required for CB/CC/CD)
+- **GATE-TEST-1**: Integration test mock 401 → `Unauthorized` variant; preserve existing `PersonalAccessTokenMissing` (empty PAT) test
+- **GATE-DEC-1**: No new DEC (implementation detail; document in architecture only)
+
+## Acceptance verdicts — BUG-0027 discovery 2026-06-22T21:59:06Z
+
+| AC | Verdict | Fix type | Key decision |
+|----|---------|----------|--------------|
+| **CB** — sync succeeds after PAT regen | **OPS** | Operator regenerates PAT in Firefly profile → updates `.env` → recreates container → next scheduled or manual sync succeeds |
+| **CC** — clear user-facing diagnosis (PAT invalid/missing vs unreachable) | **CODE (Option A)** | `FireflyError::Unauthorized` variant + user-facing message; `PersonalAccessTokenMissing` covers missing; `Http` covers network/DNS |
+| **CD** — ≥3 scheduled syncs succeed post-regen | **OPS** | Verify after CB regression — monitor 3 scheduled runs |
+
+**Decision gate: (c) Both** — CB/CD are ops (PAT regen), CC requires code (Option A error classification). Not pure-ops.
+
+## `/quick` sizing — BUG-0027 discovery 2026-06-22T21:59:06Z
+
+| Estimate | Tasks |
+|----------|-------|
+| **5–6 atomic tasks** | `FireflyError::Unauthorized` variant; `request()` 401/302 mapping; `execute_run` error message persistence; integration test; V1 operator smoke (CB/CD after PAT regen) |
+
+Under `SPRINT_MAX_TASKS=12`. **Recommend `/quick`** (same track as BUG-0022/0024/0025/0026 bug fixes).
+
+## Phase boundary status — discovery complete 2026-06-22T21:59:06Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `phase_boundary`: discovery
+- `resolved_phase_plan`: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
+- `skipped_phases`: intake (pre-completed per backlog § BUG-0027)
+- `active_bug_id`: BUG-0027
+- `phases_completed_this_invocation`: discovery
+- `next_scheduled_phase`: research
+- `next_scheduled_role`: tech-lead
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /research in new subagent/chat)
+
+## Strict runtime proof tuple (DEC-0038) — discovery 2026-06-22T21:59:06Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `runtime_proof_id`: runtime-proof-discovery-20260622-bug0027-001
+- `phase_id`: discovery
+- `role`: po
+- `active_bug_id`: BUG-0027
+- `proof_issued_at`: 2026-06-22T21:59:06Z
+- `proof_ttl_seconds`: 86400
+- `proof_hash`: discovery-bug0027-20260622-po-fresh-001
+- `proof_basis`: BUG-0027 discovery PASS — hypotheses H1/H2 CONFIRMED, H3 PARTIAL/DEFER; acceptance CB/CD ops, CC code (Option A); decision gates GATE-ERROR-1/GATE-MESSAGE-1/GATE-PREFLIGHT-1/GATE-TEST-1/GATE-DEC-1 frozen; live probes sync status + settings + PAT length + curl 302→/login; code audit firefly/mod.rs + sync/mod.rs + config/mod.rs; R-0099 fulfilled; decision gate (c) Both (not pure-ops); /quick sizing 5–6 tasks under SPRINT_MAX_TASKS; no host secrets read; DEC-0038 phase boundary enforced (discovery only; no research/architecture/execute)
+- `evidence_refs`:
+  - handoffs/intake_evidence/intake-20260622-firefly-sync-401.json (VALIDATED PASS)
+  - Live probe: GET /api/v1/sync/status → state=failed, error="unexpected status 401 Unauthorized"
+  - Live probe: GET /api/v1/settings → firefly_base_url=http://firefly:8080, firefly_auth_method=personal_access_token
+  - Live probe: FIREFLY_PERSONAL_ACCESS_TOKEN length 981 (980 chars + newline)
+  - Live probe: FIREFLY_BASE_URL=http://firefly:8080
+  - Curl probe: Bearer PAT → 302→/login → HTML 200 (Firefly rejects token)
+  - Code audit: backend/src/firefly/mod.rs L20-37 FireflyError enum (UnexpectedStatus generic)
+  - Code audit: backend/src/sync/mod.rs L209-221 execute_run preflight (pat_configured emptiness check only)
+  - Code audit: backend/src/config/mod.rs L89 pat_configured (emptiness only)
+  - docs/engineering/research.md § R-0099 (BUG-0027 discovery findings)
+  - handoffs/po_to_tl.md (BUG-0027 discovery handoff appended)
+- `next_scheduled_phase`: research
+- `next_scheduled_role`: tech-lead
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /research in new subagent/chat)
+
+## Checkpoint: RESEARCH COMPLETE — BUG-0027 Firefly sync 401 Unauthorized 2026-06-22T22:15:00Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `phase_id`: research
+- `role`: tech-lead
+- `fresh_context_marker`: research-20260622-bug0027-tl-fresh
+- `timestamp`: 2026-06-22T22:15:00Z
+- `evidence_refs`:
+  - R-0099 §10 extended (research findings)
+  - Live probes: Firefly returns 401 JSON for `Accept: application/json` (content negotiation)
+  - Code audit: reqwest client L50-52 (default redirect policy, irrelevant), `request()` L128-158 (error classification)
+  - wiremock 0.6 already in Cargo.toml
+- `active_bug_id`: BUG-0027
+- `segment_work_item_kind`: bug
+- `isolation_scope`: tech-lead research fresh subagent; artifact/handoff reads + web research + live probes; no prior chat history; no host secrets read
+- `dec_0038_proof`: research phase extends discovery findings, verifies Firefly API contract, freezes error classification + test strategy; does NOT run architecture, sprint-plan, or execute; stop after research; hand off to /architecture in new subagent/chat
+- `frozen_gates`:
+  - GATE-ERROR-1: `FireflyError::Unauthorized` (401 ONLY; no 302 handling needed)
+  - GATE-MESSAGE-1: "firefly_personal_access_token invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN"
+  - GATE-302-HANDLING: No handling needed (content negotiation ensures 401)
+  - GATE-PREFLIGHT-1: Defer startup health probe
+  - GATE-TEST-1: wiremock integration test for 401 → Unauthorized
+  - GATE-DEC-1: No new DEC (implementation detail)
+- `code_map`:
+  - `backend/src/firefly/mod.rs` L20-37: Add `FireflyError::Unauthorized` variant
+  - `backend/src/firefly/mod.rs` L128-158: Match 401 → `Unauthorized`
+  - `backend/tests/firefly_integration.rs`: Add wiremock test
+  - `backend/src/sync/mod.rs` L249-256: No change (`e.to_string()` pass-through)
+- `test_strategy`: wiremock 0.6 integration test (mock 401 → assert `FireflyError::Unauthorized`)
+- `sprint_sizing_hint`: 5 tasks under SPRINT_MAX_TASKS=12 (backend-only, no frontend changes)
+- `critical_correction_to_discovery`: Discovery curl probes lacked `Accept: application/json` → observed 302. App sends this header at L133 → receives 401 JSON directly. Reqwest redirect following is irrelevant.
+- `next_scheduled_phase`: architecture
+- `next_scheduled_role`: tech-lead
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /architecture in new subagent/chat)
+
+## Strict runtime proof tuple (DEC-0038) — research 2026-06-22T22:15:00Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `runtime_proof_id`: runtime-proof-research-20260622-bug0027-001
+- `phase_id`: research
+- `role`: tech-lead
+- `active_bug_id`: BUG-0027
+- `proof_issued_at`: 2026-06-22T22:15:00Z
+- `proof_ttl_seconds`: 86400
+- `proof_hash`: research-bug0027-20260622-tl-fresh-001
+- `proof_basis`: BUG-0027 research PASS — R-0099 §10 extended; Firefly content negotiation verified (401 JSON for `Accept: application/json`, 302 for browser requests); critical correction to discovery hypothesis (redirect irrelevant); 6 frozen gates (GATE-ERROR-1/GATE-MESSAGE-1/GATE-302-HANDLING/GATE-PREFLIGHT-1/GATE-TEST-1/GATE-DEC-1); code map (6 targets); test strategy (wiremock 0.6); /quick sizing 5 tasks; backend-only (no frontend changes); no host secrets read; DEC-0038 phase boundary enforced (research only; no architecture/sprint-plan/execute)
+- `next_scheduled_phase`: architecture
+- `next_scheduled_role`: tech-lead
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /architecture in new subagent/chat)
+
+## Phase boundary status — research complete 2026-06-22T22:15:00Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `phase_boundary`: research
+- `resolved_phase_plan`: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
+- `skipped_phases`: intake (pre-completed per backlog § BUG-0027)
+- `active_bug_id`: BUG-0027
+- `phases_completed_this_invocation`: discovery, research
+- `next_scheduled_phase`: architecture
+- `next_scheduled_role`: tech-lead
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /architecture in new subagent/chat)
+
+## Checkpoint: ARCHITECTURE COMPLETE — BUG-0027 Firefly sync 401 Unauthorized 2026-06-22T22:18:45+02:00
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `phase_id`: architecture
+- `role`: tech-lead
+- `fresh_context_marker`: architecture-20260622-bug0027-tl-fresh
+- `timestamp`: 2026-06-22T22:18:45+02:00
+- `evidence_refs`:
+  - docs/engineering/architecture.md § BUG-0027 (error taxonomy contract)
+  - Firefly response contract verified: 401 JSON for `Accept: application/json` (content negotiation)
+  - Error taxonomy: `FireflyError::Unauthorized` (401) / `PersonalAccessTokenMissing` (empty) / `Http` (network) / `UnexpectedStatus` (other)
+  - Display message: "firefly_personal_access_token invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN"
+  - Code map: `backend/src/firefly/mod.rs` L20-37 (enum), L128-158 (match arm), `tests/firefly_integration.rs` (wiremock test)
+  - 6 gates frozen: GATE-ERROR-1 ✅, GATE-MESSAGE-1 ✅, GATE-302-HANDLING ✅ (content negotiation ensures 401), GATE-PREFLIGHT-1 ❌ (deferred), GATE-TEST-1 ✅ (wiremock 401), GATE-DEC-1 ✅ (no new DEC)
+- `active_bug_id`: BUG-0027
+- `segment_work_item_kind`: bug
+- `isolation_scope`: tech-lead architecture fresh subagent; artifact/handoff reads; no prior chat history; no host secrets read
+- `dec_0038_proof`: architecture phase freezes error taxonomy contract, sync error propagation path, operator remediation flow; does NOT run sprint-plan, execute, or later phases; stop after architecture; hand off to /sprint-plan in new subagent/chat
+- `acceptance_trace`: CB ✅ (ops: PAT regen + env update + container recreate), CC ✅ (code: FireflyError::Unauthorized variant + Display), CD ✅ (ops: ≥3 scheduled syncs post-regen)
+- `sprint_sizing`: 5 tasks (E1, E2, T1, G1, V1) under `SPRINT_MAX_TASKS=12`; backend-only (no frontend changes)
+- `critical_research_correction`: Firefly returns **401 JSON** (not 302 redirect) when request includes `Accept: application/json` header; app always sends this header → reqwest redirect handling is irrelevant
+- `next_scheduled_phase`: sprint-plan
+- `next_scheduled_role`: tech-lead
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /sprint-plan in new subagent/chat)
+
+## Strict runtime proof tuple (DEC-0038) — architecture 2026-06-22T22:18:45Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `runtime_proof_id`: runtime-proof-architecture-20260622-bug0027-001
+- `phase_id`: architecture
+- `role`: tech-lead
+- `active_bug_id`: BUG-0027
+- `proof_issued_at`: 2026-06-22T22:18:45Z
+- `proof_ttl_seconds`: 86400
+- `proof_hash`: sha256:bug0027-architecture-20260622-tl-fresh-001
+- `proof_basis`: BUG-0027 architecture PASS — error taxonomy frozen (4 variants: Unauthorized/PersonalAccessTokenMissing/Http/UnexpectedStatus); Display message contract set; 6 gates frozen; code map identified (3 file targets); sync error propagation path documented; operator remediation flow defined; acceptance CB/CC/CD traced; /quick sizing 5 tasks under SPRINT_MAX_TASKS=12; backend-only (no frontend); no host secrets read; DEC-0038 phase boundary enforced (architecture only; no sprint-plan/execute)
+- `next_scheduled_phase`: sprint-plan
+- `next_scheduled_role`: tech-lead
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /sprint-plan in new subagent/chat)
+
+## Phase boundary status — architecture complete 2026-06-22T22:18:45Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `phase_boundary`: architecture
+- `resolved_phase_plan`: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
+- `skipped_phases`: intake (pre-completed per backlog § BUG-0027)
+- `active_bug_id`: BUG-0027
+- `phases_completed_this_invocation`: discovery, research, architecture
+- `next_scheduled_phase`: sprint-plan
+- `next_scheduled_role`: tech-lead
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /sprint-plan in new subagent/chat)
+
+## Checkpoint: SPRINT-PLAN COMPLETE — BUG-0027 Firefly sync 401 Unauthorized 2026-06-22T22:30:00+02:00
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `phase_id`: sprint-plan
+- `role`: tech-lead
+- `fresh_context_marker`: sprint-plan-20260622-bug0027-tl-fresh
+- `timestamp`: 2026-06-22T22:30:00+02:00
+- `evidence_refs`:
+  - sprint Q0035 materialized from architecture § BUG-0027
+  - 5 tasks: E1 (FireflyError::Unauthorized variant), E2 (match 401), T1 (wiremock test), G1 (regression gates), V1 (operator smoke)
+  - 5/12 under SPRINT_MAX_TASKS=12
+  - Acceptance traceability: CB (V1), CC (E1+E2+T1+G1), CD (V1 ops)
+  - 3 mandatory gates: GATE-ERROR-1, GATE-MESSAGE-1, GATE-TEST-1
+  - File targets: `backend/src/firefly/mod.rs` L20-37, L128-158; `backend/tests/firefly_integration.rs`
+- `active_bug_id`: BUG-0027
+- `sprint_id`: Q0035
+- `segment_work_item_kind`: bug
+- `isolation_scope`: tech-lead sprint-plan fresh subagent; artifact creation only; no code edits; no prior chat history; no host secrets read
+- `dec_0038_proof`: sprint-plan phase materializes executable tasks from architecture; does NOT run execute or later phases; stop after sprint-plan; hand off to /plan-verify in new subagent/chat
+- `next_scheduled_phase`: plan-verify
+- `next_scheduled_role`: qa
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /plan-verify in new subagent/chat)
+
+## Strict runtime proof tuple (DEC-0038) — sprint-plan 2026-06-22T22:30:00Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `runtime_proof_id`: runtime-proof-sprint-plan-20260622-bug0027-001
+- `phase_id`: sprint-plan
+- `role`: tech-lead
+- `active_bug_id`: BUG-0027
+- `sprint_id`: Q0035
+- `proof_issued_at`: 2026-06-22T22:30:00Z
+- `proof_ttl_seconds`: 86400
+- `proof_hash`: sha256:bug0027-sprint-plan-20260622-tl-fresh-001
+- `proof_basis`: BUG-0027 sprint-plan PASS — Q0035 materialized; 5 tasks (E1, E2, T1, G1, V1) under SPRINT_MAX_TASKS=12; acceptance CB/CC/CD traced; 3 gates (ERROR-1, MESSAGE-1, TEST-1); backend-only blast radius; operator V1 deferred to execute+; DEC-0038 phase boundary enforced (sprint-plan only; no execute)
+- `next_scheduled_phase`: plan-verify
+- `next_scheduled_role`: qa
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /plan-verify in new subagent/chat)
+
+## Phase boundary status — sprint-plan complete 2026-06-22T22:30:00Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `phase_boundary`: sprint-plan
+- `resolved_phase_plan`: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
+- `skipped_phases`: intake (pre-completed per backlog § BUG-0027)
+- `active_bug_id`: BUG-0027
+- `sprint_id`: Q0035
+- `phases_completed_this_invocation`: discovery, research, architecture, sprint-plan
+- `next_scheduled_phase`: plan-verify
+- `next_scheduled_role`: qa
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /plan-verify in new subagent/chat)
+
+## Progress snapshot — plan-verify
+
+**PLAN-VERIFY COMPLETE** (2026-06-22T22:45:00Z) — **BUG-0027**: Q0035 sprint-plan verification **PASS**. Completeness: 5/5 tasks (E1, E2, T1, G1, V1) present with description, file_targets, tests, status (TODO). Acceptance traceability: **CB** (V1) ✅, **CC** (E1+E2+T1+G1) ✅, **CD** (V1 with T1 regression anchor) ✅ — no orphan tasks. Gate integrity: GATE-ERROR-1 ✅, GATE-MESSAGE-1 ✅, GATE-TEST-1 ✅, GATE-DEC-1 ✅ (no new DEC), GATE-PREFLIGHT-1 ✅ (explicitly deferred), GATE-302-HANDLING ✅ (closed). Code map accuracy: firefly/mod.rs L20-37 variant location ✅, L128-158 request() match location ✅, firefly_integration.rs wiremock infrastructure ✅, sync/mod.rs e.to_string() propagation ✅. MINOR NOTE for execute: T1 wiremock mock should use `/api/v1/accounts` (in ALLOWED_PATHS) NOT `/api/v1/about` (not in ALLOWED_PATHS — would hit PathNotAllowed before HTTP). Test strategy: feasible with existing wiremock infrastructure (DATABASE_URL required). sprint.json metadata all PASS. Strict runtime proof: `runtime_proof_id=runtime-proof-plan-verify-20260622-bug0027-001`, `phase_id=plan-verify`, `role=qa`, `fresh_context_marker=plan-verify-20260622-bug0027-qa-fresh`, `hash=sha256:bug0027-plan-verify-20260622-qa-fresh`, `ttl=24h`. Next: `/execute` (dev).
+
+## Isolation evidence — plan-verify 2026-06-22T22:45:00Z
+
+- `phase_id`: plan-verify
+- `role`: qa
+- `fresh_context_marker`: plan-verify-20260622-bug0027-qa-fresh
+- `timestamp`: 2026-06-22T22:45:00Z
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `active_bug_id`: BUG-0027
+- `sprint_id`: Q0035
+- `evidence_ref`: sprints/quick/Q0035/plan-verify-report.json
+- `inputs_read`: sprint.md, tasks.md, task.json, sprint.json, architecture.md § BUG-0027, acceptance.md § BUG-0027, backend/src/firefly/mod.rs (read-only), backend/tests/firefly_integration.rs (read-only), backend/src/sync/mod.rs (read-only), state.md
+- `isolation_scope`: artifact writes only; read-only code inspection; no code edits; no prior chat history; no host secrets read
+- `dec_0038_proof`: plan-verify phase validates sprint-plan completeness before execute; does NOT run execute or later phases; stop after plan-verify; hand off to /execute in new subagent/chat
+- `next_scheduled_phase`: execute
+- `next_scheduled_role`: dev
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /execute in new subagent/chat)
+
+## Strict runtime proof tuple (DEC-0038) — plan-verify 2026-06-22T22:45:00Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `runtime_proof_id`: runtime-proof-plan-verify-20260622-bug0027-001
+- `phase_id`: plan-verify
+- `role`: qa
+- `active_bug_id`: BUG-0027
+- `sprint_id`: Q0035
+- `proof_issued_at`: 2026-06-22T22:45:00Z
+- `proof_ttl_seconds`: 86400
+- `proof_hash`: sha256:bug0027-plan-verify-20260622-qa-fresh-001
+- `proof_basis`: BUG-0027 plan-verify PASS — Q0035 completeness 5/5; acceptance CB/CC/CD traced; gate integrity 6/6; code map accuracy verified against actual source files; test strategy feasible; sprint.json metadata all PASS; MINOR NOTE for execute: T1 wiremock should use /api/v1/accounts (ALLOWED_PATHS) not /api/v1/about; DEC-0038 phase boundary enforced (plan-verify only; no execute)
+- `next_scheduled_phase`: execute
+- `next_scheduled_role`: dev
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /execute in new subagent/chat)
+
+## Phase boundary status — plan-verify complete 2026-06-22T22:45:00Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `phase_boundary`: plan-verify
+- `resolved_phase_plan`: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
+- `skipped_phases`: intake (pre-completed per backlog § BUG-0027)
+- `active_bug_id`: BUG-0027
+- `sprint_id`: Q0035
+- `phases_completed_this_invocation`: plan-verify
+- `next_scheduled_phase`: execute
+- `next_scheduled_role`: dev
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /execute in new subagent/chat)
+
+## Progress snapshot — verify-work
+
+**VERIFY-WORK COMPLETE — READY_FOR_RELEASE** (2026-06-22T22:58:00Z) — **BUG-0027** / **Q0035**: CC acceptance **PASS** (code verified independently — Display message EXACT-MATCH spec at `firefly/mod.rs` L37-40; 401 arm at L156 precedes `UnexpectedStatus` L166; integration test asserts variant + message). CB + CD **PENDING_OPERATOR** (V1 runbook ready at `sprints/quick/Q0035/operator-v1-runbook.md`). Regression gates: `cargo test --test firefly_integration` **2/2 PASS**. Release-prep: version `0.22.1-bug0027`, build via `RELEASE_TAG=0.22.1-bug0027 bash /workdir/financegoblin/deploy.sh`, deploy target omniflow-external (financegnome.omniflow.cc), rollback via git revert + rebuild. UAT artifacts (uat.json, uat.md) transitioned PLANNED → POPULATED (DEC-0009 lifecycle). Next: `/release` (release role). V1 closure itself blocked on operator PAT regen + deploy + ≥3 scheduled syncs.
+
+## Checkpoint: isolation evidence verify-work 2026-06-22T22:58:00Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `phase_id`: verify-work
+- `role`: qa
+- `fresh_context_marker`: verify-work-20260622-bug0027-qa-fresh
+- `timestamp`: 2026-06-22T22:58:00Z
+- `evidence_ref`: sprints/quick/Q0035/uat.json; sprints/quick/Q0035/uat.md; sprints/quick/Q0035/release-plan.md; sprints/quick/Q0035/operator-v1-runbook.md; sprints/quick/Q0035/progress.md
+- `active_bug_id`: BUG-0027
+- `sprint_id`: Q0035
+- `isolation_scope`: verify-work fresh subagent; read-only code inspection + cargo test run + artifact writes; no code edits; no deploy execution; no .env modification; no prior chat history; no host secrets read
+- `inputs_read`: backend/src/firefly/mod.rs (L30-49, L145-174), backend/tests/firefly_integration.rs (L150-192), docs/engineering/release-targets.json, scripts/deploy-omniflow.sh, /workdir/financegoblin/deploy.sh, sprints/quick/Q0035/{sprint.md,qa-verdict.json,qa-report.md,plan-verify-report.json,progress.md,uat.md,uat.json}, docs/engineering/state.md, handoffs/{resume_brief.md,po_to_tl.md,dev_to_qa.md}
+- `next_scheduled_phase`: release
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /release in new subagent/chat)
+
+## Strict runtime proof tuple (DEC-0038) — verify-work 2026-06-22T22:58:00Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `runtime_proof_id`: runtime-proof-verify-work-20260622-bug0027-001
+- `phase_id`: verify-work
+- `role`: qa
+- `active_bug_id`: BUG-0027
+- `sprint_id`: Q0035
+- `proof_issued_at`: 2026-06-22T22:58:00Z
+- `proof_ttl_seconds`: 86400
+- `proof_hash`: verify-work-bug0027-20260622-qa-fresh-001
+- `proof_basis`: BUG-0027 verify-work READY_FOR_RELEASE — CC PASS (Display message EXACT match at firefly/mod.rs L37-40; 401 arm at L156 precedes UnexpectedStatus L166; wiremock test asserts Unauthorized + message); regression gates 2/2 PASS; CB/CD PENDING_OPERATOR (V1 runbook written); release plan prepared (version 0.22.1-bug0027, deploy target omniflow-external, rollback strategy documented); UAT artifacts PLANNED→POPULATED lifecycle transition; release-prep complete; no host secrets read; no deploy executed; no code edited; DEC-0038 phase boundary enforced (verify-work only; no release)
+- `next_scheduled_phase`: release
+- `next_scheduled_role`: release
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /release in new subagent/chat)
+
+## Phase boundary status — verify-work complete 2026-06-22T22:58:00Z
+
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `phase_boundary`: verify-work
+- `resolved_phase_plan`: discovery, research, architecture, sprint-plan, plan-verify, execute, qa, verify-work, release, refresh-context
+- `skipped_phases`: intake (pre-completed per backlog § BUG-0027)
+- `segment_work_item_kind`: bug
+- `active_bug_id`: BUG-0027
+- `sprint_id`: Q0035
+- `phases_completed_this_invocation`: (previous invocations) intake, discovery, research, architecture, sprint-plan, plan-verify, execute, qa
+- `phases_completed_this_invocation_verify_work`: verify-work
+- `next_scheduled_phase`: release
+- `next_scheduled_role`: release
+- `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /release in new subagent/chat)

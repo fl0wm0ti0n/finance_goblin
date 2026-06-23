@@ -1,139 +1,82 @@
-# Resume Brief — Segment Complete (Backlog Empty)
+# Resume Brief
 
 ## Current status
 
-- **Active story:** none (US-0022 released)
-- **Active bug:** none (BUG-0025 released)
-- **Active sprint:** none (S0021 released `0.22.0-us0022`)
-- **Segment kind:** segment complete
-- **Orchestrator run:** auto-20260613-bug0025
-- **Last completed phase:** refresh-context (role: curator, 2026-06-14T19:31:00Z)
-- **Phase:** idle (backlog empty; await new intake)
+- **Active bug:** BUG-0027 — Firefly sync fails with 401 Unauthorized (PAT invalid/expired after deploy)
+- **Bug status:** BUG-0027 **OPEN** (V1 PENDING_OPERATOR)
+- **Active story:** none
+- **Orchestrator run:** auto-20260622-bug0027
+- **Last completed phase:** verify-work (2026-06-22T22:58:00Z)
 
-## Backlog status
+## Verify-work summary (2026-06-22, QA — fresh isolated context)
 
-| Category | Count |
-|----------|-------|
-| OPEN stories | 0 |
-| OPEN bugs | 0 |
-| Open epics | 0 |
+**Verdict:** READY_FOR_RELEASE (CC PASS; CB/CD PENDING_OPERATOR)
 
-**Backlog drain:** COMPLETE — all work items released.
+**CC acceptance PASS (code verified independently):**
+- `FireflyError::Unauthorized` variant at `backend/src/firefly/mod.rs` L37-40 — Display message EXACT-MATCH architecture § BUG-0027 frozen string
+- 401 match arm at L156 precedes `UnexpectedStatus` fallthrough at L166 (no shadowing)
+- Integration test asserts `Err(FireflyError::Unauthorized)` + message substring "firefly_personal_access_token invalid or expired"
 
-## Latest release
+**CB/CD acceptance PENDING_OPERATOR:** operator must regenerate PAT + update .env + recreate container + monitor ≥3 scheduled syncs. Operator V1 runbook ready at `sprints/quick/Q0035/operator-v1-runbook.md`.
 
-**US-0022 / S0021** — `0.22.0-us0022` (2026-06-14)
+**Regression gates PASS:** `cargo test --test firefly_integration` → 2/2 PASS (test_firefly_401_returns_unauthorized_variant + sync_issues_only_get_requests_to_firefly)
 
-- Deploy version stamp & stale-frontend detection
-- Backend metadata endpoint + Docker ARG chain + SPA compile-time stamp + on-mount stale detection
-- UAT: 6 pass / 2 pass-with-prerequisites / 0 fail
-- Acceptance: AC-1..AC-6 checked (live AC-5/AC-6 operator-deferred)
-- Release notes: `handoffs/releases/S0021-release-notes.md`
+**Release-prep complete:**
+- Release plan: `sprints/quick/Q0035/release-plan.md` (version `0.22.1-bug0027`, build via `RELEASE_TAG=0.22.1-bug0027 bash /workdir/financegoblin/deploy.sh`)
+- Deploy target: omniflow-external (https://financegnome.omniflow.cc)
+- Rollback: git revert + rebuild; or `docker compose down` + re-up previous image
+- Operator V1 runbook: 8-step guide for PAT regen + deploy + ≥3 syncs monitor
 
-## Operator gates pending
+**UAT status (DEC-0009 lifecycle):** uat.json transitioned PLANNED → POPULATED
+- CC: PASS (code verified)
+- CB: PENDING_OPERATOR
+- CD: PENDING_OPERATOR
 
-**BACKEND_FRONTEND_DEPLOY** — live smoke for US-0022:
-- AC-5: Stale detection browser smoke (rebuild with new build id → old SPA shows stale banner)
-- AC-6: OIDC external profile smoke (verify no regression)
-
-## Triad status
-
-**RECONCILED** — rollover 10 units; `--check` PASS
-
-| Artifact | Lines | Cap |
-|----------|-------|-----|
-| `state.md` | 938 | 1000 |
-| `po_to_tl.md` | 506 | 650 |
-| `architecture.md` | 2944 | 3000 |
+**Artifacts created/updated:**
+- `sprints/quick/Q0035/release-plan.md` (new)
+- `sprints/quick/Q0035/operator-v1-runbook.md` (new)
+- `sprints/quick/Q0035/progress.md` (updated: V1 → PENDING_OPERATOR)
+- `sprints/quick/Q0035/uat.json` (transitioned PLANNED → POPULATED)
+- `sprints/quick/Q0035/uat.md` (transitioned PLANNED → POPULATED)
+- `docs/engineering/state.md` (verify-work checkpoint + isolation evidence + DEC-0038 proof appended)
+- `handoffs/resume_brief.md` (this file, refreshed for release)
+- `handoffs/po_to_tl.md` (verify-work handoff prepended)
 
 ## Next actions
 
-**Orchestrator idle** — await new work:
+1. Run **`/release`** (release role) — finalize release notes, traceability index, release `0.22.1-bug0027`. Note: CB/CD closure itself requires operator V1 execution (PAT regen + deploy + ≥3 syncs). Release can mark BUG-0027 DONE/released from pipeline perspective; V1 is a post-release operator activity (pattern established via US-0022, BUG-0025).
+2. After release: operator executes V1 runbook — see `sprints/quick/Q0035/operator-v1-runbook.md`
 
-1. **New intake** (story or bug) from operator
-2. **Operator directive** (research, refactor, documentation)
-3. **Operator-deferred gates** (BACKEND_FRONTEND_DEPLOY for US-0022 live smoke)
+## Key context for release phase
+
+- **V1 PENDING_OPERATOR is the norm** — same pattern as S0021/US-0022 (AC-5/AC-6 pass-with-prerequisites for BACKEND_FRONTEND_DEPLOY), Q0034/BUG-0025 (V1 pass-with-prerequisites). Release agent should:
+  - Finalize release notes
+  - Update traceability index: BUG-0027 row → DONE / released (code scope complete)
+  - Note: V1 operator smoke (CB/CD live verification) pending post-release
+  - State.md known-issues entry: "BUG-0027 operator omniflow smoke (CB/CD live) pending BACKEND_DEPLOY + PAT regen per sprints/quick/Q0035/operator-v1-runbook.md"
+- **Rollback risk LOW** — backend-only bugfix, no frontend/migration/DEC changes
+- **Deploy command:** `RELEASE_TAG=0.22.1-bug0027 bash /workdir/financegoblin/deploy.sh`
 
 ## Intended resume phase
 
-**idle** — segment complete; backlog empty; await new intake or operator directive
-
-## Refresh-context summary
-
-**Verdict:** COMPLETE (2026-06-14T19:31:00Z)
-
-| Metric | Value |
-|--------|-------|
-| Triad status | reconciled (rollover 10 units; --check PASS) |
-| Backlog OPEN stories | 0 |
-| Backlog OPEN bugs | 0 |
-| Segment status | CLOSED (US-0022 / S0021 released) |
-| State compaction | 1345→938 lines (cap 1000) |
-| Archive packs | state-pack-20260614-b.md, state-pack-20260614-c.md |
-| Next work hint | backlog empty — orchestrator idle |
-
-## Architecture summary
-
-See `docs/engineering/architecture.md` § US-0022 for full architecture approach.
-
-### Technical approach
-
-| Layer | Pattern | Key decision |
-|-------|---------|--------------|
-| **Backend** | Axum `Json<BuildInfoResponse>` handler | `option_env!("BUILD_ID").unwrap_or("dev")` compile-time; public route (no auth); flat JSON `{build_id, release_tag, build_timestamp}` |
-| **Frontend** | Vite `define` block | `JSON.stringify(process.env.BUILD_ID \|\| 'dev')`; TypeScript `declare const __BUILD_ID__: string;` in `vite-env.d.ts` |
-| **Stale detect** | `useStaleDetection()` hook | On-mount fetch `/api/v1/meta/build-info` with `cache: 'no-store'`; compare `__BUILD_ID__` to server `build_id`; mismatch sets stale=true; skip dev mode |
-| **Docker** | 3-stage `ARG` chain | Global `ARG BUILD_ID/RELEASE_TAG/BUILD_TIMESTAMP`; re-declare per stage; `ENV` in builder for Rust `env!()`; `RUN BUILD_ID=$BUILD_ID npm run build` in frontend |
-| **UI** | `AppLayout` sidebar-footer | Subtle stamp + hover tooltip (release tag, build id, timestamp); stale banner (non-blocking, reload CTA) |
+**release** — finalize BUG-0027 release as `0.22.1-bug0027` patch
 
 ## Resolution metadata
 
-- `resolution_source`: backlog_drain
-- `resolved_start_phase`: discovery
-- `last_completed_phase`: refresh-context
-- `active_story_id`: US-0022
-- `sprint_id`: S0021
-- `segment_work_item_kind`: story
-- `intake_evidence`: handoffs/intake_evidence/intake-20260613-deploy-version-stamp.json
-- `research_ref`: R-0095 §6-§12 (extended 2026-06-14)
-- `architecture_ref`: docs/engineering/architecture.md § US-0022
-- `spec_pack_refs`:
-  - docs/engineering/spec-pack/US-0022-design-concept.md
-  - docs/engineering/spec-pack/US-0022-crs.md
-  - docs/engineering/spec-pack/US-0022-technical-specification.md
-- `acceptance_rows`: AC-1, AC-2, AC-3, AC-4, AC-5, AC-6
-- `frozen_gates`: GATE-META-1, GATE-BUILD-1, GATE-STALE-1, GATE-UI-1
-- `decisions`: No new DEC (GATE-DEC-1 closed)
-- `hypothesis_verdicts`: H1 CONFIRMED, H2 CONFIRMED, H3 CONFIRMED
-- `acceptance_verdicts`: AC-1..AC-6 all CONCRETE
-- `plan-verify_verdict`: PASS (6/6 acceptance, 11/11 tasks, 4/4 gates, 0 gaps, 0 orphans)
-- `execute_verdict`: COMPLETE (10/11 tasks DONE; V1 deferred to verify-work)
-- `qa_verdict`: PASS (6/6 acceptance qa-stage PASS; 0 blockers; V1 deferred BACKEND_FRONTEND_DEPLOY)
-- `verify-work_verdict`: PASS-WITH-PREREQUISITES (6 pass / 2 pass-with-prerequisites / 0 fail; 0 blockers; BACKEND_FRONTEND_DEPLOY pending for live AC-5/AC-6 smoke)
-- `release_verdict`: PASS (release_version 0.22.0-us0022; all gates PASS; acceptance AC-1..AC-6 verified; backlog DONE; operator BACKEND_FRONTEND_DEPLOY pending for live smoke)
-- `refresh-context_verdict`: COMPLETE (triad reconciled; rollover 10 units; --check PASS; backlog empty; segment CLOSED)
-- `next_scheduled_phase`: none (segment closed; backlog empty)
-- `next_scheduled_role`: none
-- `runtime_proof_id`: runtime-proof-refresh-context-20260614-us0022-001
-- `proof_issued_at`: 2026-06-14T19:31:00Z
-- `proof_ttl_seconds`: 86400
-- `proof_hash`: refresh-context-us0022-20260614-curator-fresh-001
-- `proof_basis`: US-0022 refresh-context PASS — triad reconciled (rollover 10 units; --check PASS); backlog OPEN stories=0 OPEN bugs=0; segment CLOSED; state.md 1345→938 lines; no new work initiated
-- `dec_0038_proof`: refresh-context phase validates triad compliance and segment closure; does NOT start new work; stop after refresh-context; orchestrator will check backlog for next item
-- `isolation_scope`: curator fresh subagent; artifact reads + triad rollover + state compaction; no prior chat history; no host secrets read
-
-## Files updated (refresh-context)
-
-- `docs/engineering/state.md`: session status + progress snapshot + checkpoint + isolation evidence + DEC-0038 proof + phase boundary appended; triad rollover executed (10 units → state-archive)
-- `docs/engineering/state-archive/state-pack-20260614-b.md`: archived checkpoints (rollover unit 1)
-- `docs/engineering/state-archive/state-pack-20260614-c.md`: archived checkpoints (rollover unit 2)
-- `handoffs/curator_refresh.md`: created with refresh-context summary
-- `handoffs/resume_brief.md`: refreshed for segment-complete idle state
-
-## Isolation evidence (DEC-0038)
-
-- **Role:** curator (refresh-context phase)
-- **Fresh context:** yes (no prior chat history; artifact reads + triad rollover + state compaction)
-- **Phase boundary:** refresh-context complete; stop; segment closed; backlog empty
-- **No new work initiated:** confirmed (refresh-context only per DEC-0038)
-- **No host secrets read:** confirmed (artifact reads + triad enforcement only)
+- `resolution_source`: resume_brief
+- `resolved_start_phase`: release
+- `segment_work_item_kind`: bug
+- `active_bug_id`: BUG-0027
+- `bug_id`: BUG-0027
+- `sprint_id`: Q0035
+- `intake_boundary_utc`: 2026-06-22T21:42:00Z
+- `discovery_boundary_utc`: 2026-06-22T21:59:06Z
+- `research_boundary_utc`: 2026-06-22T22:15:00Z
+- `architecture_boundary_utc`: 2026-06-22T22:18:45Z
+- `sprint_plan_boundary_utc`: 2026-06-22T22:30:00Z
+- `plan_verify_boundary_utc`: 2026-06-22T22:45:00Z
+- `qa_boundary_utc`: 2026-06-22T22:55:00Z
+- `verify_work_boundary_utc`: 2026-06-22T22:58:00Z
+- `intake_evidence`: handoffs/intake_evidence/intake-20260622-firefly-sync-401.json
+- `context_refreshed`: true (post-verify-work, 2026-06-22T22:58:00Z)
+- `next_phase_role`: release

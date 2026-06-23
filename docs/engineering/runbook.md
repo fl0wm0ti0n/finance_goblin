@@ -5,8 +5,8 @@
 TEST_COMMAND: bash tests/run-tests.sh
 LINT_COMMAND:
 TYPECHECK_COMMAND:
-DEPLOY_STAGING_COMMAND: echo "No staging deploy target configured for this repository"
-DEPLOY_PROD_COMMAND: echo "No production deploy target configured for this repository"
+DEPLOY_STAGING_COMMAND: bash /workdir/financegoblin/deploy.sh
+DEPLOY_PROD_COMMAND: bash /workdir/financegoblin/deploy.sh
 
 LINT_FIX_COMMAND:
 FORMAT_COMMAND:

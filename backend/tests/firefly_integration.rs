@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use flow_finance_ai::config::{AppConfig, DatabaseConfig, FireflyConfig, ForecastConfig, OidcConfig, ServerConfig, SyncConfig};
-use flow_finance_ai::firefly::{sync as firefly_sync, FireflyClient};
+use flow_finance_ai::firefly::{sync as firefly_sync, FireflyClient, FireflyError};
 use serde_json::json;
 use sqlx::PgPool;
 use wiremock::matchers::{header, method, path, path_regex};
@@ -50,6 +50,17 @@ fn test_config(base_url: &str) -> AppConfig {
         },
         subscriptions: flow_finance_ai::config::SubscriptionsConfig::default(),
         plans: flow_finance_ai::config::PlansConfig::default(),
+        alerts: flow_finance_ai::config::AlertsConfig::default(),
+        wealth: flow_finance_ai::config::WealthConfig::default(),
+        ai: flow_finance_ai::config::AiConfig::default(),
+        privacy: flow_finance_ai::config::PrivacyConfig::default(),
+        exchanges: flow_finance_ai::config::ExchangesConfig::default(),
+        portfolio: flow_finance_ai::config::PortfolioConfig::default(),
+        forecast_ml: flow_finance_ai::config::ForecastMlConfig::default(),
+        analytics: flow_finance_ai::config::AnalyticsConfig {
+            grafana_upstream: "http://localhost:3000".into(),
+        },
+        database_bootstrap_url: None,
     }
 }
 
@@ -136,6 +147,45 @@ async fn sync_issues_only_get_requests_to_firefly() {
     assert_eq!(
         non_get, 0,
         "integration test failed: non-GET Firefly requests recorded in audit log"
+    );
+
+    let _ = Arc::new(cfg);
+}
+
+#[tokio::test]
+async fn test_firefly_401_returns_unauthorized_variant() {
+    let pool = match setup_db().await {
+        Some(p) => p,
+        None => {
+            eprintln!("SKIP: DATABASE_URL not set for integration test");
+            return;
+        }
+    };
+
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/v1/accounts"))
+        .and(header("Authorization", "Bearer test-pat"))
+        .respond_with(ResponseTemplate::new(401))
+        .mount(&mock_server)
+        .await;
+
+    let cfg = test_config(&mock_server.uri());
+    let client = FireflyClient::new(&cfg.firefly, pool.clone());
+
+    let result = client.get_paginated("/api/v1/accounts", &[]).await;
+
+    match &result {
+        Err(FireflyError::Unauthorized) => {}
+        Err(e) => panic!("Expected Unauthorized, got {:?}", e),
+        Ok(_) => panic!("Expected error"),
+    }
+    let error_msg = result.unwrap_err().to_string();
+    assert!(
+        error_msg.contains("firefly_personal_access_token invalid or expired"),
+        "Error message should contain PAT regeneration instructions, got: {}",
+        error_msg
     );
 
     let _ = Arc::new(cfg);

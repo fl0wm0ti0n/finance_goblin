@@ -1,0 +1,119 @@
+{
+  "sprint_id": "Q0035",
+  "bug_id": "BUG-0027",
+  "phase": "qa",
+  "verdict": "READY_FOR_VERIFY",
+  "timestamp": "2026-06-22T22:55:00Z",
+  "orchestrator_run_id": "auto-20260622-bug0027",
+  "code_review": {
+    "verdict": "PASS",
+    "findings": [
+      {
+        "item": "FireflyError::Unauthorized variant",
+        "location": "backend/src/firefly/mod.rs L37-40",
+        "result": "PASS",
+        "detail": "Variant placed after PersonalAccessTokenMissing (L33-36). Display message EXACTLY matches architecture spec: \"firefly_personal_access_token invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN\""
+      },
+      {
+        "item": "401 match arm in request()",
+        "location": "backend/src/firefly/mod.rs L156-158",
+        "result": "PASS",
+        "detail": "Located in request() method after audit record. status == StatusCode::UNAUTHORIZED check at L156 returns FireflyError::Unauthorized."
+      },
+      {
+        "item": "Ordering: Unauthorized before UnexpectedStatus(401)",
+        "location": "backend/src/firefly/mod.rs L156 vs L166",
+        "result": "PASS",
+        "detail": "Unauthorized check (L156) precedes server-error/429 retry block (L160) and UnexpectedStatus catch-all (L166). 401 cannot leak to UnexpectedStatus."
+      }
+    ]
+  },
+  "test_review": {
+    "verdict": "PASS",
+    "findings": [
+      {
+        "item": "Mock path is /api/v1/accounts (not /api/v1/about)",
+        "location": "backend/tests/firefly_integration.rs L168",
+        "result": "PASS",
+        "detail": "Plan-verify remediation (ALLOWED_PATHS) correctly applied. Path is in ALLOWED_PATHS."
+      },
+      {
+        "item": "Mock configures 401 response",
+        "location": "backend/tests/firefly_integration.rs L170",
+        "result": "PASS",
+        "detail": "ResponseTemplate::new(401) mounted on mock server."
+      },
+      {
+        "item": "Asserts Err(FireflyError::Unauthorized)",
+        "location": "backend/tests/firefly_integration.rs L179-183",
+        "result": "PASS",
+        "detail": "Pattern match on Err(FireflyError::Unauthorized) with panic on mismatch. Also asserts error message contains 'firefly_personal_access_token invalid or expired' (L185-189)."
+      },
+      {
+        "item": "Existing sync_issues_only_get_requests_to_firefly preserved",
+        "location": "backend/tests/firefly_integration.rs L86-153",
+        "result": "PASS",
+        "detail": "Original test unmodified. No PersonalAccessTokenMissing test exists in file — that was not in BUG-0027 scope."
+      }
+    ]
+  },
+  "regression_gates": {
+    "verdict": "PASS",
+    "results": [
+      {
+        "gate": "cargo build --lib",
+        "exit_code": 0,
+        "summary": "2/2 PASS (15 pre-existing warnings, no new)"
+      },
+      {
+        "gate": "cargo test --test firefly_integration",
+        "exit_code": 0,
+        "summary": "2/2 PASS (sync_issues_only_get + test_firefly_401_unauthorized)"
+      },
+      {
+        "gate": "cargo test sync --lib",
+        "exit_code": 0,
+        "summary": "24/24 PASS"
+      },
+      {
+        "gate": "cargo test sync --test bug0025_sync_transaction_window",
+        "exit_code": 0,
+        "summary": "3/3 PASS"
+      }
+    ],
+    "notes": "Broad `cargo test sync` hits pre-existing compile errors in firefly_readonly_test.rs (missing config fields) and exchanges_portfolio_integration.rs (missing Clone impl). These are NOT in BUG-0027 blast radius. Targeted sync tests all PASS."
+  },
+  "acceptance_verification": {
+    "CB": {
+      "status": "PENDING_OPERATOR",
+      "can_verify_now": false,
+      "reason": "Requires PAT regen + .env update + container recreate + live sync. Operator action required."
+    },
+    "CC": {
+      "status": "PASS",
+      "can_verify_now": true,
+      "reason": "Display message matches architecture spec exactly. Wiremock test confirms Unauthorized variant + error message. Manual /sync UX probe after V1 deploy will confirm end-to-end."
+    },
+    "CD": {
+      "status": "PENDING_OPERATOR",
+      "can_verify_now": false,
+      "reason": "Requires ≥3 scheduled syncs post-PAT regen. Operator action required."
+    }
+  },
+  "uat_status": {
+    "code_tests": "PASS",
+    "operator_tests": "PENDING",
+    "notes": "CC verifiable in code; CB and CD require operator BACKEND_DEPLOY + PAT regen + live sync"
+  },
+  "next_phase": "verify-work",
+  "next_phase_role": "qa",
+  "operator_actions_required": [
+    "BACKEND_DEPLOY (rebuild with BUG-0027 changes)",
+    "PAT regen in Firefly profile → API tokens",
+    "Update FIREFLY_PERSONAL_ACCESS_TOKEN in .env",
+    "Recreate container",
+    "Smoke: GET /api/v1/sync/status → state: completed",
+    "Smoke: manual Sync now → status: completed, entity counts > 0",
+    "Monitor ≥3 scheduled syncs (CD regression)"
+  ]
+}

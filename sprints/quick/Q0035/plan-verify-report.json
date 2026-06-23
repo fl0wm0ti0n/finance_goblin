@@ -1,0 +1,158 @@
+{
+  "report_id": "plan-verify-20260622-bug0027-qa",
+  "sprint_id": "Q0035",
+  "work_item": "BUG-0027",
+  "verdict": "PASS",
+  "timestamp": "2026-06-22T22:45:00Z",
+  "role": "qa",
+  "phase_id": "plan-verify",
+  "fresh_context_marker": "plan-verify-20260622-bug0027-qa-fresh",
+
+  "completeness": {
+    "verdict": "PASS",
+    "details": [
+      "All 5 tasks present in sprint.md, tasks.md, task.json, sprint.json: E1, E2, T1, G1, V1",
+      "Each task has: title, status (TODO/open), description (tasks.md §Description), file_targets (task.json), tests (tasks.md §Done when + task.json tests[]), estimate, depends_on",
+      "sprint.md L12 references acceptance rows CB, CC, CD",
+      "sprint.json: task_count=5, sprint_max_tasks=12, auto_split=false",
+      "Sprint status=PLANNED, next_phase=plan-verify, next_phase_role=qa"
+    ]
+  },
+
+  "acceptance_traceability": {
+    "verdict": "PASS",
+    "rows": {
+      "CB": {
+        "verdict": "PASS",
+        "mapped_tasks": ["V1"],
+        "coverage": "V1 covers PAT regen + env update + container recreate + manual Sync now + sync status check + entity count verification + no 401 in error_message",
+        "notes": "CB requires operator BACKEND_DEPLOY gate before V1 can execute — correctly sequenced in deploy_order"
+      },
+      "CC": {
+        "verdict": "PASS",
+        "mapped_tasks": ["E1", "E2", "T1", "G1"],
+        "coverage": "E1 adds unauthorized variant + frozen Display message; E2 matches 401 in request(); T1 wiremock test asserts variant; G1 runs regression — full automated chain covers user-facing diagnosis",
+        "notes": "Display message frozen at GATE-MESSAGE-1 level, propagated via e.to_string() in sync/mod.rs L254 (no code change needed in sync/mod.rs)"
+      },
+      "CD": {
+        "verdict": "PASS",
+        "mapped_tasks": ["V1"],
+        "with_test_coverage": "T1 (automated) verifies 401->Unauthorized mapping; V1 (operator) verifies >=3 scheduled syncs succeed post-PAT regen — both layers present",
+        "notes": "CD is an operator-only temporal requirement (monitor multiple sync cycles) — T1 provides the automated regression anchor"
+      }
+    },
+    "orphan_check": {
+      "verdict": "PASS",
+      "notes": "No orphan tasks. E1->CC (variant+Display), E2->CC (match arm), T1->CC+CD (wiremock test + regression anchor), G1->CB+CC+CD (regression gates all), V1->CB+CD (ops smoke)"
+    }
+  },
+
+  "gate_integrity": {
+    "verdict": "PASS",
+    "gates": {
+      "GATE-ERROR-1": {
+        "verdict": "PASS",
+        "coverage": "E1 adds Unauthorized variant; E2 uses it in match arm",
+        "constraint_check": "task.json frozen_boundaries: 'Unauthorized is unit variant (no fields)' — correct"
+      },
+      "GATE-MESSAGE-1": {
+        "verdict": "PASS",
+        "coverage": "E1 Display impl frozen per task.json + tasks.md + architecture.md",
+        "constraint_check": "Display: 'firefly_personal_access_token invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN' — matches architecture.md L2830"
+      },
+      "GATE-TEST-1": {
+        "verdict": "PASS",
+        "coverage": "T1 wiremock 401 test + preserve existing PAT-empty behavior",
+        "constraint_check": "tasks.md T1: 'Preserve existing PersonalAccessTokenMissing test' — noted",
+        "note": "Existing firefly_integration.rs has no explicit PAT-missing test in current file (only sync_issues_only_get_requests_to_firefly). The pat_configured() check in sync/mod.rs L209 is unit-level. T1 should add new 401 test without breaking existing integration test."
+      },
+      "GATE-DEC-1": {
+        "verdict": "PASS",
+        "coverage": "No new DEC required — implementation detail per architecture.md L2812",
+        "constraint_check": "sprint.md L88: 'GATE-DEC-1 ✅ closed — No new DEC (implementation detail)'"
+      },
+      "GATE-PREFLIGHT-1": {
+        "verdict": "PASS",
+        "coverage": "Explicitly deferred — sprint.md L86: 'GATE-PREFLIGHT-1 ❌ deferred'",
+        "constraint_check": "Architecture § BUG-0027 L2832: 'GATE-PREFLIGHT-1 ❌ Deferred — Startup health probe deferred to future US' — matches sprint.md"
+      },
+      "GATE-302-HANDLING": {
+        "verdict": "PASS",
+        "coverage": "Closed — no handling needed (Accept: application/json always sent at firefly/mod.rs L133)",
+        "constraint_check": "architecture.md L2704 confirms Firefly returns 401 JSON when Accept: application/json is sent"
+      }
+    }
+  },
+
+  "code_map_accuracy": {
+    "verdict": "PASS",
+    "checks": {
+      "firefly_mod_variant_location_L20_37": {
+        "verdict": "PASS",
+        "actual_lines": "L19-37: #[derive(Debug, thiserror::Error)] pub enum FireflyError { ... } — 6 variants: MethodNotAllowed, PathNotAllowed, Http, InvalidUrl, Db, UnexpectedStatus, PersonalAccessTokenMissing",
+        "note": "Unauthorized goes after PersonalAccessTokenMissing (L36-37) or between variants — line range L20-37 is accurate for the enum definition"
+      },
+      "firefly_mod_request_L128_158": {
+        "verdict": "PASS",
+        "actual_lines": "L128: 'for attempt in 0..=max_retries' retry loop; L137: status extraction; L148-150: is_success return; L152-156: server error/429 retry; L158: 'return Err(FireflyError::UnexpectedStatus(status))'",
+        "note": "401 match arm should be inserted BEFORE L158 (the UnexpectedStatus fallthrough) — likely between L156 and L158. Line range L128-158 is accurate for the request method's status handling."
+      },
+      "firefly_integration_exists_and_uses_wiremock": {
+        "verdict": "PASS",
+        "actual": "backend/tests/firefly_integration.rs exists, imports wiremock::{Mock, MockServer, ResponseTemplate}, uses MockServer::start(), Mock::given(...).respond_with(...).mount(&mock). Pattern is well-established for T1 to follow.",
+        "note": "Existing test requires DATABASE_URL (via setup_db()) — T1 wiremock test will need same infra. Test uses test_config() with FireflyConfig{personal_access_token: 'test-pat'}, FireflyClient constructed from config. Pattern directly reusable for 401 mock test."
+      },
+      "sync_mod_error_propagation": {
+        "verdict": "PASS",
+        "actual_lines": "sync/mod.rs L249-255: Err(e) => finish_sync_run(..., Some(&e.to_string()))",
+        "note": "FireflyError::Unauthorized.to_string() will yield the Display message → error_message column in sync_runs. No code change needed in sync/mod.rs. Confirmed: e.to_string() propagation captures new variant automatically."
+      },
+      "allowed_paths_check": {
+        "verdict": "PASS",
+        "note": "firefly/mod.rs L10-17 ALLOWED_PATHS includes /api/v1/accounts. T1 wiremock test should mock /api/v1/accounts (NOT /api/v1/about which is not in ALLOWED_PATHS). Task T1 description in task.json specifies /api/v1/about — this would hit PathNotAllowed before HTTP. Recommend T1 use /api/v1/accounts as the mock path to exercise the actual 401 flow.",
+        "severity": "MINOR",
+        "action": "Note for execute phase: T1 implementation should use /api/v1/accounts (or another ALLOWED_PATHS entry) rather than /api/v1/about for the wiremock mock"
+      }
+    }
+  },
+
+  "test_strategy": {
+    "verdict": "PASS",
+    "t1_plan": {
+      "feasible": true,
+      "notes": "Existing firefly_integration.rs test infrastructure directly supports wiremock 401 test. MockServer start -> Mock::given(method('GET')).and(path('/api/v1/accounts')).and(header('Authorization', 'Bearer test-pat')).respond_with(ResponseTemplate::new(401)). FireflyClient constructed -> call get_paginated('/api/v1/accounts', &[]) -> assert matches Err(FireflyError::Unauthorized).",
+      "constraint": "DATABASE_URL env var required (existing infrastructure constraint — graceful skip when absent, same as existing test)",
+      "path_correction": "Mock /api/v1/accounts instead of /api/v1/about (ALLOWED_PATHS enforcement)"
+    },
+    "g1_regression": {
+      "cargo_check_lib": "runnable — standard cargo check",
+      "cargo_test_firefly_integration": "runnable — requires DATABASE_URL (same as existing)",
+      "cargo_test_sync_tests": "runnable — unit tests in sync::tests module (no DB needed)"
+    }
+  },
+
+  "sprint_json_metadata": {
+    "verdict": "PASS",
+    "checks": {
+      "sprint_id": { "expected": "Q0035", "actual": "Q0035", "match": true },
+      "work_item": { "expected": "BUG-0027", "actual": "BUG-0027", "match": true },
+      "delivery_mode": { "actual": "quick", "expected": "quick", "match": true },
+      "status": { "actual": "PLANNED", "expected_for_plan_verify": "PLANNED", "match": true },
+      "task_count": { "actual": 5, "max": 12, "within_limit": true },
+      "next_phase": { "actual": "plan-verify", "expected": "plan-verify", "match": true },
+      "next_phase_role": { "actual": "qa", "expected": "qa", "match": true },
+      "acceptance_rows": { "actual": ["CB", "CC", "CD"], "expected": ["CB", "CC", "CD"], "match": true },
+      "orchestrator_run_id": { "actual": "auto-20260622-bug0027", "expected": "auto-20260622-bug0027", "match": true }
+    }
+  },
+
+  "remediation_notes": [],
+
+  "execute_phase_guidance": {
+    "path_correction_for_t1": "Use /api/v1/accounts (in ALLOWED_PATHS) instead of /api/v1/about (NOT in ALLOWED_PATHS) for wiremock 401 mock path",
+    "execute_order": ["E1", "E2", "T1", "G1", "operator:BACKEND_DEPLOY", "V1"],
+    "operator_gate_before_v1": "BACKEND_DEPLOY (rebuild container so new Unauthorized variant is live)",
+    "next_phase": "execute",
+    "next_role": "dev"
+  }
+}

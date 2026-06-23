@@ -1,0 +1,19 @@
+{
+  "id": "G1",
+  "title": "Regression gates (cargo lib + integration + sync tests)",
+  "description": "Run cargo check, firefly integration tests, sync tests; verify blast radius",
+  "file_targets": ["sprints/quick/Q0035/progress.md"],
+  "tests": [
+    "cargo check --lib PASS",
+    "cargo test --test firefly_integration PASS (T1 wiremock + existing PAT-empty)",
+    "cargo test full suite PASS (sync tests included)",
+    "git diff --stat matches frozen file list"
+  ],
+  "effort": "0.5h",
+  "complexity": "low",
+  "risk": "low",
+  "status": "TODO",
+  "acceptance": ["CB", "CC", "CD"],
+  "gates": [],
+  "depends_on": ["E1", "E2", "T1"]
+}

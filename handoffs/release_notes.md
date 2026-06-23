@@ -55,6 +55,11 @@ Canonical queue state:
 - **Bug status:** DONE; acceptance BW, BX, BY checked (live operator-deferred)
 - **Release version:** `bug0025-q0034`
 
+- **Unreleased quick task (code scope complete):** Q0035 / BUG-0027 (2026-06-22, RELEASED TO OPERATOR)
+- **Notes:** [handoffs/releases/Q0035-release-notes.md](releases/Q0035-release-notes.md)
+- **Bug status:** READY_FOR_OPERATOR (code + integration PASS, CC ✅; CB/CD PENDING_OPERATOR — operator V1 pending post-deploy per `sprints/quick/Q0035/release-verification-checklist.md`)
+- **Release version:** `0.22.1-bug0027`
+
 - **Latest sprint release:** S0021 / US-0022 (2026-06-14)
 - **Latest sprint notes:** [handoffs/releases/S0021-release-notes.md](releases/S0021-release-notes.md)
 - **Story status:** DONE; acceptance AC-1..AC-6 checked (AC-5/AC-6 live operator-deferred BACKEND_FRONTEND_DEPLOY)
@@ -107,9 +112,19 @@ Canonical queue state:
 
 ## Unreleased queue visibility
 
-No rows with `status=unreleased` or `status=blocked`. See `handoffs/release_queue.md` for full queue.
+| sprint_id | story_refs | status | release_notes | release_version | gate_snapshot |
+|-----------|------------|--------|---------------|-----------------|---------------|
+| Q0035 | BUG-0027 | `unreleased` (code scope complete; V1 PENDING_OPERATOR post-deploy) | [handoffs/releases/Q0035-release-notes.md](releases/Q0035-release-notes.md) | `0.22.1-bug0027` | code gates PASS; CC ✅; CB/CD PENDING_OPERATOR (PAT regen + ≥3 syncs) |
 
-## Latest operator summary (Run/Connect/Verify) — US-0022 / S0021
+## Latest operator summary (Run/Connect/Verify) — BUG-0027 / Q0035
+
+- **Deploy:** `RELEASE_TAG=0.22.1-bug0027 bash /workdir/financegoblin/deploy.sh` (backend rebuild only — no migration, no frontend)
+- **Operator V1 checklist:** `sprints/quick/Q0035/release-verification-checklist.md` (8-step guide: deploy → PAT regen → `.env` update → container recreate → manual sync → ≥3 scheduled syncs monitor)
+- **Verify:** `cargo test --test firefly_integration` (2/2); `cargo test sync --lib` (24/24); operator smoke per `sprints/quick/Q0035/release-verification-checklist.md`
+- **Endpoint:** `http://localhost:18080/sync` / `https://financegnome.omniflow.cc`
+- **Full steps:** [handoffs/releases/Q0035-release-notes.md](releases/Q0035-release-notes.md)
+
+## Latest sprint release operator summary — US-0022 / S0021
 
 - **Deploy:** `docker compose -f docker-compose.yml -f docker-compose.external.yml --profile external up -d --build flow-finance-ai` (backend + frontend rebuild; no migration)
 - **Verify:** `cd backend && cargo test --lib && cargo test --test meta_test`; `cd frontend && npm test && npm run build`; operator smoke per `sprints/S0021/uat.json`

@@ -1,0 +1,10 @@
+# Omniflow deploy overlay — inject release metadata at build time (US-0022 / GATE-BUILD-1)
+# Copied to /workdir/financegoblin/docker-compose.build.yml on deploy host.
+
+services:
+  flow-finance-ai:
+    build:
+      args:
+        BUILD_ID: ${BUILD_ID:-unknown}
+        RELEASE_TAG: ${RELEASE_TAG:-unknown}
+        BUILD_TIMESTAMP: ${BUILD_TIMESTAMP:-unknown}

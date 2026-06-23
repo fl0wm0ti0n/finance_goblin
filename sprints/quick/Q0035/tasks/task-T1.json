@@ -1,0 +1,19 @@
+{
+  "id": "T1",
+  "title": "wiremock 401 integration test",
+  "description": "Add wiremock-based test asserting FireflyError::Unauthorized on 401 response",
+  "file_targets": ["backend/tests/firefly_integration.rs"],
+  "tests": [
+    "wiremock mock GET /api/v1/about returns 401 with Accept: application/json header",
+    "Assert FireflyClient request returns FireflyError::Unauthorized (not UnexpectedStatus(401))",
+    "Existing PersonalAccessTokenMissing test preserved (not broken)",
+    "cargo test --test firefly_integration PASS"
+  ],
+  "effort": "1.5h",
+  "complexity": "medium",
+  "risk": "low",
+  "status": "TODO",
+  "acceptance": ["CC", "CD"],
+  "gates": ["GATE-TEST-1"],
+  "depends_on": ["E2"]
+}

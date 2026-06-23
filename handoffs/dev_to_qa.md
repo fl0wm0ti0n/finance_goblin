@@ -1,3 +1,56 @@
+# Dev → QA handoff — operator omniflow deploy 2026-06-16
+
+**From:** Dev (`/execute` — operator deploy)  
+**To:** QA (smoke optional)  
+**Date:** 2026-06-16  
+**Release:** `0.22.0-us0022` (US-0022 / S0021) + pending BUG-0025 (`bug0025-q0034`) code in tree  
+**Verdict:** deploy **COMPLETE**
+
+## Dev environment relaunch
+
+| Field | Value |
+|-------|-------|
+| `dev_auto_launch_profile` | on (manual deploy — `scripts/dev_environment_lib.py` not shipped) |
+| `runtime_mode` | docker-host-local / omniflow-external |
+| `relaunch_tier` | B (full image rebuild) |
+| `relaunch_command` | `bash /workdir/financegoblin/deploy.sh` |
+| `relaunch_outcome` | success |
+| `retry_count` | 0 |
+| `reason_code` | (none) |
+
+## Connect
+
+| Field | Value |
+|-------|-------|
+| `runtime_mode` | remote (Traefik) |
+| `connect_endpoint` | `https://financegnome.omniflow.cc` |
+| `health_path` | `/health` |
+| `service_id` | `flow-finance-ai` |
+| `container_id` | `financegoblin-flow-finance-ai-1` |
+| `target_id` | `omniflow-external` |
+| `env_refs` | `TRAEFIK_HOST`, `DATABASE_HOST`, `FIREFLY_BASE_URL` |
+
+## Build metadata (live)
+
+```json
+{"build_id":"bc3b959","release_tag":"0.22.0-us0022","build_timestamp":"2026-06-16T21:38:57Z"}
+```
+
+## Deploy root
+
+- Host: `/workdir/financegoblin` (`.env`, `deploy.sh`, `docker-compose.build.yml`)
+- Source: `/workdir/dev_git/finance_goblin`
+- Project: `financegoblin` — containers on `traefik` network
+
+## QA smoke (suggested)
+
+1. `https://financegnome.omniflow.cc/health` → 200
+2. Sidebar-footer version stamp + tooltip (AC-1/AC-2)
+3. Manual **Sync now** on `/sync` — Stromkosten multi-month (BUG-0025 BW)
+4. `/forecast` Income card (prior bugs BZ/CA — if frontend bundle current)
+
+---
+
 # Dev → QA handoff — US-0022 / S0021
 
 **From:** Dev (`/execute`)  

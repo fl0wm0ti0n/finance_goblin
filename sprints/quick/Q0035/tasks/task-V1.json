@@ -1,0 +1,23 @@
+{
+  "id": "V1",
+  "title": "Operator smoke: PAT regen + >=3 scheduled syncs",
+  "description": "Operator regenerates PAT, updates .env, recreates container, verifies sync succeeds, monitors >=3 scheduled syncs",
+  "file_targets": ["sprints/quick/Q0035/uat.md", "sprints/quick/Q0035/uat.json"],
+  "tests": [
+    "Regenerate PAT in Firefly profile -> API tokens",
+    "Update FIREFLY_PERSONAL_ACCESS_TOKEN in .env",
+    "Recreate container (docker compose up -d)",
+    "Manual Sync now -> state:completed with entity counts",
+    "GET /api/v1/sync/status -> state:completed; no 401 in error_message",
+    "Monitor >=3 scheduled syncs succeed (CD)",
+    "If 401 recurs: /sync page shows Unauthorized display message (CC ops check)"
+  ],
+  "effort": "1h",
+  "complexity": "low",
+  "risk": "low",
+  "status": "TODO",
+  "acceptance": ["CB", "CD"],
+  "gates": [],
+  "depends_on": ["G1"],
+  "operator_gate": "BACKEND_DEPLOY"
+}

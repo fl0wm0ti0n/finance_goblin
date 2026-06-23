@@ -8247,3 +8247,185 @@ Well under `SPRINT_MAX_TASKS=12`. **Recommend `/quick`** (same track as **BUG-00
 **Status:** fulfilled (research complete 2026-06-13 — five gates frozen; GATE-DEC-1 no new DEC; next `/architecture`)
 
 ---
+
+## R-0099 — BUG-0027 Firefly sync 401 Unauthorized discovery (PAT invalid/expired)
+
+**Date:** 2026-06-22  
+**Topic:** Firefly sync failure — PAT present but Firefly returns 302→/login on Bearer auth  
+**Query:** Why does sync fail with 401 when `FIREFLY_PERSONAL_ACCESS_TOKEN` is set (980 chars) and how can the app improve error diagnosis?  
+**Sources:**
+- Live probes: `GET /api/v1/sync/status` (state=failed, error="unexpected status 401 Unauthorized")
+- Container env: `FIREFLY_PERSONAL_ACCESS_TOKEN` length 981 chars (incl newline); `FIREFLY_BASE_URL=http://firefly:8080`
+- Curl probe: `curl -H "Authorization: Bearer <PAT>" http://firefly:8080/api/v1/about` → HTTP 302 → `/login` → HTML 200
+- Code audit: `backend/src/firefly/mod.rs` `FireflyError::UnexpectedStatus(StatusCode)`; `backend/src/sync/mod.rs` L209 `pat_configured()` check; `backend/src/config/mod.rs` L89 `pat_configured()` checks only emptiness
+- Related: [R-0057](docs/engineering/research.md#r-0057--firefly-iii-api-docs-discovery-post-bug-0001) (Firefly PAT /auth contract); BUG-0002 (prior PAT-empty case); BUG-0025 (Firefly category tx stale mirror)
+
+### 1. Live probe evidence (2026-06-22 21:45 UTC)
+
+| Probe | Result |
+|-------|--------|
+| `GET /api/v1/sync/status` | **200** — `state: failed`, `last_run.status: failed`, `error_message: unexpected status 401 Unauthorized` |
+| `GET /api/v1/settings` | `firefly_base_url: http://firefly:8080`, `firefly_auth_method: personal_access_token` — config loaded correctly |
+| Container env `FIREFLY_PERSONAL_ACCESS_TOKEN` | length 981 (non-empty, 980 chars + newline) |
+| Container env `FIREFLY_BASE_URL` | `http://firefly:8080` — correct Docker DNS |
+| `curl -H "Authorization: Bearer <PAT>" http://firefly:8080/api/v1/about` | HTTP **302** → `/login` → HTML 200 (Firefly login page) |
+
+**Observation:** PAT is present and non-empty, but Firefly rejects the Bearer token and redirects to login. The token itself has been invalidated/revoked/expired in Firefly (not a config load issue).
+
+### 2. Hypotheses verdicts
+
+| ID | Verdict | Evidence |
+|----|---------|----------|
+| **H1: PAT expiry/invalidation in Firefly** | **CONFIRMED (primary)** | PAT is present (980 chars) but Firefly returns 302→/login on API calls. This is consistent with Firefly revoking/invaliating the token (container recreation, secret rotation, manual revocation in Firefly profile). **Not** a code/config load issue. |
+| **H2: App should classify 401/302 as PAT auth failure (not generic "unexpected status")** | **CONFIRMED** | Code audit: `firefly/mod.rs` L158 `FireflyError::UnexpectedStatus(status)` is generic — does not distinguish 401, 302, or 5xx. `sync/mod.rs` L250-254 persists `&e.to_string()` to `error_message` column. `execute_run` has a preflight `pat_configured()` check (L209) that only catches **empty** PAT (config L89 `!self.personal_access_token.trim().is_empty()`). There is no preflight to detect **invalid** PAT (non-empty but revoked). |
+| **H3: App should fail-fast on startup when PAT is configured but invalid (optional)** | **PARTIAL / OPTIONAL** | `/health/ready` already reports `firefly_pat_configured` (boolean), but this is only **emptiness** check (config L89). A preflight PAT validity check on `/health` or `/sync/status` would be **nice-to-have** for operator UX, but not blocking for the immediate fix — operator can regenerate PAT and verify via `/sync/status` after regen. |
+
+### 3. Blast radius (code)
+
+| Layer | Scope | Current gap |
+|-------|-------|-------------|
+| **Primary** | `backend/src/firefly/mod.rs` L148-158 — `FireflyError` enum + `request()` method | Generic `UnexpectedStatus` — no structured error for auth failures |
+| **Sync error persistence** | `backend/src/sync/mod.rs` L250-254 — `execute_run()` error path | Persists `&e.to_string()` — "unexpected status 401 Unauthorized" (generic) |
+| **Config guard** | `backend/src/config/mod.rs` L89 — `pat_configured()` | Checks emptiness only, not validity |
+| **Health endpoint** | `backend/src/health/mod.rs` L17-49 — `firefly_pat_configured: bool` | Boolean emptiness check only; no validity probe |
+| **Out of scope** | `FireflyClient` struct L39-62; sync trigger/scheduler; frontend `/sync` display | Error message display is pass-through today |
+
+### 4. Architectural options
+
+| Option | Approach | Complexity | Pros | Cons |
+|--------|----------|------------|------|------|
+| **A (PO recommended)** | Add `FireflyError::Unauthorized` variant for 401/302; map to user-facing message "Firefly PAT invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN" | Low | Clear diagnosis for CC; small blast radius; no new endpoint | Still ops-driven (operator must regenerate PAT) |
+| **B** | Option A + startup preflight in `/health` or `/sync/status`: if PAT configured, attempt `/api/v1/about` (or similar lightweight endpoint) and cache validity state; surface "PAT valid" / "PAT invalid" in sync status UI | Medium | Fail-fast for operator; no silent stale mirror | Adds HTTP call to health/sync status (latency); cache invalidation complexity |
+| **C** | Option A + optional startup preflight (like B) + `/api/v1/sync/test-pat` endpoint (manual trigger) | Medium-High | Full observability; operator can test PAT validity on demand | Overkill for immediate bug; can be added in future US |
+
+**PO recommendation: Option A** — satisfies CC (clear user-facing diagnosis distinguishing "PAT expired/invalid"/"PAT missing"/"Firefly unreachable"); CB is ops-only (PAT regen); CD is ops-only (≥3 successful syncs after regen). Option B/C are **future improvements** (optional P2 for US/Future story).
+
+### 5. Acceptance row verdicts (CB/CC/CD)
+
+| AC | Verdict | Fix type | Key decision |
+|----|---------|----------|--------------|
+| **CB** — sync status shows `state: completed` after PAT regen | **OPS** (no code change) | Operator regenerates PAT in Firefly profile → updates `FIREFLY_PERSONAL_ACCESS_TOKEN` in `.env` → recreates container → next scheduled or manual sync succeeds |
+| **CC** — App surfaces clear user-facing diagnosis on `/sync` when PAT auth fails (distinguishing "PAT expired/invalid" / "PAT missing" / "Firefly unreachable") | **CODE** (Option A) | `FireflyError::Unauthorized` variant + user-facing message "Firefly PAT invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN"; current `PersonalAccessTokenMissing` covers "PAT missing"; generic `UnexpectedStatus` for other failures (network/DNS) |
+| **CD** — Regression: ≥3 scheduled syncs succeed after PAT regen (no silent 401 recurrence) | **OPS** (no code change) | Verify after CB — monitor 3 scheduled sync runs post-regen |
+
+### 6. Acceptance traceability (CC code fix)
+
+```
+CC (clear user-facing diagnosis)
+ ├── CB (PAT regen) ← ops-only
+ ├── CC (error classification) ← CODE (Option A)
+ │   ├── FireflyError::Unauthorized (401/302) → "PAT invalid or expired"
+ │   ├── FireflyError::PersonalAccessTokenMissing (existing) → "PAT missing"
+ │   └── FireflyError::Http (reqwest) / UnexpectedStatus (other) → "Firefly unreachable" (network/DNS)
+ └── CD (≥3 successful syncs) ← ops-only
+```
+
+**Decision gates (discovery frozen):**
+
+| Gate | Question | PO default |
+|------|----------|------------|
+| **GATE-ERROR-1** | Error classification taxonomy | Option A: `Unauthorized` (401/302) / `PersonalAccessTokenMissing` (empty) / other (network/DNS) |
+| **GATE-MESSAGE-1** | User-facing message for `Unauthorized` | "Firefly PAT invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN" |
+| **GATE-PREFLIGHT-1** | Startup health probe for PAT validity? | **Defer to future US** — not required for BUG-0027 CB/CC/CD |
+| **GATE-TEST-1** | Regression test | Integration test: mock Firefly returns 401 → assert `Unauthorized` variant + sync run `error_message` contains "PAT invalid"; existing `PersonalAccessTokenMissing` test preserved |
+| **GATE-DEC-1** | New DEC? | **No** — error classification is implementation detail; document in architecture only |
+
+### 7. `/quick` sizing
+
+| Estimate | Tasks |
+|----------|-------|
+| **5–6 atomic tasks** | `FireflyError::Unauthorized` variant; `request()` 401/302 mapping; `execute_run` error message persistence; integration test; V1 operator smoke (CB/CD after PAT regen) |
+
+Under `SPRINT_MAX_TASKS=12`. **Recommend `/quick`** (same track as BUG-0022/0024/0025/0026 bug fixes).
+
+### 8. Risks
+
+| Risk | Mitigation |
+|------|------------|
+| 302 → /login follow redirect (reqwest default) may mask 302 status | reqwest default `redirect(Policy::limited)` follows redirects; need to disable or capture final status. Verify reqwest behavior in code audit. If following 302→/login returns 200 HTML, the error may be "unexpected status 200" (HTML) or "failed to parse JSON from HTML" rather than "401". Live probe evidence shows "unexpected status 401 Unauthorized" — Firefly may be returning 401 directly for API calls with invalid Bearer (not 302). |
+| Firefly UI vs API auth contract may differ | R-0057 confirms Firefly API uses Bearer PAT for `/api/v1/*`; login redirect applies to web UI. API calls with invalid PAT may return 401 directly (not 302). |
+| False positive "PAT invalid" message if Firefly is unreachable | `Http` (reqwest error) covers network/DNS/connect timeout; `Unauthorized` (401/302) is only Firefly auth failure |
+| Operator must manually regenerate PAT in Firefly | Document in runbook § Omniflow external deploy (existing section) |
+
+### 9. Recommended next phase
+
+`/research` (role: tech-lead) — confirm reqwest redirect behavior (302 → 401 mapping); verify Firefly API auth contract (401 vs 302 for invalid PAT); freeze Option A error classification; design integration test; size `/quick` tasks.
+
+**Web references (EARLY_RESEARCH):** [Firefly III API authentication](https://api-docs.firefly-iii.org/#authentication) — Bearer PAT in `Authorization` header; invalid/expired PAT returns 401 Unauthorized (per OpenAPI spec); [reqwest redirect policy](https://docs.rs/reqwest/latest/reqwest/redirect/struct.Policy.html) — default follows up to 10 redirects; `Policy::none()` disables; `Policy::limited(n)` sets max.
+
+### 10. Research phase findings (tech-lead, 2026-06-22, isolated fresh context)
+
+**Marker:** `research-20260622-bug0027-tl-fresh`
+
+#### 10.1 Reqwest client config (redirect hypothesis RESOLVED)
+
+- `backend/src/firefly/mod.rs` L50-52: `Client::builder().timeout(Duration::from_secs(120)).build()` — **no explicit `redirect` policy**
+- Reqwest default = `Policy::default()` = follows up to 10 redirects
+- **BUT the app sends `Accept: application/json` at L133** — Firefly returns **401 JSON** for any request with this header, not 302 redirect
+- **Conclusion:** Redirect following is active but **irrelevant** — content negotiation (401 vs 302) is determined server-side by Accept header
+
+#### 10.2 Firefly API content negotiation — live probe VERIFIED
+
+| Probe | Headers | Result |
+|-------|---------|--------|
+| `curl https://firefly:8080/api/v1/about` (no auth, no Accept) | default | **302** |
+| `curl -H "Authorization: Bearer BADTOKEN" https://firefly:8080/api/v1/about` | Bearer bad | **302** |
+| `curl -H "Authorization: Bearer BADTOKEN" -H "Accept: application/json" https://firefly:8080/api/v1/accounts` | Bearer bad + **Accept JSON** | **401** + `application/json` body |
+
+**Root cause of "302 → login" observation in R-0099 §1:** The discovery curl probes used `curl http://firefly:8080/api/v1/about` — no `Accept: application/json` header → Firefly returned 302 (browser-like). The app sends `Accept: application/json` at `firefly/mod.rs` L133 → Firefly returns **401 Unauthorized JSON** directly. **This is the actual status the app sees.**
+
+#### 10.3 Code map (execute targets, read-only)
+
+| File | Lines | What | Change in execute |
+|------|-------|------|--------------------|
+| `backend/src/firefly/mod.rs` | L20-37 | `FireflyError` enum | Add `Unauthorized` variant with operator-facing `#[error(...)]` |
+| `backend/src/firefly/mod.rs` | L128-158 | `request()` retry loop | Add arm: `status == StatusCode::UNAUTHORIZED` → `Err(FireflyError::Unauthorized)` (break before retry) |
+| `backend/src/sync/mod.rs` | L249-256 | `execute_run` error persistence | No change — `e.to_string()` already captures the new variant's Display output |
+| `backend/src/sync/mod.rs` | L561-564 | `exchanges_only_terminal` | No change — same `e.to_string()` pass-through |
+| `backend/src/config/mod.rs` | L89-90 | `pat_configured()` | No change — emptiness check preserved as-is (separate `PersonalAccessTokenMissing` variant) |
+| `backend/tests/firefly_integration.rs` | full file | existing wiremock | Add new test: mock returns 401 → assert `Unauthorized` |
+
+All changes in execute are backend-only; no frontend changes. Frontend `/sync` page already renders `error_message` pass-through from `SyncRunRow.error_message`.
+
+#### 10.4 Decision gates frozen
+
+| Gate | Decision |
+|------|----------|
+| GATE-ERROR-1 | `FireflyError::Unauthorized` (401 ONLY, since `Accept: application/json` suppresses 302) + existing `PersonalAccessTokenMissing` (empty) + `Http` (reqwest) + `UnexpectedStatus` (other) |
+| GATE-MESSAGE-1 | `Unauthorized`: `"firefly_personal_access_token invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN (see docs/engineering/runbook.md § Omniflow external deploy)"` |
+| GATE-302-HANDLING | No 302 handling needed — content negotiation ensures 401 for app requests |
+| GATE-PREFLIGHT-1 | Defer (as discovery decided) |
+| GATE-TEST-1 | Add wiremock test in `tests/firefly_integration.rs` — mock 401 → assert `Unauthorized` |
+| GATE-DEC-1 | No new DEC (GATE-DEC-1 from discovery carries; error taxonomy is implementation detail) |
+
+#### 10.5 Test strategy
+
+- Use existing `firefly_integration.rs` pattern (already uses wiremock 0.6, `MockServer::start()`, `ResponseTemplate`)
+- New test: `unauthorized_maps_to_unauthorized_error` — mount `Mock::given(method("GET")).and(path("/api/v1/accounts")).respond_with(ResponseTemplate::new(401))` then call `client.get_json("/api/v1/accounts", &[])` and assert error is `FireflyError::Unauthorized`
+- Preserve existing `PersonalAccessTokenMissing` tests in `sync/mod.rs` L587-597
+
+#### 10.6 Risks (research)
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Firefly future version returns 302 for JSON-accept requests | Low | `UnexpectedStatus` fall-through still handles it; operator sees generic message with HTTP status |
+| reqwest `401` could appear from transparent proxy/auth wall | Low | Message text references Firefly specifically — operator can verify by checking `firefly_base_url` setting |
+| Display output changes affect sync_runs error_message history | Low | Old runs keep "unexpected status 401 Unauthorized"; new runs get clearer message — no migration needed |
+| Frontend needs no change | Verified | `error_message` column is pass-through string; SyncPage renders raw |
+
+#### 10.7 /quick sizing (final)
+
+5 atomic tasks (under `SPRINT_MAX_TASKS=12`):
+1. **E1**: Add `FireflyError::Unauthorized` variant in `firefly/mod.rs` L20-37
+2. **E2**: Match `StatusCode::UNAUTHORIZED` → `FireflyError::Unauthorized` in `request()` L128-158
+3. **T1**: wiremock integration test in `tests/firefly_integration.rs` for 401 → Unauthorized
+4. **G1**: Regression gate: cargo lib + firefly_integration + sync module tests green
+5. **V1**: Operator smoke: PAT regen + redeploy + ≥3 scheduled syncs pass
+
+No frontend changes. Recommend `/quick` (same shape as BUG-0022/0024/0025/0026).
+
+**Linked:** BUG-0027, CB, CC, CD, BUG-0002, BUG-0025, R-0057, firefly/mod.rs, sync/mod.rs, config/mod.rs, health/mod.rs  
+**Confidence:** **high** — live probes + code audit + Firefly API contract cross-check  
+**Status:** fulfilled (discovery complete 2026-06-22 — Option A recommended; no new DEC; next `/research`)
+
+---

@@ -8,269 +8,6 @@ Flow Finance AI is a self-hosted analytics layer on Firefly III. **US-0001** del
 
 ---
 
-## US-0015 — AI-assisted forecast category bucket mapping
-
-**Status:** Architecture complete (2026-06-06)  
-**Discovery:** `discovery-20260606-us0015` in `handoffs/po_to_tl.md` / `handoffs/archive/po-to-tl-pack-20260606-o.md`  
-**Research:** [R-0074](research.md#r-0074--us-0015-ai-forecast-bucket-mapping-rulellm-cascade-privacy), [R-0075](research.md#r-0075--us-0015-forecast-bucket-privacy-feature-allowlist)  
-**Decisions:** **DEC-0078** (AI bucket cascade); frozen **DEC-0007** (config map), **DEC-0032** (privacy defaults), **DEC-0069** (chat tool isolation)  
-**Depends on:** BUG-0012 DONE (Q0014, DEC-0007 baseline), US-0008 (`build_provider()`), US-0006 (audit pattern)  
-**Sprint:** **S0016** recommended — slices US-0015-S1..S3  
-**Acceptance:** `docs/product/acceptance.md` § US-0015 (8 rows)  
-**Spec-pack:** `docs/engineering/spec-pack/US-0015-{design-concept,crs,technical-specification}.md` (`SPEC_PACK_MODE=1`)  
-**User guide:** `docs/user-guides/US-0015.md` (`USER_GUIDE_MODE=1`; execute publishes content)
-
-### Problem
-
-BUG-0012 (Q0014) shipped DEC-0007 config-driven `resolve_bucket` for **recurring** pattern dues in `project.rs`. Remaining gaps:
-
-| AC | Discovery verdict | Execute weight |
-|----|-------------------|----------------|
-| Prerequisite BUG-0012 | Shipped | Verify only |
-| AC-1 Baseline precedence | Partial | S2 primary |
-| AC-2 AI inference | **Gap** | **S1 primary** |
-| AC-3 Privacy defaults | **Gap** | **S1 primary** |
-| AC-4 API visibility | **Gap** | S3 |
-| AC-5 UI badge | **Gap** | S3 |
-| AC-6 Audit trail | **Gap** | S3 |
-| AC-7 Regression | Verify | S3 smoke |
-
-**Critical path:** uncategorized mirror rows and config-map misses on recurring dues still collapse to Variable via `map_category` empty-name default. **Rolling residual** (`variable_residual` daily rate) remains hardcoded Variable — documented MVP limitation (stage-2 gate).
-
-`isolation_scope`: artifact + repo source reads; no host `.env` / secrets read.
-
-### System context
-
-```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  Browser — ForecastPage.tsx Monthly tab                                     │
-│    Four stat cards (Income / Fixed / Variable / Free cashflow)              │
-│    Seasonal callout pattern → AI-mapped badge when ai_mapped=true (S3)      │
-└───────────────────────────────┬─────────────────────────────────────────────┘
-                                │ GET /api/v1/forecast/monthly
-                                ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  flow-finance-ai (Axum)                                                     │
-│                                                                             │
-│  ForecastService::recompute (DEC-0010 post-sync)                            │
-│    └─▶ project_account (project.rs)                                         │
-│           ├─▶ resolve_bucket (categories.rs) — DEC-0007 config first (AC-1)│
-│           ├─▶ BucketInferenceService (NEW S1) — LLM batch on ambiguous rows │
-│           │      PrivacyLayer::prepare_bucket_features (R-0075)               │
-│           │      build_provider() when configured (US-0008)                   │
-│           └─▶ variable_residual → Variable (MVP unchanged)                  │
-│                                                                             │
-│  GET /api/v1/forecast/monthly ──▶ MonthlyPointResponse + bucket_sources     │
-│                                   + ai_mapped (S3)                          │
-│  ai_tool_audit ──▶ forecast_bucket_assignment rows (S3, AC-6)               │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-**AC-7 boundary:** No changes to chat six-tool registry (DEC-0069), US-0013 ML overlay, or Firefly write-back.
-
-### Architecture contract (DEC-0078)
-
-```text
-US-0015
-├── S1 — AI bucket inference module (P0)
-│   ├── T1 — backend/src/forecast/bucket_inference.rs (rule→LLM cascade)
-│   ├── T2 — PrivacyLayer::prepare_bucket_features + BucketFeatureRow (R-0075)
-│   ├── T3 — Structured LLM I/O + ai_bucket_min_confidence=0.75 TOML
-│   └── T4 — Unit tests: privacy allowlist, threshold, provider_unavailable
-├── S2 — Projection merge (P0)
-│   ├── T1 — resolve_bucket_with_ai wrapper; config precedence guard (AC-1)
-│   ├── T2 — Recurring dues: AI only on config-map miss / ambiguous rows
-│   ├── T3 — Provenance tracking per monthly accumulation (source enum)
-│   └── T4 — Integration tests: config never overridden by AI
-└── S3 — API / UI / audit (P1)
-    ├── T1 — MonthlyPointResponse bucket_sources + ai_mapped (AC-4)
-    ├── T2 — ForecastPage AI-mapped badge (seasonal callout pattern, AC-5)
-    ├── T3 — ai_tool_audit forecast_bucket_assignment persistence (AC-6)
-    ├── T4 — docs/user-guides/US-0015.md
-    └── V1 — OIDC /forecast Monthly smoke (AC-7; BACKEND_FRONTEND_DEPLOY)
-```
-
-**Out of scope:** RAG/vector index; seventh chat tool; `[forecast.merchant_aliases]` TOML (post-MVP); rolling-residual aggregate AI split (stage-2); US-0013 ML changes.
-
-### S1 — AI bucket inference (frozen — DEC-0078 §1–3)
-
-#### Cascade stages
-
-| Stage | Trigger | Output |
-|-------|---------|--------|
-| 1 Config | `category_id` resolves via `category_buckets` | Bucket from DEC-0007; source=`config` |
-| 2 Rule heuristics | Config miss; optional in-module sign/pattern rules | Bucket + confidence; short-circuit ≥0.98 |
-| 3 LLM batch | Ambiguous rows after stage 2; provider configured | `{ bucket, confidence, rationale_code }` per `feature_id` |
-| 4 Fallback | confidence &lt; threshold or provider absent | Variable; source=`default`; audit reason |
-
-**Batch cap:** 100 `BucketFeatureRow` per provider call (R-0074 cost guard).
-
-#### Module placement
-
-| Type | Path | Responsibility |
-|------|------|----------------|
-| `BucketInferenceService` | `backend/src/forecast/bucket_inference.rs` | Collect ambiguous rows; invoke privacy + provider; return assignments |
-| `BucketAssignment` | same | `{ feature_id, bucket, confidence, source, rationale_code }` |
-| `BucketSource` | `backend/src/forecast/types.rs` or `categories.rs` | Enum: `Config`, `Ai`, `Default` |
-
-Reuse `build_provider()` from `backend/src/ai/provider.rs` via `AiService` — **no** `forecast_ai_*` env split.
-
-#### TOML contract
-
-```toml
-[forecast]
-ai_bucket_min_confidence = 0.75   # new; below → Variable + low_confidence audit
-```
-
-#### Privacy (R-0075 / AC-3)
-
-`PrivacyLayer::prepare_bucket_features(rows) -> Vec<BucketFeatureRow>` before any HTTP call:
-
-| Field | Default TOML | Treatment |
-|-------|--------------|-----------|
-| `category_name` | Sent if present | Lowercase trim |
-| `merchant_token` | Sent | `hash_counterparty(normalized_payee)` |
-| `amount_sign` | Sent | −1 / 0 / +1 only |
-| `magnitude_band` | Sent | `"0-50"` \| `"50-200"` \| `"200+"` |
-| `recurring_label` | Sent when detection provides | Subscription `display_name` preserve rule |
-| `pattern_class` | Sent | `standing_order` \| `subscription` \| `discretionary` |
-| Raw description/payee/IBAN/exact amount | **Never** under `allow_raw_transactions=false` | DEC-0032 default |
-
-**Opt-in:** `allow_raw_transactions=true` permits normalized description for ≤50 rows/batch — document elevated risk in user guide.
-
-**Local provider:** Same allowlist for Ollama/openai_compatible — consistency over "local = raw OK" (R-0075 §4).
-
-#### Invalidation (DEC-0078 §4)
-
-- **No cross-run DB assignment cache** for MVP
-- Recompute inline each forecast pass (DEC-0010)
-- Config bust: hash `[forecast.category_buckets]` at inference start
-- Optional in-call memo: `payee_fingerprint + category_id + sign` within single `project_account` invocation only
-
-### S2 — Projection merge (frozen — DEC-0078 §1, §5)
-
-#### `resolve_bucket_with_ai` contract
-
-```rust
-fn resolve_bucket_with_ai(
-    category_id: Option<&str>,
-    category_names: &HashMap<String, String>,
-    config: &ForecastConfig,
-    inference_ctx: &BucketInferenceContext,  // mirror row + pattern metadata
-    ai: Option<&BucketInferenceService>,
-) -> (Bucket, BucketSource);
-```
-
-| Rule | Contract |
-|------|----------|
-| AC-1 precedence | If `resolve_bucket` returns non-Variable from config map → **return immediately**; AI never consulted |
-| Config-mapped Variable | TOML explicit `"variable"` is config source — not AI-eligible |
-| Ambiguous | Empty/missing category name on recurring due → stage 2–3 cascade |
-| Threshold | `confidence >= ai_bucket_min_confidence` → apply AI bucket, source=`ai` |
-| Low confidence | Variable + `low_confidence` audit |
-| Provider down | Skip LLM; Variable + `provider_unavailable` audit |
-
-#### Rolling residual (MVP limitation — decision gate deferred)
-
-`accumulate_bucket(entry, Bucket::Variable, rolling.daily_rate)` **unchanged** in MVP. Rolling aggregate is not per-row disambiguable without stage-2 aggregate split design.
-
-| Option | Verdict |
-|--------|---------|
-| MVP: keep rolling as Variable | **Accepted** — document in user guide; `ai_mapped` reflects recurring AI only |
-| Stage-2: monthly aggregate AI split of residual | **Deferred** — requires new DEC if operator feedback demands |
-
-#### Provenance aggregation
-
-During monthly loop, track per-bucket mass by source. Dominant label per bucket month: precedence `config` &gt; `ai` &gt; `default`. `ai_mapped = true` when any AI-assigned mass &gt; 0 in that month (authoritative for badge per R-0074 §7).
-
-### S3 — API / UI / audit (frozen — DEC-0078 §5–7)
-
-#### API extension (`backend/src/api/forecast.rs`)
-
-```rust
-#[derive(Serialize)]
-pub struct BucketSources {
-    pub income: String,        // "config" | "ai" | "default"
-    pub fixed_costs: String,
-    pub variable_costs: String,
-}
-
-#[derive(Serialize)]
-pub struct MonthlyPointResponse {
-    // existing fields unchanged
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bucket_sources: Option<BucketSources>,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub ai_mapped: bool,
-}
-```
-
-Reject per-daily-point provenance — AC-4 targets monthly cards only.
-
-#### UI badge (AC-5)
-
-Mirror `ForecastPage.tsx` seasonal callout block (~L259): when `ai_mapped`, show compact **AI-mapped** badge with tooltip explaining config precedence and privacy-safe inference. Config-only months: no badge.
-
-#### Audit (AC-6)
-
-Persist to `ai_tool_audit` (existing US-0006 pattern):
-
-| Column / payload | Value |
-|------------------|-------|
-| `tool_name` | `forecast_bucket_assignment` |
-| `result_summary` | Redacted: `feature_id`, proposed bucket, confidence, source, rationale_code |
-| Never log | Raw merchant/description |
-
-### Provider contract (DEC-0078 §6)
-
-| Condition | Behavior |
-|-----------|----------|
-| `build_provider()` succeeds | LLM stage 3 for ambiguous rows |
-| Provider absent / misconfigured | Rule-only stages 1–2; Variable fallback |
-| Provider HTTP error | Skip batch; Variable; audit `provider_unavailable` |
-| Ollama/local configured | Preferred for privacy-sensitive operators; same allowlist |
-
-### Risks
-
-| Risk | Mitigation |
-|------|------------|
-| Threshold calibration — German merchants below 0.75 | Monitor `low_confidence` audit rate in QA; TOML override documented |
-| Rolling residual stays Variable | User guide + architecture stage-2 gate; `ai_mapped` scoped to recurring AI |
-| Provider cost on large mirrors | Batch ambiguous rows only; cap 100/call |
-| Privacy regression on forecast path | S1 code review gate; unit tests on allowlist |
-| Mixed `bucket_sources` hides partial AI | `ai_mapped` boolean authoritative for badge |
-| Config override regression | S2 integration tests — AC-1 guard |
-
-### Decision gates
-
-| Gate | Status | Resolution |
-|------|--------|------------|
-| DEC-0078 formalization | **Closed** | Accepted at architecture |
-| Confidence threshold 0.75 | **Closed** | Default TOML; operator override allowed |
-| Merchant aliases TOML | **Deferred** | Post-MVP extension point documented |
-| Rolling residual AI split | **Deferred** | MVP keeps Variable; stage-2 if operator feedback |
-
-**No blocking gates** — proceed to `/sprint-plan`.
-
-### Acceptance mapping
-
-| Row | Architecture slice | Verify |
-|-----|-------------------|--------|
-| Prerequisite | — | BUG-0012 DONE (checked) |
-| AC-1 | S2 | Config map never overridden |
-| AC-2 | S1, S2 | LLM proposal + threshold fallback |
-| AC-3 | S1 | `prepare_bucket_features` allowlist |
-| AC-4 | S3 | `bucket_sources` on monthly API |
-| AC-5 | S3 | `ai_mapped` badge |
-| AC-6 | S3 | `ai_tool_audit` rows |
-| AC-7 | S3 | OIDC smoke; chat/ML unchanged |
-
-### Next phase
-
-`/sprint-plan` **S0016** — materialize US-0015-S1..S3 tasks; S1+S2 before S3 API/UI; then `/plan-verify` → `/execute`.
-
----
-
 ## US-0017 — README living-doc expansion and troubleshooting (post-US-0016)
 
 **Status:** Architecture complete (2026-06-09)  
@@ -2941,4 +2678,166 @@ US-0022
 `runtime_proof_id`: `runtime-proof-architecture-20260614-us0022-001`
 
 `triad_hot_surface`: architecture § US-0022 appended (H1 heading per policy); four gates frozen; GATE-DEC-1 closed (no new DEC); spec-pack US-0022 created; state checkpoint; post-write `--check` required.
+
+---
+
+# BUG-0027 — Firefly sync fails with 401 Unauthorized (PAT invalid/expired after deploy)
+
+**Status:** Architecture complete (2026-06-22)
+**Discovery:** `discovery-20260622-bug0027` in `handoffs/po_to_tl.md`
+**Research:** [R-0099 §10](research.md#10-research-phase-findings-tech-lead-2026-06-22-isolated-fresh-context) (research phase findings)
+**Decisions:** No new DEC (GATE-DEC-1 closed — error taxonomy is implementation detail)
+**Depends on:** BUG-0002 (prior PAT-empty case Q0008); [R-0057](research.md#r-0057--firefly-iii-api-docs-discovery-post-bug-0001) (Firefly PAT /auth contract); existing `firefly/mod.rs`, `sync/mod.rs`, `tests/firefly_integration.rs`
+**Sprint:** `/quick` recommended — 5 tasks under `SPRINT_MAX_TASKS=12`; no split needed
+**Acceptance:** `docs/product/acceptance.md` § BUG-0027 (CB, CC, CD)
+
+### Problem
+
+Firefly sync fails with `error_message: unexpected status 401 Unauthorized` since deploy 2026-06-16. PAT is present (980 chars) but revoked/expired in Firefly. App surfaces generic `UnexpectedStatus(401)` — operator cannot distinguish "PAT invalid" from "Firefly unreachable" or "PAT missing".
+
+| Gap | Impact |
+|-----|--------|
+| `FireflyError` has no `Unauthorized` variant | 401 maps to generic `UnexpectedStatus` — unclear diagnosis (CC) |
+| No structured error for auth failures | Operator sees "unexpected status 401" — must read logs to understand PAT issue |
+| `pat_configured()` checks emptiness only | Cannot detect non-empty-but-invalid PAT (by design — no network call) |
+
+**Critical research correction:** Firefly returns **401 JSON** (not 302 redirect) when request includes `Accept: application/json` header. The app always sends this header at `firefly/mod.rs` L133, so the app always receives 401 directly. The 302→/login behavior observed in discovery curl probes was due to missing Accept header. Reqwest redirect following is **irrelevant**.
+
+### System context
+
+```text
+┌─────────────────────────────────────────────┐
+│  Operator (browser or /sync page)           │
+│  GET /api/v1/sync/status                  │
+│  → sees error_message from last sync run   │
+└───────────────────┬─────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────┐
+│  sync/mod.rs — execute_run()               │
+│  On error: finish_sync_run(…, e.to_string()) │
+│  error_message column = pass-through Display │
+└───────────────────┬─────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────┐
+│  firefly/mod.rs — request() L128-158       │
+│  Matches StatusCode → FireflyError variant │
+│  401 → Unauthorized (NEW)                  │
+│  other → UnexpectedStatus (existing)       │
+└───────────────────┬─────────────────────────┘
+                    │
+                    ▼
+┌─────────────────────────────────────────────┐
+│  Firefly III API (http://firefly:8080)      │
+│  Accept: application/json + invalid Bearer  │
+│  → 401 Unauthorized JSON                    │
+└─────────────────────────────────────────────┘
+```
+
+### Firefly error taxonomy contract
+
+| Variant | Condition | Display message | Source |
+|---------|-----------|-----------------|--------|
+| `Unauthorized` **(NEW)** | HTTP 401 response from Firefly API | `firefly_personal_access_token invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN` | `request()` status match |
+| `PersonalAccessTokenMissing` **(existing)** | PAT empty or whitespace (config L89 check) | (existing message — unchanged) | `execute_run()` preflight |
+| `Http(reqwest::Error)` **(existing)** | Network/DNS/timeout error | (reqwest error display) | reqwest transport |
+| `UnexpectedStatus(StatusCode)` **(existing)** | Any other non-success status | `unexpected status {status}` | `request()` fallthrough |
+
+**Why no 302 handling:** App sends `Accept: application/json` → Firefly returns 401 for auth failures. 302 only occurs without Accept header (browser-like), which the app never does.
+
+### Sync error propagation path
+
+```text
+Firefly returns 401 JSON
+  └→ request() matches StatusCode::UNAUTHORIZED
+       └→ Err(FireflyError::Unauthorized)
+            └→ execute_run() catches error
+                 └→ e.to_string()
+                      └→ "firefly_personal_access_token invalid or expired — …"
+                           └→ finish_sync_run(…, error_message)
+                                └→ sync_runs.error_message column
+                                     └→ GET /api/v1/sync/status → last_run.error_message
+                                          └→ /sync page renders message to operator
+```
+
+**No changes needed in:**
+- `sync/mod.rs` L249-256 — `e.to_string()` pass-through already captures new variant Display
+- `sync/mod.rs` L561-564 — `exchanges_only_terminal` same pass-through
+- `config/mod.rs` L89-90 — `pat_configured()` emptiness check preserved
+- `health/mod.rs` — `firefly_pat_configured: bool` unchanged (emptiness only)
+- Frontend — `/sync` page renders `error_message` raw
+
+### Operator remediation flow
+
+```text
+1. Operator sees "firefly_personal_access_token invalid or expired" on /sync
+2. Regenerate PAT: Firefly profile → API tokens → create new token
+3. Update .env: FIREFLY_PERSONAL_ACCESS_TOKEN=<new-token>
+4. Recreate container: docker compose up -d (picks up new env)
+5. Trigger sync: "Sync now" button or wait for next scheduled run
+6. Verify: GET /api/v1/sync/status → state: completed
+7. Monitor: ≥3 scheduled syncs succeed (CD)
+```
+
+### Acceptance trace
+
+| Row | Type | Mechanism | Tasks |
+|-----|------|-----------|-------|
+| **CB** | OPS | PAT regen + .env update + container recreate + sync | V1 |
+| **CC** | CODE | `FireflyError::Unauthorized` variant + Display message | E1, E2, T1, G1 |
+| **CD** | OPS | ≥3 scheduled syncs succeed post-regen | V1 |
+
+### Sprint-plan scope (`/quick`)
+
+```text
+BUG-0027
+├── E1 — FireflyError::Unauthorized variant (firefly/mod.rs L20-37)
+├── E2 — Match 401 → Unauthorized (firefly/mod.rs L128-158)
+├── T1 — wiremock 401 integration test (tests/firefly_integration.rs)
+├── G1 — Regression gates: cargo lib + firefly integration + sync tests
+└── V1 — Operator smoke: PAT regen + redeploy + ≥3 scheduled syncs verify
+```
+
+5 tasks, 5/12 under `SPRINT_MAX_TASKS`. Backend-only (no frontend changes).
+
+### Decisions (BUG-0027)
+
+| Topic | Contract | DEC |
+|-------|----------|-----|
+| 401 → Unauthorized mapping | HTTP 401 only (no 302) | GATE-ERROR-1 (architecture) |
+| Display message template | Frozen per GATE-MESSAGE-1 | architecture |
+| No startup preflight | Defer to future US | GATE-PREFLIGHT-1 (architecture) |
+| wiremock integration test | Mock 401 → assert Unauthorized | GATE-TEST-1 (architecture) |
+| No new DEC record | Implementation detail only | GATE-DEC-1 closed |
+
+### Risks
+
+| Risk | Severity | Mitigation |
+|------|----------|------------|
+| Firefly future version returns 302 for JSON-accept requests | Low | `UnexpectedStatus` fallthrough handles it; operator sees generic message with HTTP status |
+| Proxy/auth-wall returns 401 for non-PAT reasons | Low | Message text references Firefly specifically; operator can verify via `firefly_base_url` setting |
+| Old sync_runs keep "unexpected status 401" in error_message | None | Old runs unchanged; new runs get clearer message; no migration needed |
+| reqwest 401 match accidentally catches non-Firefly errors | Low | `request()` method is Firefly-specific; all calls go through `firefly_base_url` |
+
+**Overall risk:** Low. All changes are additive (new enum variant + match arm); no behavioral change to existing code paths.
+
+### Gate checklist
+
+| Gate | Status | Detail |
+|------|--------|--------|
+| GATE-ERROR-1 | ✅ | `Unauthorized` variant added to `FireflyError` |
+| GATE-MESSAGE-1 | ✅ | Display: "firefly_personal_access_token invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN" |
+| GATE-302-HANDLING | ✅ | No handling needed — content negotiation ensures 401 |
+| GATE-PREFLIGHT-1 | ❌ Deferred | Startup health probe deferred to future US |
+| GATE-TEST-1 | ✅ | wiremock 401 integration test in `tests/firefly_integration.rs`; preserve existing `PersonalAccessTokenMissing` test |
+| GATE-DEC-1 | ✅ | No new DEC (implementation detail) |
+
+### Next phase
+
+`/sprint-plan` (role: tech-lead) — materialize `/quick` from sprint-plan scope (5 tasks: E1, E2, T1, G1, V1); then `/plan-verify` → `/execute`.
+
+`runtime_proof_id`: `runtime-proof-architecture-20260622-bug0027-001`
+
+`triad_hot_surface`: architecture § BUG-0027 appended (H1 heading per DEC-0076/BUG-0010 policy); six gates frozen; GATE-DEC-1 closed (no new DEC); state checkpoint; post-write `--check` required.
 

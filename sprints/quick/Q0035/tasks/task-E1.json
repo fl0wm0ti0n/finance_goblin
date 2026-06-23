@@ -1,0 +1,18 @@
+{
+  "id": "E1",
+  "title": "FireflyError::Unauthorized variant",
+  "description": "Add Unauthorized unit variant to FireflyError enum with frozen Display message",
+  "file_targets": ["backend/src/firefly/mod.rs L20-37"],
+  "tests": [
+    "Add Unauthorized unit variant to FireflyError enum L20-37",
+    "Display impl returns frozen message per GATE-MESSAGE-1",
+    "cargo check --lib compiles"
+  ],
+  "effort": "0.5h",
+  "complexity": "low",
+  "risk": "low",
+  "status": "TODO",
+  "acceptance": ["CC"],
+  "gates": ["GATE-ERROR-1", "GATE-MESSAGE-1"],
+  "depends_on": []
+}

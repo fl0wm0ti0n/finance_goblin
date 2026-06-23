@@ -1,0 +1,182 @@
+{
+  "id": "Q0035",
+  "title": "BUG-0027 Firefly sync 401 Unauthorized (PAT invalid/expired)",
+  "status": "PLANNED",
+  "bug_id": "BUG-0027",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0027",
+  "acceptance_doc": "docs/product/acceptance.md",
+  "acceptance_rows": ["CB", "CC", "CD"],
+  "acceptance_mapping": {
+    "CB": {
+      "tasks": ["V1"],
+      "primary_verify": "After PAT regen + env update + container recreate, GET /api/v1/sync/status shows state:completed; manual Sync now returns completed with entity counts; no 401 in error_message"
+    },
+    "CC": {
+      "tasks": ["E1", "E2", "T1", "G1"],
+      "primary_verify": "App surfaces FireflyError::Unauthorized display message on 401 distinguishing PAT invalid from PAT missing from Firefly unreachable; wiremock test asserts Unauthorized variant"
+    },
+    "CD": {
+      "tasks": ["V1"],
+      "primary_verify": "≥3 scheduled syncs succeed post-PAT regen with no silent 401 recurrence"
+    }
+  },
+  "task_count": 5,
+  "mandatory_task_count": 5,
+  "optional_task_ids": [],
+  "estimate_total_hours": 4.0,
+  "user_guide_mode": {
+    "enabled": true,
+    "waived": true,
+    "reason": "Operator remediation is standard Firefly PAT regen; app surfaces self-explanatory display message"
+  },
+  "tasks": [
+    {
+      "id": "E1",
+      "title": "FireflyError::Unauthorized variant",
+      "status": "TODO",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "complexity": "low",
+      "risk": "low",
+      "depends_on": [],
+      "acceptance_hook": "BUG-0027 (CC) — GATE-ERROR-1 + GATE-MESSAGE-1 frozen variant + display",
+      "files": ["backend/src/firefly/mod.rs"],
+      "file_targets": ["backend/src/firefly/mod.rs L20-37"],
+      "decisions": [],
+      "research": ["R-0099"],
+      "tests": [
+        "Add Unauthorized unit variant to FireflyError enum L20-37",
+        "Display impl returns frozen message per GATE-MESSAGE-1",
+        "cargo check --lib compiles"
+      ]
+    },
+    {
+      "id": "E2",
+      "title": "Match 401 -> Unauthorized in request()",
+      "status": "TODO",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "complexity": "low",
+      "risk": "low",
+      "depends_on": ["E1"],
+      "acceptance_hook": "BUG-0027 (CC) — GATE-ERROR-1 401 match arm",
+      "files": ["backend/src/firefly/mod.rs"],
+      "file_targets": ["backend/src/firefly/mod.rs L128-158"],
+      "decisions": [],
+      "research": ["R-0099"],
+      "tests": [
+        "Add match arm StatusCode::UNAUTHORIZED => Err(FireflyError::Unauthorized) in request() method",
+        "Other status codes unchanged (UnexpectedStatus fallthrough)",
+        "cargo check --lib compiles"
+      ]
+    },
+    {
+      "id": "T1",
+      "title": "wiremock 401 integration test",
+      "status": "TODO",
+      "priority": "P0",
+      "estimate_hours": 1.5,
+      "complexity": "medium",
+      "risk": "low",
+      "depends_on": ["E2"],
+      "acceptance_hook": "BUG-0027 (CC)(CD) — GATE-TEST-1 wiremock mock 401",
+      "files": ["backend/tests/firefly_integration.rs"],
+      "file_targets": ["backend/tests/firefly_integration.rs"],
+      "decisions": [],
+      "research": ["R-0099"],
+      "tests": [
+        "wiremock mock GET /api/v1/about returns 401 with Accept: application/json header",
+        "Assert FireflyClient request returns FireflyError::Unauthorized (not UnexpectedStatus(401))",
+        "Existing PersonalAccessTokenMissing test preserved (not broken)",
+        "cargo test --test firefly_integration PASS"
+      ]
+    },
+    {
+      "id": "G1",
+      "title": "Regression gates (cargo lib + integration + sync tests)",
+      "status": "TODO",
+      "priority": "P0",
+      "estimate_hours": 0.5,
+      "complexity": "low",
+      "risk": "low",
+      "depends_on": ["E1", "E2", "T1"],
+      "acceptance_hook": "BUG-0027 (CB)(CC)(CD) — automated verification",
+      "files": ["sprints/quick/Q0035/progress.md"],
+      "file_targets": [],
+      "decisions": [],
+      "tests": [
+        "cargo check --lib PASS",
+        "cargo test --test firefly_integration PASS (T1 wiremock + existing PAT-empty)",
+        "cargo test full suite PASS (sync tests included)",
+        "git diff --stat matches frozen file list"
+      ]
+    },
+    {
+      "id": "V1",
+      "title": "Operator smoke: PAT regen + >=3 scheduled syncs",
+      "status": "TODO",
+      "priority": "P0",
+      "estimate_hours": 1.0,
+      "complexity": "low",
+      "risk": "low",
+      "depends_on": ["G1"],
+      "operator_gate": "BACKEND_DEPLOY",
+      "acceptance_hook": "BUG-0027 (CB)(CC)(CD) — operator PAT regen + regression monitor",
+      "files": [
+        "sprints/quick/Q0035/uat.md",
+        "sprints/quick/Q0035/uat.json"
+      ],
+      "file_targets": [],
+      "tests": [
+        "Regenerate PAT in Firefly profile -> API tokens",
+        "Update FIREFLY_PERSONAL_ACCESS_TOKEN in .env",
+        "Recreate container (docker compose up -d)",
+        "Manual Sync now -> state:completed with entity counts",
+        "GET /api/v1/sync/status -> state:completed; no 401 in error_message",
+        "Monitor >=3 scheduled syncs succeed (CD)",
+        "If 401 recurs: /sync page shows Unauthorized display message (CC ops check)"
+      ]
+    }
+  ],
+  "deploy_order": [
+    "E1 FireflyError::Unauthorized variant + Display",
+    "E2 401 match arm in request()",
+    "T1 wiremock 401 integration test",
+    "G1 regression gates",
+    "BACKEND_DEPLOY",
+    "V1 operator smoke"
+  ],
+  "execute_order": ["E1", "E2", "T1", "G1", "V1"],
+  "operator_gates": [
+    {
+      "id": "BACKEND_DEPLOY",
+      "before_tasks": ["V1"],
+      "action": "rebuild/restart backend container — E1+E2 error variant live",
+      "rationale": "New FireflyError::Unauthorized variant + 401 match arm must be deployed before operator PAT regen smoke"
+    }
+  ],
+  "frozen_boundaries": [
+    "GATE-ERROR-1: Unauthorized is unit variant (no fields) on FireflyError",
+    "GATE-MESSAGE-1: Display frozen — firefly_personal_access_token invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN",
+    "GATE-302-HANDLING: closed — no 302 handling needed (content negotiation ensures 401)",
+    "GATE-PREFLIGHT-1: deferred — startup health probe not in scope",
+    "GATE-TEST-1: wiremock 401 mock -> assert Unauthorized; preserve existing PersonalAccessTokenMissing test",
+    "GATE-DEC-1: closed — no new DEC (implementation detail)",
+    "Forbidden: sync/mod.rs changes (e.to_string() pass-through already captures new Display)",
+    "Forbidden: config/mod.rs pat_configured() changes (emptiness check by design)",
+    "Forbidden: frontend changes (/sync page renders error_message raw)",
+    "Forbidden: 302 redirect handling (not applicable — Accept: application/json always sent)"
+  ],
+  "decisions": [],
+  "research": ["R-0099"],
+  "operator_next": "After E1+E2+T1+G1: BACKEND_DEPLOY; then V1 operator PAT regen + container recreate + >=3 scheduled syncs",
+  "next_phase": "plan-verify",
+  "sprint_plan_ref": "sprint-plan-20260622-bug0027-q0035",
+  "orchestrator_run_id": "auto-20260622-bug0027",
+  "isolation_evidence": {
+    "phase_id": "sprint-plan",
+    "role": "tech-lead",
+    "fresh_context_marker": "sprint-plan-20260622-bug0027-tl-fresh",
+    "timestamp": "2026-06-22T22:26:00Z"
+  }
+}

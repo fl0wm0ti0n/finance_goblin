@@ -47,6 +47,7 @@ Canonical release queue for sprint-level release state.
 | Q0033 | BUG-0024 | released | 2026-06-13T16:00:00Z | handoffs/releases/Q0033-release-notes.md | check-in_test:pass(npm 31/31); qa:pass; uat:pass-with-prerequisites(verify-work); isolation:pass; runtime_proof:pass; publish:skipped(disabled) | bug0024-q0033 | — |
 | Q0034 | BUG-0025 | released | 2026-06-14T18:00:00Z | handoffs/releases/Q0034-release-notes.md | check-in_test:pass(221/221 lib, bug0025 3/3, npm 31/31); qa:pass; uat:pass-with-prerequisites(verify-work); isolation:pass; runtime_proof:pass; publish:skipped(disabled) | bug0025-q0034 | — |
 | S0021 | US-0022 | released | 2026-06-14T19:23:00Z | handoffs/releases/S0021-release-notes.md | check-in_test:pass(221/221 lib, meta_test 3/3, npm 31/31); qa:pass; uat:pass-with-prerequisites(verify-work); isolation:pass; runtime_proof:pass; publish:skipped(disabled) | 0.22.0-us0022 | — |
+| Q0035 | BUG-0027 | unreleased | 2026-06-22T22:58:00Z | handoffs/releases/Q0035-release-notes.md | check-in_test:pass(firefly_integration 2/2, sync lib 24/24, bug0025 3/3); qa:pass; uat:pass-with-prerequisites(verify-work; CC PASS, CB/CD PENDING_OPERATOR); isolation:pass; runtime_proof:pass; publish:skipped(disabled) | 0.22.1-bug0027 | operator V1 pending (PAT regen + manual sync + ≥3 scheduled syncs monitoring) |
 
 ## Status model
 

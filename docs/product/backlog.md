@@ -2468,6 +2468,54 @@ Priority: P2
 
 ---
 
+### BUG-0027 — Firefly sync fails with 401 Unauthorized (PAT invalid/expired after deploy)
+
+Status: READY_FOR_OPERATOR
+Priority: P0
+
+**Release notes:** `handoffs/releases/Q0035-release-notes.md` (version `0.22.1-bug0027`, 2026-06-22)
+**Code fix:** `FireflyError::Unauthorized` variant + Display message at `backend/src/firefly/mod.rs` L37-40, L156-158; wiremock 401 test at `backend/tests/firefly_integration.rs` L155-192. All automated gates PASS.
+**Operator V1 status:** PENDING_OPERATOR — operator must deploy `0.22.1-bug0027`, regenerate PAT, update `.env`, recreate container, verify sync status, monitor ≥3 scheduled syncs. Full checklist: `sprints/quick/Q0035/release-verification-checklist.md`.
+**Closure criteria:** After operator confirms V1 pass (CB ✅, CD ✅), status → DONE.
+
+**environment:** omniflow external profile; Docker network `traefik`; container `financegoblin-flow-finance-ai-1`; Firefly on `http://firefly:8080`; deploy 2026-06-16.
+
+**steps_to_reproduce:**
+
+1. Open `/sync` on `https://financegnome.omniflow.cc`.
+2. Click **Sync now** OR wait for hourly scheduled trigger.
+3. Observe sync status via `GET /api/v1/sync/status`.
+
+**expected:**
+
+- Sync completes; entities synced to mirror; `last_run.status = completed`; entity counts non-zero.
+- No `error_message` containing `401` or `Unauthorized`.
+
+**actual:**
+
+- Sync fails; `status: failed`; `error_message: unexpected status 401 Unauthorized`.
+- All sync runs (scheduled + manual) have been failing since deploy on 2026-06-16.
+- `FIREFLY_PERSONAL_ACCESS_TOKEN` length = **980** chars (non-empty) but `curl -H "Authorization: Bearer <PAT>" http://firefly:8080/api/v1/about` → HTTP **302** redirecting to `/login` → app follows redirect → Firefly `/login` HTML returns 200, but app sync layer sees `401` upstream.
+- **Root cause hypothesis:** Firefly PAT has expired or been invalidated in Firefly profile → API tokens. Firefly rejects API calls with 302→/login when Authorization is invalid.
+
+**evidence_refs:** `handoffs/intake_evidence/intake-20260622-firefly-sync-401.json`; container logs 2026-06-22 19:18:41Z; `GET /api/v1/sync/status` response; Firefly `api/v1/about` curl probe.
+
+**Related work:** **BUG-0002** (prior PAT-empty case on rebuild); [R-0057](docs/engineering/research.md#r-0057) (Firefly PAT contract)
+
+#### Intake evidence (BUG-0027)
+
+- `intake_run_id`: `intake-20260622-firefly-sync-401`
+- `intake_work_item_kind`: `bug`
+- `selected_pack`: `small-intake-pack`
+- `asked_topics`: outcome_success_criteria, impacted_components, constraints_compatibility_risks, required_tests_acceptance_checks, done_definition
+- `missing_topics`: _(none)_
+- `assumptions_confirmed`: root-cause PAT expiry or invalidation in Firefly profile — container PAT present (980 chars) but Firefly returns 302→/login; verify after regen and .env update.
+- Evidence bundle: `handoffs/intake_evidence/intake-20260622-firefly-sync-401.json`
+
+**Decomposition:** single-bug — PAT regen + .env update + container recreate is one vertical operator fix; optional UI diagnosis enhancement is a separate improvement (not part of this bug).
+
+---
+
 ## User stories (canonical)
 
 ### US-0001 — Self-hosted platform foundation & Firefly read-only integration

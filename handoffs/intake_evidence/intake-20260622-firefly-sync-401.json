@@ -1,0 +1,61 @@
+{
+  "intake_run_id": "intake-20260622-firefly-sync-401",
+  "intake_work_item_kind": "bug",
+  "bug_id": "BUG-0027",
+  "selected_pack": "small-intake-pack",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": "root-cause PAT expiry or invalidation in Firefly profile — container PAT is present (980 chars) but Firefly rejects with 302->login, consistent with expired/revoked PAT; verify after regen and .env update.",
+  "assumption_confirmation_ref": "ie:intake-20260622-firefly-sync-401:10:aab8eb6fa2676369",
+  "assumption_confirmation_intake_run_id": "intake-20260622-firefly-sync-401",
+  "assumption_confirmation_turn_index": 10,
+  "assumption_confirmation_quoted": "curl -H \"Authorization: Bearer <PAT>\" http://firefly:8080/api/v1/about -> HTTP 302 redirecting to /login -> app follows redirect -> Firefly /login HTML returns 200 but app sync layer sees 401 upstream; PAT has expired or been invalidated in Firefly profile.",
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "Firefly sync all scheduled + manual runs return status failed error_message unexpected status 401 Unauthorized; mirror data is stale since deploy 2026-06-16.",
+      "intake_run_id": "intake-20260622-firefly-sync-401",
+      "turn_index": 0,
+      "ref": "ie:intake-20260622-firefly-sync-401:0:6453fcb1f1043118"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "FIREFLY_PERSONAL_ACCESS_TOKEN length 980 non-empty; FIREFLY_BASE_URL=http://firefly:8080; container financegoblin-flow-finance-ai-1; curl 302->login on Bearer PAT; GET /api/v1/sync/status state failed; Docker network traefik; omniflow external profile.",
+      "intake_run_id": "intake-20260622-firefly-sync-401",
+      "turn_index": 1,
+      "ref": "ie:intake-20260622-firefly-sync-401:1:9d269a839a80fb66"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "answer_ref",
+      "quoted_user_text": "BUG-0002 sub-defect C covered similar 401/PAT-empty case; this is a new recurrence after deploy on 2026-06-16 (token existed but now invalid in Firefly profile).",
+      "intake_run_id": "intake-20260622-firefly-sync-401",
+      "turn_index": 2,
+      "ref": "ie:intake-20260622-firefly-sync-401:2:05af88c7c1795e72"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "assumption_confirmation_ref",
+      "quoted_user_text": "After regenerating PAT in Firefly profile and updating FIREFLY_PERSONAL_ACCESS_TOKEN in .env + recreating container, GET /api/v1/sync/status shows state completed after next scheduled run; manual Sync now returns status completed with non-zero entity counts; no error_message containing 401 or Unauthorized.",
+      "intake_run_id": "intake-20260622-firefly-sync-401",
+      "turn_index": 3,
+      "ref": "ie:intake-20260622-firefly-sync-401:3:09cb29dfe7c3a218"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "assumption_confirmation_ref",
+      "quoted_user_text": "App surfaces clear user-facing diagnosis on /sync when PAT auth fails (distinguishing PAT expired/invalid from PAT missing and Firefly unreachable); live Firefly mirror reflects current data; >=3 subsequent scheduled syncs succeed (no silent 401 recurrence); OIDC-enabled and omniflow external deploy regression checks pass.",
+      "intake_run_id": "intake-20260622-firefly-sync-401",
+      "turn_index": 4,
+      "ref": "ie:intake-20260622-firefly-sync-401:4:860badecaec81bd8"
+    }
+  ]
+}

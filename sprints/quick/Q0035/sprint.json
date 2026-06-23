@@ -1,0 +1,17 @@
+{
+  "sprint_id": "Q0035",
+  "type": "quick",
+  "status": "PLANNED",
+  "work_item": "BUG-0027",
+  "work_item_kind": "bug",
+  "created": "2026-06-22",
+  "architecture_ref": "docs/engineering/architecture.md # BUG-0027",
+  "acceptance_ref": "docs/product/acceptance.md",
+  "acceptance_rows": ["CB", "CC", "CD"],
+  "task_count": 5,
+  "sprint_max_tasks": 12,
+  "auto_split": false,
+  "orchestrator_run_id": "auto-20260622-bug0027",
+  "next_phase": "plan-verify",
+  "next_phase_role": "qa"
+}

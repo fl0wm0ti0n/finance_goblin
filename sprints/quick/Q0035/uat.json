@@ -1,0 +1,99 @@
+{
+  "sprint_id": "Q0035",
+  "bug_id": "BUG-0027",
+  "acceptance_rows": ["CB", "CC", "CD"],
+  "status": "POPULATED",
+  "created": "2026-06-22T22:30:00Z",
+  "populated_at": "2026-06-22T22:58:00Z",
+  "user_guide_mode": "waived",
+  "counts": {
+    "pass": 1,
+    "pass_with_prerequisites": 0,
+    "pending_operator": 2,
+    "fail": 0,
+    "total": 3
+  },
+  "steps": [
+    {
+      "id": "CC-code",
+      "acceptance_row": "CC",
+      "description": "Verify Display message for FireflyError::Unauthorized EXACT-MATCH architecture § BUG-0027 frozen message at backend/src/firefly/mod.rs L37-40",
+      "probe_kind": "manual_code_review",
+      "expected": "firefly_personal_access_token invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN",
+      "result": "pass",
+      "evidence_ref": "backend/src/firefly/mod.rs L37-40",
+      "verified_at": "2026-06-22T22:58:00Z",
+      "verified_by": "verify-work-20260622-bug0027-qa-fresh"
+    },
+    {
+      "id": "CC-arm-order",
+      "acceptance_row": "CC",
+      "description": "Verify 401 match arm at backend/src/firefly/mod.rs L156 PRECEDES UnexpectedStatus fallthrough at L166 (no shadowing)",
+      "probe_kind": "manual_code_review",
+      "expected": "status == StatusCode::UNAUTHORIZED at L156 before retry block at L160 and UnexpectedStatus at L166",
+      "result": "pass",
+      "evidence_ref": "backend/src/firefly/mod.rs L156-166",
+      "verified_at": "2026-06-22T22:58:00Z",
+      "verified_by": "verify-work-20260622-bug0027-qa-fresh"
+    },
+    {
+      "id": "CC-wiremock",
+      "acceptance_row": "CC",
+      "description": "Integration test test_firefly_401_returns_unauthorized_variant asserts Err(FireflyError::Unauthorized) + message substring 'firefly_personal_access_token invalid or expired'",
+      "probe_kind": "cargo_test",
+      "command": "cargo test --test firefly_integration",
+      "expected": "2 passed; 0 failed; 0 ignored",
+      "actual": "2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+      "result": "pass",
+      "evidence_ref": "backend/tests/firefly_integration.rs L155-192",
+      "verified_at": "2026-06-22T22:58:00Z",
+      "verified_by": "verify-work-20260622-bug0027-qa-fresh"
+    },
+    {
+      "id": "CB-PAT-regen",
+      "acceptance_row": "CB",
+      "description": "Operator regenerates PAT in Firefly UI, updates /workdir/financegoblin/.env, recreates container, triggers manual sync. Sync must complete with state=completed + error_message=null + entity_counts > 0",
+      "probe_kind": "manual_operator",
+      "expected": "GET /api/v1/sync/status → {state: completed, error_message: null}",
+      "result": "pending_operator",
+      "pending_reason": "Requires Firefly UI access (profile → OAuth → regenerate PAT) + .env edit + container recreate. Cannot be verified without operator action.",
+      "runbook_ref": "sprints/quick/Q0035/operator-v1-runbook.md Steps 2-5"
+    },
+    {
+      "id": "CD-scheduled-syncs",
+      "acceptance_row": "CD",
+      "description": "Monitor ≥3 scheduled sync_runs after PAT regen. All state=completed, error_message IS NULL, trigger=scheduled, no 401 in logs",
+      "probe_kind": "manual_operator",
+      "expected": "≥3 sync_runs with state=completed + trigger=scheduled within 3h window",
+      "result": "pending_operator",
+      "pending_reason": "Requires waiting 3h of scheduled sync cycles (hourly cron). Cannot be verified without operator monitoring.",
+      "runbook_ref": "sprints/quick/Q0035/operator-v1-runbook.md Step 6"
+    }
+  ],
+  "probe_results": [
+    {
+      "probe_kind": "manual_code_review",
+      "step_ids": ["CC-code", "CC-arm-order"],
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "notes": "Independent read-only verification of firefly/mod.rs L37-40 (Display) + L156-166 (401 arm order). Matches architecture § BUG-0027 frozen contract exactly."
+    },
+    {
+      "probe_kind": "cargo_test",
+      "step_ids": ["CC-wiremock"],
+      "passed": true,
+      "reason_code": "UAT_PROBE_PASS",
+      "command": "cargo test --test firefly_integration",
+      "exit_code": 0,
+      "output_summary": "test result: ok. 2 passed; 0 failed; 0 ignored"
+    },
+    {
+      "probe_kind": "manual_operator",
+      "step_ids": ["CB-PAT-regen", "CD-scheduled-syncs"],
+      "passed": false,
+      "reason_code": "UAT_PROBE_FORBIDDEN",
+      "notes": "Operator-only probes. V1 runbook written. Cannot be executed in verify-work phase — blocked on operator PAT regen + Firefly UI access."
+    }
+  ],
+  "notes": "CC verifiable in code — PASS. CB + CD require operator V1 smoke (deploy + PAT regen + ≥3 scheduled syncs monitor). Operator V1 runbook: sprints/quick/Q0035/operator-v1-runbook.md"
+}

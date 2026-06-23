@@ -87,3 +87,13 @@ enabled.
 - `connect_endpoint`: `http://localhost:8080` (API/UI), `:8081` Firefly, `:3000` Grafana
 - `release_context`: `handoffs/releases/S0001-release-notes.md` (released 2026-05-31)
 - `qa_context`: `sprints/S0001/qa-findings.md`, `sprints/S0001/uat.json`
+
+## Omniflow external production (US-0010 / US-0022)
+
+- `target_id`: omniflow-external
+- `execution_mode`: remote (homelab host `/workdir/financegoblin`)
+- `connect_endpoint`: `https://financegnome.omniflow.cc` (`TRAEFIK_HOST`)
+- `ingress`: Traefik routers `financegnome` (UI + basic-auth) and `financegnome-api` (API/analytics, no auth)
+- `deploy_command`: `bash /workdir/financegoblin/deploy.sh`
+- `release_context`: `handoffs/releases/S0021-release-notes.md` (`0.22.0-us0022`)
+- `build_metadata`: `GET /api/v1/meta/build-info` — `build_id`, `release_tag`, `build_timestamp`

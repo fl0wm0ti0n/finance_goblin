@@ -4,6 +4,31 @@
   "runtimeConnectivityDoc": "docs/engineering/runtime-connectivity.md",
   "targets": [
     {
+      "id": "omniflow-external",
+      "type": "docker",
+      "enabled": true,
+      "order": 5,
+      "command": "bash /workdir/financegoblin/deploy.sh",
+      "workingDirectory": "/workdir/financegoblin",
+      "runtime": {
+        "mode": "remote",
+        "domainEnv": "TRAEFIK_HOST",
+        "protocol": "https",
+        "port": 443,
+        "traefik": {
+          "enabled": true,
+          "router": "financegnome",
+          "entrypoint": "websecure",
+          "tls": true
+        }
+      },
+      "dockerOverSsh": {
+        "enabled": false,
+        "composeFile": "docker-compose.yml:docker-compose.external.yml",
+        "service": "flow-finance-ai"
+      }
+    },
+    {
       "id": "npm-public",
       "type": "npm",
       "enabled": false,

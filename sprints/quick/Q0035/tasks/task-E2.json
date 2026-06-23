@@ -1,0 +1,18 @@
+{
+  "id": "E2",
+  "title": "Match 401 -> Unauthorized in request()",
+  "description": "Add 401 match arm in request() method to return FireflyError::Unauthorized",
+  "file_targets": ["backend/src/firefly/mod.rs L128-158"],
+  "tests": [
+    "Add match arm StatusCode::UNAUTHORIZED => Err(FireflyError::Unauthorized) in request() method",
+    "Other status codes unchanged (UnexpectedStatus fallthrough)",
+    "cargo check --lib compiles"
+  ],
+  "effort": "0.5h",
+  "complexity": "low",
+  "risk": "low",
+  "status": "TODO",
+  "acceptance": ["CC"],
+  "gates": ["GATE-ERROR-1"],
+  "depends_on": ["E1"]
+}

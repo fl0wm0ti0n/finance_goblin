@@ -34,6 +34,10 @@ pub enum FireflyError {
         "firefly_personal_access_token_missing: set non-empty FIREFLY_PERSONAL_ACCESS_TOKEN (see docs/engineering/runbook.md § Omniflow external deploy)"
     )]
     PersonalAccessTokenMissing,
+    #[error(
+        "firefly_personal_access_token invalid or expired — regenerate in Firefly profile → API tokens → update FIREFLY_PERSONAL_ACCESS_TOKEN"
+    )]
+    Unauthorized,
 }
 
 pub struct FireflyClient {
@@ -147,6 +151,10 @@ impl FireflyClient {
 
             if status.is_success() {
                 return Ok(response.json().await?);
+            }
+
+            if status == StatusCode::UNAUTHORIZED {
+                return Err(FireflyError::Unauthorized);
             }
 
             if (status.is_server_error() || status.as_u16() == 429) && attempt < max_retries {
