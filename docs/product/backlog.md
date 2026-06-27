@@ -2470,13 +2470,12 @@ Priority: P2
 
 ### BUG-0027 — Firefly sync fails with 401 Unauthorized (PAT invalid/expired after deploy)
 
-Status: READY_FOR_OPERATOR
+Status: DONE
 Priority: P0
 
 **Release notes:** `handoffs/releases/Q0035-release-notes.md` (version `0.22.1-bug0027`, 2026-06-22)
 **Code fix:** `FireflyError::Unauthorized` variant + Display message at `backend/src/firefly/mod.rs` L37-40, L156-158; wiremock 401 test at `backend/tests/firefly_integration.rs` L155-192. All automated gates PASS.
-**Operator V1 status:** PENDING_OPERATOR — operator must deploy `0.22.1-bug0027`, regenerate PAT, update `.env`, recreate container, verify sync status, monitor ≥3 scheduled syncs. Full checklist: `sprints/quick/Q0035/release-verification-checklist.md`.
-**Closure criteria:** After operator confirms V1 pass (CB ✅, CD ✅), status → DONE.
+**Closed:** 2026-06-25 — `0.22.1-bug0027` deployed; new `FireflyError::Unauthorized` path verified live; operator confirmed sync operational after PAT regeneration.
 
 **environment:** omniflow external profile; Docker network `traefik`; container `financegoblin-flow-finance-ai-1`; Firefly on `http://firefly:8080`; deploy 2026-06-16.
 

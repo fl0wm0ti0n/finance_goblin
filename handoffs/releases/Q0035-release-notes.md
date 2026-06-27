@@ -137,4 +137,26 @@ Scope LOW — backend-only bugfix, no migration, no frontend.
 - Queue row: `handoffs/release_queue.md` — Q0035 `status=unreleased`
 - `release_notes_ref`: this file
 - `release_version`: `0.22.1-bug0027`
-- `release_status`: READY_FOR_OPERATOR_VERIFICATION
+- `release_status`: DONE (2026-06-25)
+
+---
+
+## Live verification (2026-06-25)
+
+**Operator verification post-deployment:**
+
+- Date: 2026-06-25T21:11:00Z
+- Sync run ID: `44f0f6ca-f344-4f79-be3d-d5ce76df0b58`
+- Timestamp: 2026-06-25T19:03:26Z
+- Status: `success`
+- Trigger: `scheduled`
+- error_message: `null`
+- Container: `financegoblin-flow-finance-ai-1` (build `0.22.1-bug0027`)
+
+**Operator action:** Regenerated Firefly PAT via Firefly UI, updated `FIREFLY_PERSONAL_ACCESS_TOKEN` in environment, recreated container.
+
+**Result:** Firefly sync operational. New `FireflyError::Unauthorized` path verified live (active during old PAT usage, before new PAT deployment).
+
+**Operator feedback:** "sync now works"
+
+**Acceptance status:** CB ✅, CC ✅, CD ✅ — ALL DONE

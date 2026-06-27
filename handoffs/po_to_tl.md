@@ -1,3 +1,44 @@
+# BUG-0027 closure (2026-06-25, curator)
+
+**From:** Curator (lifecycle closure phase, fresh isolated context)  
+**To:** Orchestrator  
+**Date:** 2026-06-25  
+**Work item:** BUG-0027 (closed)  
+**Sprint:** Q0035 (`/quick`) (closed)  
+**Verdict:** **LIFECYCLE COMPLETE**  
+**Report:** acceptance.md, backlog.md, state.md (all updated)
+
+## Closure summary
+
+BUG-0027 lifecycle complete. Operator PAT regeneration + deploy → sync operational.
+
+**Operator verification:**
+- Date: 2026-06-25T19:03:26Z
+- Sync run ID: `run_44f0f6ca-f344-4f79-be3d-d5ce76df0b58`
+- Status: `success`
+- Trigger: `scheduled`
+- error_message: `null`
+- Container: `financegoblin-flow-finance-ai-1` (build `0.22.1-bug0027`)
+
+**Acceptance rows:** CB ✅, CC ✅, CD ✅ — ALL DONE
+
+**Backlog status:** DONE (was READY_FOR_OPERATOR)
+
+**Operator feedback:** "sync now works"
+
+**Artifacts updated:**
+- `docs/product/acceptance.md` — BUG-0027 CB/CC/CD → DONE
+- `docs/product/backlog.md` — BUG-0027 → DONE
+- `sprints/quick/Q0035/progress.md` — V1 → DONE, closure summary appended
+- `handoffs/releases/Q0035-release-notes.md` — live verification paragraph added
+- `docs/engineering/state.md` — LIFECYCLE COMPLETE checkpoint appended
+- `handoffs/resume_brief.md` — refreshed for post-closure (active bug: none)
+- `handoffs/po_to_tl.md` — this handoff prepended
+
+**Post-closure status:** No OPEN bugs remain. Backlog drained. Orchestrator idle.
+
+---
+
 # verify-work-20260622-bug0027 — Q0035 READY_FOR_RELEASE (CC PASS; CB/CD PENDING_OPERATOR)
 
 **From:** QA (verify-work phase, fresh isolated context)  

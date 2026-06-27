@@ -1190,3 +1190,25 @@ Under `SPRINT_MAX_TASKS=12`. **Recommend `/quick`** (same track as BUG-0022/0024
 - `next_scheduled_phase`: release
 - `next_scheduled_role`: release
 - `stop_reason`: completed (phase boundary; DEC-0038 isolation; hand off to /release in new subagent/chat)
+
+---
+
+## Checkpoint: LIFECYCLE COMPLETE — BUG-0027 2026-06-25T21:11:00Z
+
+- `phase_id`: closure
+- `role`: curator
+- `fresh_context_marker`: closure-20260625-bug0027-curator-fresh
+- `timestamp`: 2026-06-25T21:11:00Z
+- `orchestrator_run_id`: auto-20260622-bug0027
+- `active_bug_id`: BUG-0027
+- `segment_work_item_kind`: bug (closure)
+- `sprint_id`: Q0035
+- `acceptance_rows`: CB ✅, CC ✅, CD ✅ — ALL DONE
+- `backlog_status`: DONE (was READY_FOR_OPERATOR)
+- `operator_verification`: 2026-06-25T19:03:26Z `status: success` sync run `44f0f6ca-f344-4f79-be3d-d5ce76df0b58` (scheduled trigger)
+- `release_version`: 0.22.1-bug0027
+- `release_target`: omniflow-external
+- `closure_evidence`: /sync/status probe, operator-confirmation chat message
+- `stop_reason`: completed (lifecycle terminal — all acceptance rows satisfied)
+
+**Post-closure status:** BUG-0027 closed. No OPEN bugs remain in backlog (drained).
