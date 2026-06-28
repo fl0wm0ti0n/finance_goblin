@@ -1,0 +1,57 @@
+{
+  "intake_run_id": "intake-20260628-us0023-multi-category-trend",
+  "intake_work_item_kind": "story",
+  "selected_pack": "small-intake-pack",
+  "asked_topics": [
+    "outcome_success_criteria",
+    "impacted_components",
+    "constraints_compatibility_risks",
+    "required_tests_acceptance_checks",
+    "done_definition"
+  ],
+  "missing_topics": [],
+  "assumptions_confirmed": [
+    "US-0018 single-category MVP already shipped and DONE; multi-category deferred in AC-3 scope notes",
+    "Extension bounded to CategoryTrendChart shared component on /forecast and /wealth only",
+    "ECharts line-series supports multi-line color-coded overlay natively",
+    "localStorage sufficient for multi-select persistence (no server-side state required)",
+    "Operator confirmed: top-5 default OR last-saved selection, flat-zero months, no category limit, persist, both pages, P1"
+  ],
+  "topic_coverage": [
+    {
+      "topic_key": "outcome_success_criteria",
+      "satisfied_by": "answer_ref",
+      "ref": "ie:ac-rows-us0023",
+      "quoted_user_text": "Multi-category line chart on /forecast and /wealth where every category shows as colored line, with multi-select to toggle categories on/off, so operator can see how each category evolves over time"
+    },
+    {
+      "topic_key": "impacted_components",
+      "satisfied_by": "answer_ref",
+      "ref": "ie:component-scope",
+      "quoted_user_text": "Shared CategoryTrendChart.tsx component (used on /forecast and /wealth), GET /api/v1/categories/expense-series API (already serves multi-category), CategoryFilter multi-select UX"
+    },
+    {
+      "topic_key": "constraints_compatibility_risks",
+      "satisfied_by": "assumption_confirmation_ref",
+      "ref": "ie:assumptions",
+      "quoted_user_text": "Read-only Firefly mirror; no new API required (series already returns multi-category data); localStorage for persistence; US-0015 bucket mapping + US-0013 ML overlay unchanged"
+    },
+    {
+      "topic_key": "required_tests_acceptance_checks",
+      "satisfied_by": "answer_ref",
+      "ref": "ie:acceptance-rows",
+      "quoted_user_text": "6 acceptance rows covering: multi-line rendering, toggle behavior, default top-5/restore, cumulative toggle, persistence, OIDC deployment smoke"
+    },
+    {
+      "topic_key": "done_definition",
+      "satisfied_by": "answer_ref",
+      "ref": "ie:done",
+      "quoted_user_text": "Operator sees multi-color line chart on /forecast and /wealth; can toggle categories via multi-select (persisted); can switch between per-month and cumulative view; top-5 default or last-saved; no hard category limit; OIDC pass; vitest for toggle/persistence; no US-0018 regression"
+    }
+  ],
+  "evidence_bundle_hash": null,
+  "plan_area_inventory": null,
+  "plan_area_coverage": null,
+  "coverage_complete": null,
+  "_notes": "small-intake-pack; bounded extension of shipped US-0018 single-category MVP; no plan-area mapping required"
+}
